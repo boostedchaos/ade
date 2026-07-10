@@ -58,7 +58,7 @@ jobs:
           $unpacked = "release/win-unpacked/resources/app.asar.unpacked/node_modules"
           @"
           const path = require('path');
-          const root = process.argv[2];
+          const root = path.resolve(process.argv[2]);
           const Database = require(path.join(root, 'better-sqlite3'));
           const db = new Database(':memory:');
           db.exec('CREATE TABLE t(x); INSERT INTO t VALUES (42)');
