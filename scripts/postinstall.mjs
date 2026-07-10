@@ -34,5 +34,9 @@ function run(commandLine) {
 // Workspace validation.
 run("sherif");
 
-// Install native dependencies for the desktop app.
-run("bun run --filter=@ade/desktop install:deps");
+// Install native dependencies for the desktop app. Skippable for pipelines
+// that use prebuilt natives only (e.g. the Windows build: npmRebuild is off
+// and prepare:win-natives stages prebuilds, so no compiler toolchain needed).
+if (!process.env.ADE_SKIP_INSTALL_APP_DEPS) {
+	run("bun run --filter=@ade/desktop install:deps");
+}

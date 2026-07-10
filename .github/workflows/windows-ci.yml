@@ -26,6 +26,10 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
+        env:
+          # Windows build uses prebuilt natives exclusively (npmRebuild off);
+          # skip @electron/rebuild, which needs a Visual Studio toolchain.
+          ADE_SKIP_INSTALL_APP_DEPS: "1"
         run: bun install
 
       - name: Typecheck
