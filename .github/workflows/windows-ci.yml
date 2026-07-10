@@ -1,0 +1,97 @@
+name: Windows CI (ground truth)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-smoke:
+    name: Build + smoke test - Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Typecheck
+        working-directory: apps/desktop
+        run: |
+          bun run generate:routes
+          bunx tsc --noEmit
+
+      - name: Unit tests (desktop)
+        working-directory: apps/desktop
+        continue-on-error: true
+        run: bun test src/main/lib/terminal src/main/lib/agent-setup src/lib/trpc/routers/changes
+
+      - name: Build Windows package (full pipeline incl. verify)
+        working-directory: apps/desktop
+        run: bun run build:win
+
+      - name: "Smoke: native modules load under packaged Electron"
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $unpacked = "release/win-unpacked/resources/app.asar.unpacked/node_modules"
+          @"
+          const path = require('path');
+          const root = process.argv[2];
+          const Database = require(path.join(root, 'better-sqlite3'));
+          const db = new Database(':memory:');
+          db.exec('CREATE TABLE t(x); INSERT INTO t VALUES (42)');
+          const row = db.prepare('SELECT x FROM t').get();
+          if (row.x !== 42) throw new Error('sqlite roundtrip failed');
+          console.log('SQLITE_OK');
+          const pty = require(path.join(root, 'node-pty'));
+          const p = pty.spawn('powershell.exe', ['-NoProfile','-Command','echo PTY_OK_42'], { cols: 80, rows: 24, cwd: process.env.USERPROFILE, env: process.env });
+          let out = '';
+          p.onData(d => { out += d; });
+          p.onExit(() => {
+            if (!out.includes('PTY_OK_42')) { console.error('PTY output missing:', out.slice(0,200)); process.exit(1); }
+            console.log('PTY_OK');
+            process.exit(0);
+          });
+          setTimeout(() => { console.error('PTY timeout'); process.exit(1); }, 30000);
+          "@ | Set-Content smoke-natives.cjs
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          & "release/win-unpacked/ADE.exe" smoke-natives.cjs $unpacked
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: "Smoke: packaged app boots and stays alive"
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "release/win-unpacked/ADE.exe" -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) {
+            Write-Error "ADE.exe exited early with code $($p.ExitCode)"
+            exit 1
+          }
+          Write-Output "APP_ALIVE_20S"
+          Stop-Process -Id $p.Id -Force
+          exit 0
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ade-windows-x64
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.zip
+            apps/desktop/release/latest.yml
+          retention-days: 30
