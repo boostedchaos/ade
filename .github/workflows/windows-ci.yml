@@ -82,8 +82,11 @@ jobs:
           "@ | Set-Content smoke-natives.cjs
           Remove-Item -Force -ErrorAction SilentlyContinue smoke-result.txt
           $env:ELECTRON_RUN_AS_NODE = "1"
-          & "release/win-unpacked/ADE.exe" smoke-natives.cjs $unpacked
-          Write-Output "electron exit code: $LASTEXITCODE (informational)"
+          # ADE.exe is a GUI-subsystem binary: `&` would NOT wait for it and
+          # $LASTEXITCODE stays empty — Start-Process -Wait is required.
+          $p = Start-Process -FilePath "release/win-unpacked/ADE.exe" -ArgumentList "smoke-natives.cjs", "`"$unpacked`"" -NoNewWindow -Wait -PassThru
+          Write-Output "electron exit code: $($p.ExitCode) (informational)"
+          Start-Sleep -Seconds 2
           if (!(Test-Path smoke-result.txt) -or (Get-Content smoke-result.txt) -ne 'OK') {
             Write-Error "smoke marker missing — natives smoke failed"
             exit 1
