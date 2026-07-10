@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
 	chmodSync,
+	existsSync,
 	mkdirSync,
 	readFileSync,
 	rmSync,
@@ -65,9 +66,11 @@ const {
 	getCopilotHookScriptPath,
 	getGeminiSettingsJsonContent,
 	getMastraHooksJsonContent,
+	getOpenCodePluginContent,
 } = await import("./agent-wrappers");
 
 const {
+	buildCodexNotifyOverride,
 	createShimRuntime,
 	createWindowsShim,
 	getShimRuntimePath,
@@ -175,21 +178,54 @@ describe("agent-wrappers copilot", () => {
 			).toBe('node "C:\\Users\\dev\\.ade\\hooks\\cursor-hook.mjs" Start');
 		});
 
-		it("createWindowsShim writes .cmd and .ps1 that delegate to the node launcher", () => {
+		it("createWindowsShim writes a .cmd (only) that delegates to the node launcher", () => {
 			createWindowsShim("claude");
 
 			const shimPath = getShimRuntimePath();
 			const cmd = readFileSync(path.join(TEST_BIN_DIR, "claude.cmd"), "utf-8");
-			const ps1 = readFileSync(path.join(TEST_BIN_DIR, "claude.ps1"), "utf-8");
 
 			expect(cmd).toContain("@echo off");
 			// Header carries the "agent-wrapper" needle so the resolver skips it.
 			expect(cmd).toContain("agent-wrapper");
 			expect(cmd).toContain(`node "${shimPath}" claude %*`);
 
-			expect(ps1).toContain("agent-wrapper");
-			expect(ps1).toContain(`& node '${shimPath}' claude @args`);
-			expect(ps1).toContain("exit $LASTEXITCODE");
+			// No .ps1 is generated (PowerShell prefers .ps1 and a Restricted policy
+			// would block it with no fallback; PowerShell runs .cmd fine).
+			expect(existsSync(path.join(TEST_BIN_DIR, "claude.ps1"))).toBe(false);
+		});
+
+		it("createWindowsShim removes a stale .ps1 left by an earlier build", () => {
+			writeFileSync(
+				path.join(TEST_BIN_DIR, "codex.ps1"),
+				"# stale ADE agent-wrapper shim\n",
+			);
+			createWindowsShim("codex");
+			expect(existsSync(path.join(TEST_BIN_DIR, "codex.cmd"))).toBe(true);
+			expect(existsSync(path.join(TEST_BIN_DIR, "codex.ps1"))).toBe(false);
+		});
+
+		it("buildCodexNotifyOverride emits a TOML literal-string array (fix #1)", () => {
+			const notifyMjs = "C:\\Users\\dev\\.ade\\hooks\\notify.mjs";
+			const override = buildCodexNotifyOverride(notifyMjs);
+			// Single-quoted (TOML literal) so backslashes are NOT doubled and no
+			// double quotes exist to be mangled by the cmd.exe /c hop.
+			expect(override).toBe(
+				"notify=['node','C:\\Users\\dev\\.ade\\hooks\\notify.mjs']",
+			);
+			expect(override).not.toContain('"');
+			expect(override).not.toContain("\\\\");
+		});
+
+		it("opencode plugin JSON-escapes the notify path so Windows backslashes survive (fix #2)", () => {
+			const notifyPath = "C:\\Users\\dev\\.ade\\hooks\\notify.mjs";
+			const content = getOpenCodePluginContent(notifyPath);
+			// Emitted as a valid, properly-escaped JS string literal.
+			expect(content).toContain(
+				'const notifyPath = "C:\\\\Users\\\\dev\\\\.ade\\\\hooks\\\\notify.mjs";',
+			);
+			// The raw (unescaped) form that would corrupt the path must NOT appear.
+			expect(content).not.toContain('"C:\\Users\\dev\\.ade\\hooks\\notify.mjs"');
+			expect(content).not.toContain("{{NOTIFY_PATH_JSON}}");
 		});
 
 		it("createShimRuntime bakes the per-agent config into agent-shim.mjs", () => {

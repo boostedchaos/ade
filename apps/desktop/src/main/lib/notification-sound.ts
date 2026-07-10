@@ -66,6 +66,7 @@ function playSoundFile(soundPath: string): void {
 	} else if (process.platform === "win32") {
 		execFile("powershell", ["-NoProfile", "-Command", WIN_PLAY_SOUND_SCRIPT], {
 			env: { ...process.env, [WIN_SOUND_PATH_ENV]: soundPath },
+			windowsHide: true,
 		});
 	} else {
 		// Linux - try common audio players

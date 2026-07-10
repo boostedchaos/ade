@@ -243,14 +243,13 @@ function main() {
 		for (const [k, v] of Object.entries(agent.env)) process.env[k] = v;
 	}
 
-	let extraArgs = agent.extraArgs ? [...agent.extraArgs] : [];
+	const extraArgs = agent.extraArgs ? [...agent.extraArgs] : [];
 
 	if (agent.copilotInject) injectCopilotHooks(agent.copilotInject);
 
-	if (agent.codexWatcher) {
-		startCodexWatcher(CONFIG.notifyMjs);
-		extraArgs = ["-c", `notify=["node","${CONFIG.notifyMjs.replaceAll("\\", "\\\\")}"]`, ...extraArgs];
-	}
+	// The codex `-c notify=...` override is baked into extraArgs at setup time
+	// (buildCodexNotifyOverride); here we only start the task_started watcher.
+	if (agent.codexWatcher) startCodexWatcher(CONFIG.notifyMjs);
 
 	runReal(realBin, [...extraArgs, ...userArgs]);
 }

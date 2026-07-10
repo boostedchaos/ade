@@ -3,6 +3,7 @@ import {
 	buildSafeEnv,
 	buildTerminalEnv,
 	FALLBACK_SHELL,
+	getDefaultShell,
 	getLocale,
 	removeAppEnvVars,
 	setOpenRouterKeyResolver,
@@ -21,6 +22,74 @@ describe("env", () => {
 
 		it("should have SHELL_CRASH_THRESHOLD_MS set to 1000", () => {
 			expect(SHELL_CRASH_THRESHOLD_MS).toBe(1000);
+		});
+	});
+
+	describe("getDefaultShell (win32 resolution order)", () => {
+		// The probe is injected so the resolution order can be exercised
+		// deterministically on any host OS (PORT-PLAN decision 5).
+		const PWSH = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
+		const POWERSHELL =
+			"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+
+		it("prefers pwsh.exe when it resolves on PATH", () => {
+			const resolveExecutable = (exe: string) =>
+				exe === "pwsh.exe"
+					? PWSH
+					: exe === "powershell.exe"
+						? POWERSHELL
+						: null;
+			const shell = getDefaultShell({ platform: "win32", resolveExecutable });
+			expect(shell).toBe(PWSH);
+		});
+
+		it("falls back to powershell.exe when pwsh is absent", () => {
+			const resolveExecutable = (exe: string) =>
+				exe === "powershell.exe" ? POWERSHELL : null;
+			const shell = getDefaultShell({ platform: "win32", resolveExecutable });
+			expect(shell).toBe(POWERSHELL);
+		});
+
+		it("falls back to COMSPEC (cmd) when neither PowerShell resolves", () => {
+			const original = process.env.COMSPEC;
+			process.env.COMSPEC = "C:\\Windows\\System32\\cmd.exe";
+			try {
+				const shell = getDefaultShell({
+					platform: "win32",
+					resolveExecutable: () => null,
+				});
+				expect(shell).toBe("C:\\Windows\\System32\\cmd.exe");
+			} finally {
+				if (original === undefined) {
+					delete process.env.COMSPEC;
+				} else {
+					process.env.COMSPEC = original;
+				}
+			}
+		});
+
+		it("falls back to cmd.exe when nothing resolves and COMSPEC is unset", () => {
+			const original = process.env.COMSPEC;
+			delete process.env.COMSPEC;
+			try {
+				const shell = getDefaultShell({
+					platform: "win32",
+					resolveExecutable: () => null,
+				});
+				expect(shell).toBe("cmd.exe");
+			} finally {
+				if (original !== undefined) process.env.COMSPEC = original;
+			}
+		});
+
+		it("does not use the default-shell (cmd) value on win32", () => {
+			// Regression: getDefaultShell used to return the default-shell package
+			// value (cmd on Windows) first, making the win32 branch dead code.
+			const resolveExecutable = (exe: string) =>
+				exe === "pwsh.exe" ? PWSH : null;
+			const shell = getDefaultShell({ platform: "win32", resolveExecutable });
+			expect(shell).toBe(PWSH);
+			expect(shell.toLowerCase()).not.toContain("cmd.exe");
 		});
 	});
 

@@ -71,7 +71,10 @@ function playSoundFile(soundPath: string): void {
 		currentSession.process = execFile(
 			"powershell",
 			["-NoProfile", "-Command", WIN_PLAY_SOUND_SCRIPT],
-			{ env: { ...process.env, [WIN_SOUND_PATH_ENV]: soundPath } },
+			{
+				env: { ...process.env, [WIN_SOUND_PATH_ENV]: soundPath },
+				windowsHide: true,
+			},
 			() => {
 				if (currentSession?.id === sessionId) {
 					currentSession = null;

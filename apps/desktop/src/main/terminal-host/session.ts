@@ -13,7 +13,10 @@ import type { Socket } from "node:net";
 import { homedir } from "node:os";
 import * as path from "node:path";
 import { getShellArgs } from "../lib/agent-setup/shell-wrappers";
-import { buildSafeEnv } from "../lib/terminal/env";
+import {
+	buildSafeEnv,
+	getDefaultShell as getEnvDefaultShell,
+} from "../lib/terminal/env";
 import { HeadlessEmulator } from "../lib/terminal-host/headless-emulator";
 import type {
 	CreateOrAttachRequest,
@@ -930,13 +933,11 @@ export class Session {
 	}
 
 	/**
-	 * Get default shell for the platform
+	 * Get default shell for the platform. Delegates to the terminal env layer so
+	 * Windows shell selection (pwsh -> powershell -> cmd) stays single-sourced.
 	 */
 	private getDefaultShell(): string {
-		if (process.platform === "win32") {
-			return process.env.COMSPEC || "cmd.exe";
-		}
-		return process.env.SHELL || "/bin/zsh";
+		return getEnvDefaultShell();
 	}
 }
 

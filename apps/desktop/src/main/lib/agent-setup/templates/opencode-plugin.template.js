@@ -29,7 +29,7 @@ export const SupersetNotifyPlugin = async ({ $, client }) => {
   // Only run inside a Superset terminal session
   if (!process?.env?.SUPERSET_TAB_ID) return {};
 
-  const notifyPath = "{{NOTIFY_PATH}}";
+  const notifyPath = {{NOTIFY_PATH_JSON}};
   const debug = process?.env?.SUPERSET_DEBUG === '1';
 
   // State tracking for deduplication and session-scoping

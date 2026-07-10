@@ -131,12 +131,20 @@ export function nodeHookCommand(scriptPath: string, arg?: string): string {
 	return arg ? `${base} ${arg}` : base;
 }
 
-/** Escape a path for embedding inside a single-quoted PowerShell string. */
-function escapePs1SingleQuoted(value: string): string {
-	return value.replaceAll("'", "''");
+/**
+ * The codex `-c notify=...` override value. Uses TOML LITERAL strings (single
+ * quotes) so Windows backslashes pass through verbatim (no escape processing)
+ * and the single quotes survive the cmd.exe /c hop that Node's double-quote
+ * escaping would otherwise mangle. Codex parses `-c` values as TOML, so
+ * `notify=['node','C:\...\notify.mjs']` is a valid literal-string array.
+ * (A home path containing a single quote can't be a TOML literal — vanishingly
+ * rare on Windows; the POSIX path keeps its double-quoted form via the template.)
+ */
+export function buildCodexNotifyOverride(notifyMjs: string): string {
+	return `notify=['node','${notifyMjs}']`;
 }
 
-function buildCmdShim(binaryName: string, shimPath: string): string {
+export function buildCmdShim(binaryName: string, shimPath: string): string {
 	// `%` must be doubled inside a batch file; `%*` forwards every arg. node is an
 	// .exe (no `call` needed) and its exit code becomes the script's exit code.
 	const safeShimPath = shimPath.replaceAll("%", "%%");
@@ -148,24 +156,17 @@ function buildCmdShim(binaryName: string, shimPath: string): string {
 	].join("\r\n");
 }
 
-function buildPs1Shim(binaryName: string, shimPath: string): string {
-	// Single-quote the path so PowerShell does not interpolate `$`; `@args`
-	// splats every argument through to node; propagate the child's exit code.
-	return [
-		`# ${WINDOWS_SHIM_MARKER}`,
-		`& node '${escapePs1SingleQuoted(shimPath)}' ${binaryName} @args`,
-		"exit $LASTEXITCODE",
-		"",
-	].join("\r\n");
-}
-
 /**
  * Windows interception: instead of a POSIX bash wrapper + shell-function shim,
- * every agent gets `<name>.cmd` and `<name>.ps1` on the PATH-prepended BIN_DIR.
- * Both delegate to the shared node launcher (agent-shim.mjs), which resolves the
- * real binary, applies the agent's env/args, and execs it. See the divergence
- * note in the E2 report for why resolution lives in node rather than in the
- * .cmd/.ps1 directly.
+ * every agent gets a `<name>.cmd` on the PATH-prepended BIN_DIR that delegates to
+ * the shared node launcher (agent-shim.mjs), which resolves the real binary,
+ * applies the agent's env/args, and execs it. See the divergence note in the E2
+ * report for why resolution lives in node rather than in the .cmd directly.
+ *
+ * Only `.cmd` is generated (no `.ps1`): PowerShell resolves a sibling `<name>.ps1`
+ * preferentially over `.cmd` and, under a Restricted execution policy, refuses to
+ * run it with no fallback — whereas PowerShell runs `.cmd` files fine. A single
+ * `.cmd` is therefore strictly more robust across cmd.exe and PowerShell.
  */
 export function createWindowsShim(binaryName: string): void {
 	const shimPath = getShimRuntimePath();
@@ -174,15 +175,15 @@ export function createWindowsShim(binaryName: string): void {
 		buildCmdShim(binaryName, shimPath),
 		0o755,
 	);
-	const wrotePs1 = writeFileIfChanged(
-		path.join(BIN_DIR, `${binaryName}.ps1`),
-		buildPs1Shim(binaryName, shimPath),
-		0o755,
-	);
+	// Remove any stale `<name>.ps1` from an earlier build — PowerShell would
+	// resolve it in preference to our `.cmd` and shadow the interception.
+	try {
+		fs.rmSync(path.join(BIN_DIR, `${binaryName}.ps1`), { force: true });
+	} catch {
+		// Best effort.
+	}
 	console.log(
-		`[agent-setup] ${
-			wroteCmd || wrotePs1 ? "Updated" : "Verified"
-		} ${binaryName} Windows shim`,
+		`[agent-setup] ${wroteCmd ? "Updated" : "Verified"} ${binaryName} Windows shim`,
 	);
 }
 

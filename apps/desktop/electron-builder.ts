@@ -211,6 +211,13 @@ export function createConfig(target: BuildTarget = "default"): Configuration {
 			// Windows tray reads the full-color .ico at runtime from
 			// app.asar.unpacked/resources/build/icons (src/main/lib/tray/index.ts)
 			"**/resources/build/icons/icon.ico",
+			// Windows native binaries are staged from `.win32-natives/` via `files`
+			// `from`-mappings into node_modules/<pkg>. electron-builder matches
+			// asarUnpack globs against the SOURCE path (relative to the app dir),
+			// so the `**/node_modules/...` rules above never match these remapped
+			// files — match the staging source instead. Files still unpack to their
+			// `to` destination (node_modules/<pkg>/...), so runtime require works.
+			"**/.win32-natives/**/*",
 		],
 
 		// Extra resources placed outside asar archive (accessible via process.resourcesPath)

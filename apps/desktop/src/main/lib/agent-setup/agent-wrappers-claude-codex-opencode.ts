@@ -75,7 +75,9 @@ export function getOpenCodePluginContent(notifyPath: string): string {
 	return template
 		.replace("{{MARKER}}", OPENCODE_PLUGIN_MARKER)
 		.replace("{{NOTIFY_RUNNER}}", notifyRunner)
-		.replace("{{NOTIFY_PATH}}", notifyPath);
+		// JSON.stringify → a properly-escaped JS string literal, so Windows
+		// backslashes in the path can't be misread as JS escape sequences.
+		.replace("{{NOTIFY_PATH_JSON}}", JSON.stringify(notifyPath));
 }
 
 function createClaudeSettings(): string {

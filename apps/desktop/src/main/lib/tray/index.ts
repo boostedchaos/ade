@@ -11,6 +11,7 @@ import {
 	nativeImage,
 	Tray,
 } from "electron";
+import { checkForUpdatesInteractive } from "main/lib/auto-updater";
 import { localDb } from "main/lib/local-db";
 import { menuEmitter } from "main/lib/menu-events";
 import {
@@ -304,7 +305,7 @@ async function updateTrayMenu(): Promise<void> {
 			? `Background Sessions (${sessionCount})`
 			: "Background Sessions";
 
-	const menu = Menu.buildFromTemplate([
+	const menuTemplate: MenuItemConstructorOptions[] = [
 		{
 			label: sessionsLabel,
 			submenu: sessionsSubmenu,
@@ -318,13 +319,46 @@ async function updateTrayMenu(): Promise<void> {
 			label: "Settings",
 			click: openSettings,
 		},
-		{
-			label: "Quit",
-			click: quitApp,
-		},
-	]);
+	];
 
-	tray.setContextMenu(menu);
+	// On Windows the app window is frameless, so the menu-bar About / Check for
+	// Updates entries are unreachable (Alt reveals nothing). Surface them here so
+	// the tray is the single reachable home for these actions. Same handlers and
+	// gating as menu.ts — checkForUpdatesInteractive self-gates on Windows.
+	if (IS_WIN) {
+		menuTemplate.push(
+			{ type: "separator" },
+			{
+				label: `About ${app.name}`,
+				click: () => {
+					dialog.showMessageBox({
+						type: "info",
+						title: `About ${app.name}`,
+						message: app.name,
+						detail: `Version ${app.getVersion()}`,
+					});
+				},
+			},
+			{
+				label: "Check for Updates...",
+				click: () => {
+					checkForUpdatesInteractive();
+				},
+			},
+		);
+	}
+
+	// The win32 block above already ends with a separator group; on macOS keep
+	// Quit directly after Settings (unchanged layout).
+	if (IS_WIN) {
+		menuTemplate.push({ type: "separator" });
+	}
+	menuTemplate.push({
+		label: "Quit",
+		click: quitApp,
+	});
+
+	tray.setContextMenu(Menu.buildFromTemplate(menuTemplate));
 }
 
 /** Call once after app.whenReady() */

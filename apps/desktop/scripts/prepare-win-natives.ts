@@ -24,6 +24,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	openSync,
+	readFileSync,
 	readSync,
 	closeSync,
 	readdirSync,
@@ -33,16 +34,52 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+const appDesktopDir = dirname(import.meta.dirname);
+const nodeModulesDir = join(appDesktopDir, "node_modules");
+const stagingDir = join(appDesktopDir, ".win32-natives");
+
+function fail(message: string): never {
+	console.error(`[prepare-win-natives] ${message}`);
+	process.exit(1);
+}
+
+/** Read the resolved `version` from a package.json, failing loudly if absent. */
+function readResolvedVersion(pkgJsonRelPath: string): string {
+	const pkgJsonPath = join(nodeModulesDir, pkgJsonRelPath, "package.json");
+	if (!existsSync(pkgJsonPath)) {
+		fail(
+			`Cannot resolve version: ${pkgJsonPath} not found. Run copy:native-modules / bun install first.`,
+		);
+	}
+	const version = (
+		JSON.parse(readFileSync(pkgJsonPath, "utf8")) as { version?: string }
+	).version;
+	if (!version) fail(`No version field in ${pkgJsonPath}`);
+	return version;
+}
+
 // ---------------------------------------------------------------------------
-// Pinned versions (must stay in sync with package.json + electron devDep).
-// node-pty is aliased to @lydell/node-pty in package.json; the win32 binary
-// package version must match that alias exactly.
+// Versions are DERIVED from the resolved packages in node_modules (not
+// hardcoded), so a lockfile/package.json bump can never silently mismatch the
+// wrapper and its win32 binary package. The win32 binary package version must
+// equal the host/wrapper version:
+//   - node-pty is aliased to @lydell/node-pty; its resolved version drives
+//     @lydell/node-pty-win32-x64.
+//   - libsql / @ast-grep/napi wrappers drive their -win32-x64-msvc binaries.
+// The Electron target (for the better-sqlite3 prebuild ABI) is read from the
+// electron devDependency so it tracks the electron bump automatically.
 // ---------------------------------------------------------------------------
-const LYDELL_VERSION = "1.2.0-beta.12";
-const LIBSQL_WIN_VERSION = "0.5.22";
-const ASTGREP_WIN_VERSION = "0.41.0";
-// Electron 40.2.1 → NODE_MODULE_VERSION (ABI) 143 (verified via node-abi).
-const ELECTRON_TARGET = "40.2.1";
+const LYDELL_VERSION = readResolvedVersion("node-pty");
+const LIBSQL_WIN_VERSION = readResolvedVersion("libsql");
+const ASTGREP_WIN_VERSION = readResolvedVersion(join("@ast-grep", "napi"));
+const ELECTRON_TARGET = (() => {
+	const pkg = JSON.parse(
+		readFileSync(join(appDesktopDir, "package.json"), "utf8"),
+	) as { devDependencies?: Record<string, string> };
+	const raw = pkg.devDependencies?.electron;
+	if (!raw) fail("electron devDependency not found in apps/desktop/package.json");
+	return raw.replace(/^[\^~]/, "");
+})();
 
 const NPM_WIN_PACKAGES = [
 	`@lydell/node-pty-win32-x64@${LYDELL_VERSION}`,
@@ -56,15 +93,6 @@ const REQUIRED_PE_BINARIES: Record<string, string> = {
 	"@libsql/win32-x64-msvc": "index.node",
 	"@ast-grep/napi-win32-x64-msvc": "ast-grep-napi.win32-x64-msvc.node",
 };
-
-const appDesktopDir = dirname(import.meta.dirname);
-const nodeModulesDir = join(appDesktopDir, "node_modules");
-const stagingDir = join(appDesktopDir, ".win32-natives");
-
-function fail(message: string): never {
-	console.error(`[prepare-win-natives] ${message}`);
-	process.exit(1);
-}
 
 /** A PE (Windows) executable/DLL starts with the ASCII bytes "MZ" (0x4D 0x5A). */
 function isPeBinary(filePath: string): boolean {
@@ -198,6 +226,9 @@ function verifyStagedBinaries(): void {
 
 function main(): void {
 	console.log(`[prepare-win-natives] staging dir: ${stagingDir}`);
+	console.log(
+		`[prepare-win-natives] derived versions: node-pty=${LYDELL_VERSION} libsql=${LIBSQL_WIN_VERSION} ast-grep=${ASTGREP_WIN_VERSION} electron=${ELECTRON_TARGET}`,
+	);
 	rmSync(stagingDir, { recursive: true, force: true });
 	mkdirSync(stagingDir, { recursive: true });
 

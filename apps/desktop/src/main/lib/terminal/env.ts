@@ -40,15 +40,71 @@ export const HOOK_PROTOCOL_VERSION = "2";
 export const FALLBACK_SHELL = os.platform() === "win32" ? "cmd.exe" : "/bin/sh";
 export const SHELL_CRASH_THRESHOLD_MS = 1000;
 
-export function getDefaultShell(): string {
-	if (defaultShell) {
-		return defaultShell;
+/**
+ * Resolve an executable name against the Windows PATH, returning the full path
+ * to the first match or null. Synchronous (existsSync) so shell resolution stays
+ * a plain function call and never spawns a probe process.
+ */
+function resolveWindowsExecutable(exe: string): string | null {
+	const pathVar = process.env.PATH ?? process.env.Path ?? "";
+	if (!pathVar) return null;
+	for (const dir of pathVar.split(";")) {
+		if (!dir) continue;
+		try {
+			const candidate = join(dir, exe);
+			if (fs.existsSync(candidate)) return candidate;
+		} catch {
+			// Ignore malformed PATH entries.
+		}
+	}
+	return null;
+}
+
+// The resolved Windows shell is stable for the process lifetime, so cache it to
+// avoid re-scanning PATH on every terminal spawn.
+let cachedWin32Shell: string | null = null;
+
+/**
+ * Default Windows shell (PORT-PLAN decision 5): PowerShell 7+ (`pwsh.exe`) if it
+ * is resolvable on PATH, else the always-present Windows PowerShell
+ * (`powershell.exe`), else cmd via `%ComSpec%`. The `resolve` probe is injectable
+ * for tests; the production path is cached.
+ */
+export function getDefaultWindowsShell(
+	resolve: (exe: string) => string | null = resolveWindowsExecutable,
+	useCache = true,
+): string {
+	if (useCache && cachedWin32Shell) return cachedWin32Shell;
+
+	const result =
+		resolve("pwsh.exe") ??
+		resolve("powershell.exe") ??
+		process.env.COMSPEC ??
+		"cmd.exe";
+
+	if (useCache) cachedWin32Shell = result;
+	return result;
+}
+
+export function getDefaultShell(options?: {
+	platform?: NodeJS.Platform;
+	resolveExecutable?: (exe: string) => string | null;
+}): string {
+	const platform = options?.platform ?? os.platform();
+
+	// Windows must resolve pwsh -> powershell -> cmd itself; the `default-shell`
+	// package returns cmd (COMSPEC) unconditionally, which is why this branch has
+	// to run BEFORE consulting defaultShell (otherwise pwsh/powershell never win).
+	if (platform === "win32") {
+		// Bypass the module cache when a resolver is injected so tests can exercise
+		// multiple orderings within one process.
+		return options?.resolveExecutable
+			? getDefaultWindowsShell(options.resolveExecutable, false)
+			: getDefaultWindowsShell();
 	}
 
-	const platform = os.platform();
-
-	if (platform === "win32") {
-		return process.env.COMSPEC || "powershell.exe";
+	if (defaultShell) {
+		return defaultShell;
 	}
 
 	if (process.env.SHELL) {

@@ -21,6 +21,7 @@ import {
 	getCopilotHooksObject,
 } from "./agent-wrappers";
 import {
+	buildCodexNotifyOverride,
 	createShimRuntime,
 	type ShimRuntimeConfig,
 } from "./agent-wrappers-common";
@@ -49,13 +50,17 @@ import {
  */
 function buildShimRuntimeConfig(): ShimRuntimeConfig {
 	const copilotHookMjs = getCopilotHookScriptPath();
+	const notifyMjs = getNotifyScriptPath();
 	return {
 		binDir: BIN_DIR,
-		notifyMjs: getNotifyScriptPath(),
+		notifyMjs,
 		installInfo: BINARY_INSTALL,
 		agents: {
 			claude: { extraArgs: ["--settings", getClaudeSettingsPath()] },
-			codex: { codexWatcher: true },
+			codex: {
+				codexWatcher: true,
+				extraArgs: ["-c", buildCodexNotifyOverride(notifyMjs)],
+			},
 			opencode: { env: { OPENCODE_CONFIG_DIR } },
 			gemini: {},
 			"cursor-agent": {},
