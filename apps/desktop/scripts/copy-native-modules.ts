@@ -21,7 +21,9 @@ import {
 	readdirSync,
 	readFileSync,
 	realpathSync,
+	rmdirSync,
 	rmSync,
+	unlinkSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -35,6 +37,32 @@ const NATIVE_MODULES = [
 
 // Dependencies of native modules that need to be copied (may be hoisted or symlinked)
 const NATIVE_MODULE_DEPS = ["bindings", "file-uri-to-path"] as const;
+
+/**
+ * Remove a tree that may contain symlinks/junctions. Bun on Windows throws
+ * EFAULT when rmSync touches a directory junction, and Node wants rmdirSync
+ * (not unlinkSync) for dir-symlinks on Windows — so walk manually, removing
+ * links without following them.
+ */
+function removeTreeWithLinks(target: string): void {
+	const stats = lstatSync(target);
+	if (stats.isSymbolicLink()) {
+		try {
+			unlinkSync(target);
+		} catch {
+			rmdirSync(target);
+		}
+		return;
+	}
+	if (stats.isDirectory()) {
+		for (const entry of readdirSync(target)) {
+			removeTreeWithLinks(join(target, entry));
+		}
+		rmdirSync(target);
+		return;
+	}
+	rmSync(target, { force: true });
+}
 
 function getWorkspaceRootNodeModulesDir(nodeModulesDir: string): string {
 	return join(nodeModulesDir, "..", "..", "..", "node_modules");
@@ -99,8 +127,15 @@ function copyModuleIfSymlink(
 		console.log(`  ${moduleName}: symlink -> replacing with real files`);
 		console.log(`    Real path: ${realPath}`);
 
-		// Remove the symlink
-		rmSync(modulePath);
+		// Remove the symlink. On Windows, bun's node_modules links are
+		// directory junctions: rmSync() on them throws EFAULT under Bun, and
+		// Node semantics want rmdirSync for dir-symlinks; unlinkSync covers
+		// file symlinks on POSIX.
+		try {
+			unlinkSync(modulePath);
+		} catch {
+			rmdirSync(modulePath);
+		}
 
 		// Copy the actual files
 		cpSync(realPath, modulePath, { recursive: true });
@@ -178,7 +213,7 @@ function copyNodePtyPlatformPackages(nodeModulesDir: string): void {
 	// from the top-level scope (avoids dangling absolute symlinks in the asar).
 	const wrapperNestedNodeModules = join(wrapperPath, "node_modules");
 	if (existsSync(wrapperNestedNodeModules)) {
-		rmSync(wrapperNestedNodeModules, { recursive: true, force: true });
+		removeTreeWithLinks(wrapperNestedNodeModules);
 	}
 
 	if (!materializedPlatformPackage) {
