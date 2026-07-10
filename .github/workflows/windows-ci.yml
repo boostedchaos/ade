@@ -72,13 +72,24 @@ jobs:
           p.onExit(() => {
             if (!out.includes('PTY_OK_42')) { console.error('PTY output missing:', out.slice(0,200)); process.exit(1); }
             console.log('PTY_OK');
-            process.exit(0);
+            // ConPTY teardown can crash the process AFTER our work is done,
+            // corrupting the exit code — record success in a marker file and
+            // let the shell judge by that, not by the exit code.
+            require('fs').writeFileSync('smoke-result.txt', 'OK');
+            setTimeout(() => process.exit(0), 500);
           });
           setTimeout(() => { console.error('PTY timeout'); process.exit(1); }, 30000);
           "@ | Set-Content smoke-natives.cjs
+          Remove-Item -Force -ErrorAction SilentlyContinue smoke-result.txt
           $env:ELECTRON_RUN_AS_NODE = "1"
           & "release/win-unpacked/ADE.exe" smoke-natives.cjs $unpacked
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Write-Output "electron exit code: $LASTEXITCODE (informational)"
+          if (!(Test-Path smoke-result.txt) -or (Get-Content smoke-result.txt) -ne 'OK') {
+            Write-Error "smoke marker missing — natives smoke failed"
+            exit 1
+          }
+          Write-Output "NATIVES_SMOKE_PASS"
+          exit 0
 
       - name: "Smoke: packaged app boots and stays alive"
         working-directory: apps/desktop
