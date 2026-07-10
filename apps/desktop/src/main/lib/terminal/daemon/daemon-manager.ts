@@ -580,6 +580,12 @@ export class DaemonTerminalManager extends EventEmitter {
 	}
 
 	private extractClaudeSessionId(scrollback: string): string | undefined {
+		// NOTE (Windows): patterns 2 and 3 below match POSIX-style forward-slash
+		// paths (e.g. /claude-<uid>/... and .claude/projects/...) that Claude prints
+		// with backslashes on Windows, so they will not match there. This is a
+		// best-effort scrollback fallback only — the authoritative source is the
+		// stored meta.json claudeSessionId (see caller preferring metadata), so
+		// auto-resume still works on Windows without relying on these regexes.
 		// Strip ANSI escape sequences for cleaner matching
 		const plain = scrollback.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
 		const UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";

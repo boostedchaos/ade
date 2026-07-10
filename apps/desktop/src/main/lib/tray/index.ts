@@ -22,10 +22,58 @@ import type { ListSessionsResponse } from "main/lib/terminal-host/types";
 
 const POLL_INTERVAL_MS = 5000;
 
+const IS_WIN = process.platform === "win32";
+
 /** Must have "Template" suffix for macOS dark/light mode support */
 const TRAY_ICON_FILENAME = "iconTemplate.png";
 
+/**
+ * Windows tray icons want a full-color .ico (a macOS template image renders as
+ * a black-on-transparent blob). We reuse the app icon.ico that already ships
+ * for the installer. Note for E4/packaging: this file must be staged where the
+ * packaged app can read it (extraResources / asarUnpack under resources/build/
+ * icons or resources/tray), otherwise the win32 tray falls back to the
+ * monochrome template png below.
+ */
+const WIN_TRAY_ICON_FILENAME = "icon.ico";
+
+function firstExisting(paths: string[]): string | null {
+	for (const p of paths) {
+		if (existsSync(p)) return p;
+	}
+	return null;
+}
+
 function getTrayIconPath(): string | null {
+	if (IS_WIN) {
+		const winPath = app.isPackaged
+			? firstExisting([
+					join(
+						process.resourcesPath,
+						"app.asar.unpacked/resources/build/icons",
+						WIN_TRAY_ICON_FILENAME,
+					),
+					join(
+						process.resourcesPath,
+						"app.asar.unpacked/resources/tray",
+						WIN_TRAY_ICON_FILENAME,
+					),
+				])
+			: firstExisting([
+					join(
+						app.getAppPath(),
+						"src/resources/build/icons",
+						WIN_TRAY_ICON_FILENAME,
+					),
+					join(__dirname, "../resources/build/icons", WIN_TRAY_ICON_FILENAME),
+				]);
+		if (winPath) return winPath;
+		console.warn(
+			"[Tray] Windows .ico not found; falling back to template png (will render monochrome)",
+		);
+		// Fall through to the shared template png below as a last resort.
+	}
+
 	if (app.isPackaged) {
 		const prodPath = join(
 			process.resourcesPath,
@@ -77,7 +125,11 @@ function createTrayIcon(): Electron.NativeImage | null {
 		if (size.width > 22 || size.height > 22) {
 			image = image.resize({ width: 16, height: 16 });
 		}
-		image.setTemplateImage(true);
+		// Template images are a macOS concept — on Windows they'd render as a
+		// black-on-transparent silhouette, so keep the full-color icon there.
+		if (!IS_WIN) {
+			image.setTemplateImage(true);
+		}
 		return image;
 	} catch (error) {
 		console.warn("[Tray] Failed to load icon:", error);
@@ -282,7 +334,9 @@ export function initTray(): void {
 		return;
 	}
 
-	if (process.platform !== "darwin") {
+	// Tray is supported on macOS and Windows. Linux tray support is
+	// inconsistent across desktop environments, so it stays disabled there.
+	if (process.platform !== "darwin" && !IS_WIN) {
 		return;
 	}
 

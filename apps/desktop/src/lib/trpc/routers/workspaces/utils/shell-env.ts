@@ -36,6 +36,22 @@ export async function getShellEnvironment(): Promise<Record<string, string>> {
 		return { ...cachedEnv };
 	}
 
+	// Windows has no `-lc env` login shell; the process env already carries the
+	// full PATH (there is no macOS-GUI minimal-PATH problem). Skip the probe and
+	// cache process.env directly.
+	if (process.platform === "win32") {
+		const winEnv: Record<string, string> = {};
+		for (const [key, value] of Object.entries(process.env)) {
+			if (typeof value === "string") {
+				winEnv[key] = value;
+			}
+		}
+		cachedEnv = winEnv;
+		cacheTime = now;
+		isFallbackCache = false;
+		return { ...winEnv };
+	}
+
 	const shell =
 		process.env.SHELL ||
 		(process.platform === "darwin" ? "/bin/zsh" : "/bin/bash");

@@ -1,6 +1,6 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, rename } from "node:fs/promises";
+import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
@@ -8,6 +8,7 @@ import friendlyWords = require("friendly-words");
 
 import type { BranchPrefixMode } from "@superset/local-db";
 import simpleGit, { type StatusResult } from "simple-git";
+import { canonicalizePath } from "../../changes/security/path-canonical";
 import { runWithPostCheckoutHookTolerance } from "../../utils/git-hook-tolerance";
 import { execWithShellEnv, getProcessEnvWithShellPath } from "./shell-env";
 
@@ -669,25 +670,14 @@ export async function removeWorktree(
 		});
 
 		// Delete the moved directory in the background — don't block the caller.
-		// Use spawned `rm -rf` instead of Node's fs.rm which can hang on macOS
-		// when encountering .app bundles with extended attributes.
-		const child = spawn("/bin/rm", ["-rf", tempPath], {
-			detached: true,
-			stdio: "ignore",
-		});
-		child.unref();
-		child.on("error", (err) => {
+		// Fire-and-forget with the same error-swallowing semantics as the prior
+		// spawned `rm -rf` (cross-platform; no /bin/rm dependency on Windows).
+		void rm(tempPath, { recursive: true, force: true }).catch((err) => {
+			const message = err instanceof Error ? err.message : String(err);
 			console.error(
-				`[removeWorktree] Failed to spawn rm for ${tempPath}:`,
-				err.message,
+				`[removeWorktree] Background cleanup of ${tempPath} failed:`,
+				message,
 			);
-		});
-		child.on("exit", (code: number | null) => {
-			if (code !== 0) {
-				console.error(
-					`[removeWorktree] Background cleanup of ${tempPath} failed (exit ${code})`,
-				);
-			}
 		});
 	} catch (error) {
 		const code = (error as NodeJS.ErrnoException).code;
@@ -730,9 +720,15 @@ export async function worktreeExists(
 		const git = simpleGit(mainRepoPath);
 		const worktrees = await git.raw(["worktree", "list", "--porcelain"]);
 
-		const lines = worktrees.split("\n");
-		const worktreePrefix = `worktree ${worktreePath}`;
-		return lines.some((line) => line.trim() === worktreePrefix);
+		// git emits forward-slash paths in porcelain output; worktreePath is
+		// built with path.join (backslashes on Windows). Compare canonical forms
+		// so the two spellings match on win32 (byte-identical on POSIX).
+		const target = canonicalizePath(worktreePath);
+		return worktrees.split("\n").some((line) => {
+			const trimmed = line.trim();
+			if (!trimmed.startsWith("worktree ")) return false;
+			return canonicalizePath(trimmed.slice("worktree ".length)) === target;
+		});
 	} catch (error) {
 		console.error(`Failed to check worktree existence: ${error}`);
 		throw error;

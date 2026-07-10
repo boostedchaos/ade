@@ -3,13 +3,18 @@ import path from "node:path";
 import { env } from "shared/env.shared";
 import { HOOKS_DIR } from "./paths";
 
-export const NOTIFY_SCRIPT_NAME = "notify.sh";
-export const NOTIFY_SCRIPT_MARKER = "# Superset agent notification hook";
+const IS_WINDOWS = process.platform === "win32";
+
+// On Windows the hook is a node script (no bash); POSIX keeps the .sh hook.
+export const NOTIFY_SCRIPT_NAME = IS_WINDOWS ? "notify.mjs" : "notify.sh";
+export const NOTIFY_SCRIPT_MARKER = IS_WINDOWS
+	? "// Superset agent notification hook"
+	: "# Superset agent notification hook";
 
 const NOTIFY_SCRIPT_TEMPLATE_PATH = path.join(
 	__dirname,
 	"templates",
-	"notify-hook.template.sh",
+	IS_WINDOWS ? "notify-hook.template.mjs" : "notify-hook.template.sh",
 );
 
 function writeFileIfChanged(

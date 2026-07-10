@@ -4,7 +4,9 @@ import path from "node:path";
 import {
 	buildWrapperScript,
 	createWrapper,
+	IS_WINDOWS,
 	isSupersetManagedHookCommand,
+	nodeHookCommand,
 	writeFileIfChanged,
 } from "./agent-wrappers-common";
 import { getNotifyScriptPath, NOTIFY_SCRIPT_NAME } from "./notify-hook";
@@ -65,7 +67,10 @@ export function getMastraHooksJsonContent(notifyScriptPath: string): string {
 		);
 	}
 
-	const notifyCommand = `bash ${quoteShellPath(notifyScriptPath)}`;
+	// Windows has no bash; run the .mjs notify hook via node instead.
+	const notifyCommand = IS_WINDOWS
+		? nodeHookCommand(notifyScriptPath)
+		: `bash ${quoteShellPath(notifyScriptPath)}`;
 	const managedEvents = ["UserPromptSubmit", "Stop", "PostToolUse"] as const;
 
 	for (const eventName of managedEvents) {

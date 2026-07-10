@@ -9,6 +9,7 @@
  */
 
 import type { Socket } from "node:net";
+import { homedir } from "node:os";
 import type {
 	ClearScrollbackRequest,
 	CreateOrAttachRequest,
@@ -113,7 +114,13 @@ export class TerminalHost {
 				});
 
 				session.spawn({
-					cwd: request.cwd || process.env.HOME || "/",
+					// HOME is unset on Windows; fall back to USERPROFILE then os.homedir()
+					// so we never hand the PTY a bogus "/" cwd there.
+					cwd:
+						request.cwd ||
+						process.env.HOME ||
+						process.env.USERPROFILE ||
+						homedir(),
 					cols: request.cols,
 					rows: request.rows,
 					env: request.env,

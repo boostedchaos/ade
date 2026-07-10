@@ -3,7 +3,8 @@ import {
 	getCommandShellArgs,
 	getShellEnv,
 } from "main/lib/agent-setup/shell-wrappers";
-import { buildSafeEnv, sanitizeEnv } from "main/lib/terminal/env";
+import { buildSafeEnv, getDefaultShell, sanitizeEnv } from "main/lib/terminal/env";
+import { treeKillAsync } from "main/lib/tree-kill";
 import { removeWorktree } from "./git";
 import { loadSetupConfig } from "./setup";
 
@@ -39,9 +40,13 @@ export async function runTeardown({
 	console.log(`[teardown] Running for "${workspaceName}": ${command}`);
 
 	try {
+		// Mirror the terminal layer's shell selection. On win32 getDefaultShell
+		// resolves pwsh/powershell/ComSpec; SHELL is a POSIX-only convention.
 		const shell =
-			process.env.SHELL ||
-			(process.platform === "darwin" ? "/bin/zsh" : "/bin/bash");
+			process.platform === "win32"
+				? getDefaultShell()
+				: process.env.SHELL ||
+					(process.platform === "darwin" ? "/bin/zsh" : "/bin/bash");
 
 		const baseEnv = buildSafeEnv(sanitizeEnv(process.env) || {});
 		const wrapperEnv = getShellEnv(shell);
@@ -51,6 +56,8 @@ export async function runTeardown({
 			const child = spawn(shell, args, {
 				cwd: worktreePath,
 				detached: true,
+				// Suppress a flashing console window on Windows (no-op elsewhere).
+				windowsHide: true,
 				stdio: ["ignore", "pipe", "pipe"],
 				env: {
 					...baseEnv,
@@ -104,7 +111,15 @@ export async function runTeardown({
 						`[teardown] Timed out after ${TEARDOWN_TIMEOUT_MS}ms, killing process group`,
 					);
 					try {
-						if (child.pid) process.kill(-child.pid, "SIGKILL");
+						if (child.pid) {
+							// Windows has no process groups; process.kill(-pid) is a
+							// POSIX construct. tree-kill uses taskkill /T on win32.
+							if (process.platform === "win32") {
+								void treeKillAsync(child.pid, "SIGKILL");
+							} else {
+								process.kill(-child.pid, "SIGKILL");
+							}
+						}
 					} catch {}
 					reject(
 						new Error(`Teardown timed out after ${TEARDOWN_TIMEOUT_MS}ms`),

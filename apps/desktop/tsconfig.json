@@ -12,7 +12,8 @@
 		"./src",
 		"electron.vite.config.ts",
 		"electron-builder.ts",
-		"index.d.ts"
+		"index.d.ts",
+		"types/node-pty.d.ts"
 	],
 	"exclude": [
 		"node_modules",

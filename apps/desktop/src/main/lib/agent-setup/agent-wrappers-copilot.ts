@@ -4,21 +4,34 @@ import { env } from "shared/env.shared";
 import {
 	buildWrapperScript,
 	createWrapper,
+	IS_WINDOWS,
+	nodeHookCommand,
 	writeFileIfChanged,
 } from "./agent-wrappers-common";
 import { HOOKS_DIR } from "./paths";
 
-export const COPILOT_HOOK_SCRIPT_NAME = "copilot-hook.sh";
+export const COPILOT_HOOK_SCRIPT_NAME = IS_WINDOWS
+	? "copilot-hook.mjs"
+	: "copilot-hook.sh";
 
-const COPILOT_HOOK_SIGNATURE = "# Superset copilot hook";
+const COPILOT_HOOK_SIGNATURE = IS_WINDOWS
+	? "// Superset copilot hook"
+	: "# Superset copilot hook";
 const COPILOT_HOOK_VERSION = "v1";
 export const COPILOT_HOOK_MARKER = `${COPILOT_HOOK_SIGNATURE} ${COPILOT_HOOK_VERSION}`;
 
 const COPILOT_HOOK_TEMPLATE_PATH = path.join(
 	__dirname,
 	"templates",
-	"copilot-hook.template.sh",
+	IS_WINDOWS ? "copilot-hook.template.mjs" : "copilot-hook.template.sh",
 );
+
+/** The command Copilot runs for a hook event (node on Windows, bare path on POSIX). */
+function copilotHookCommand(hookScriptPath: string, event: string): string {
+	return IS_WINDOWS
+		? nodeHookCommand(hookScriptPath, event)
+		: `${hookScriptPath} ${event}`;
+}
 
 export function getCopilotHookScriptPath(): string {
 	return path.join(HOOKS_DIR, COPILOT_HOOK_SCRIPT_NAME);
@@ -40,41 +53,44 @@ export function createCopilotHookScript(): void {
 	);
 }
 
-export function getCopilotHooksJsonContent(hookScriptPath: string): string {
-	const hooks = {
+export function getCopilotHooksObject(hookScriptPath: string): unknown {
+	return {
 		version: 1,
 		hooks: {
 			sessionStart: [
 				{
 					type: "command",
-					bash: `${hookScriptPath} sessionStart`,
+					bash: copilotHookCommand(hookScriptPath, "sessionStart"),
 					timeoutSec: 5,
 				},
 			],
 			sessionEnd: [
 				{
 					type: "command",
-					bash: `${hookScriptPath} sessionEnd`,
+					bash: copilotHookCommand(hookScriptPath, "sessionEnd"),
 					timeoutSec: 5,
 				},
 			],
 			userPromptSubmitted: [
 				{
 					type: "command",
-					bash: `${hookScriptPath} userPromptSubmitted`,
+					bash: copilotHookCommand(hookScriptPath, "userPromptSubmitted"),
 					timeoutSec: 5,
 				},
 			],
 			postToolUse: [
 				{
 					type: "command",
-					bash: `${hookScriptPath} postToolUse`,
+					bash: copilotHookCommand(hookScriptPath, "postToolUse"),
 					timeoutSec: 5,
 				},
 			],
 		},
 	};
-	return JSON.stringify(hooks, null, 2);
+}
+
+export function getCopilotHooksJsonContent(hookScriptPath: string): string {
+	return JSON.stringify(getCopilotHooksObject(hookScriptPath), null, 2);
 }
 
 export function buildCopilotWrapperExecLine(): string {

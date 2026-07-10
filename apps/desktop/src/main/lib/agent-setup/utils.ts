@@ -31,9 +31,45 @@ function findBinaryPathsWindows(name: string): string[] {
 }
 
 /**
- * Finds the real path of a binary, skipping our wrapper scripts.
+ * Picks the first candidate path that is NOT an ADE wrapper script.
  * Filters out all superset bin directories (prod, dev, and workspace-specific)
  * to avoid wrapper scripts calling each other.
+ *
+ * Normalizes separators to "/" first so the "/bin/" test matches on Windows
+ * (where.exe returns backslash paths), and case-folds on Windows because its
+ * filesystem is case-insensitive.
+ *
+ * Exported (pure) so the wrapper-dir filter can be unit-tested for both
+ * platforms without spawning a shell.
+ */
+export function pickRealBinaryPath(
+	candidates: string[],
+	homedir: string,
+	isWindows: boolean,
+): string | null {
+	const norm = (value: string): string => {
+		const forward = value.replaceAll("\\", "/");
+		return isWindows ? forward.toLowerCase() : forward;
+	};
+	// path.join uses the host separator; build with the caller-declared platform
+	// so tests can exercise the Windows filter on a POSIX host.
+	const joiner = isWindows ? path.win32 : path.posix;
+	const supersetBinDir = norm(joiner.join(homedir, ".ade", "bin"));
+	const supersetPrefix = norm(joiner.join(homedir, ".ade-"));
+	const filtered = candidates.filter((p) => {
+		if (!p) return false;
+		const normalized = norm(p);
+		if (normalized.startsWith(supersetBinDir)) return false;
+		if (normalized.startsWith(supersetPrefix) && normalized.includes("/bin/")) {
+			return false;
+		}
+		return true;
+	});
+	return filtered[0] || null;
+}
+
+/**
+ * Finds the real path of a binary, skipping our wrapper scripts.
  */
 export function findRealBinary(name: string): string | null {
 	try {
@@ -41,20 +77,7 @@ export function findRealBinary(name: string): string | null {
 		const allPaths = isWindows
 			? findBinaryPathsWindows(name)
 			: findBinaryPathsUnix(name);
-
-		const homedir = os.homedir();
-		// Filter out wrapper scripts from all ADE directories:
-		// - ~/.ade/bin
-		// - ~/.ade-*/bin (workspace-specific instances)
-		const supersetBinDir = path.join(homedir, ".ade", "bin");
-		const supersetPrefix = path.join(homedir, ".ade-");
-		const paths = allPaths.filter(
-			(p) =>
-				p &&
-				!p.startsWith(supersetBinDir) &&
-				!(p.startsWith(supersetPrefix) && p.includes("/bin/")),
-		);
-		return paths[0] || null;
+		return pickRealBinaryPath(allPaths, os.homedir(), isWindows);
 	} catch {
 		return null;
 	}

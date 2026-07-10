@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { settings } from "@superset/local-db";
+import { WIN_PLAY_SOUND_SCRIPT, WIN_SOUND_PATH_ENV } from "./win-sound";
 import {
 	CUSTOM_RINGTONE_ID,
 	DEFAULT_RINGTONE_ID,
@@ -63,10 +64,9 @@ function playSoundFile(soundPath: string): void {
 	if (process.platform === "darwin") {
 		execFile("afplay", [soundPath]);
 	} else if (process.platform === "win32") {
-		execFile("powershell", [
-			"-c",
-			`(New-Object Media.SoundPlayer '${soundPath}').PlaySync()`,
-		]);
+		execFile("powershell", ["-NoProfile", "-Command", WIN_PLAY_SOUND_SCRIPT], {
+			env: { ...process.env, [WIN_SOUND_PATH_ENV]: soundPath },
+		});
 	} else {
 		// Linux - try common audio players
 		execFile("paplay", [soundPath], (error) => {

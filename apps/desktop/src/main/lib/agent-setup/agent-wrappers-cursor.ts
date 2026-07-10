@@ -5,22 +5,35 @@ import { env } from "shared/env.shared";
 import {
 	buildWrapperScript,
 	createWrapper,
+	IS_WINDOWS,
 	isSupersetManagedHookCommand,
+	nodeHookCommand,
 	writeFileIfChanged,
 } from "./agent-wrappers-common";
 import { HOOKS_DIR } from "./paths";
 
-export const CURSOR_HOOK_SCRIPT_NAME = "cursor-hook.sh";
+export const CURSOR_HOOK_SCRIPT_NAME = IS_WINDOWS
+	? "cursor-hook.mjs"
+	: "cursor-hook.sh";
 
-const CURSOR_HOOK_SIGNATURE = "# Superset cursor hook";
+const CURSOR_HOOK_SIGNATURE = IS_WINDOWS
+	? "// Superset cursor hook"
+	: "# Superset cursor hook";
 const CURSOR_HOOK_VERSION = "v1";
 export const CURSOR_HOOK_MARKER = `${CURSOR_HOOK_SIGNATURE} ${CURSOR_HOOK_VERSION}`;
 
 const CURSOR_HOOK_TEMPLATE_PATH = path.join(
 	__dirname,
 	"templates",
-	"cursor-hook.template.sh",
+	IS_WINDOWS ? "cursor-hook.template.mjs" : "cursor-hook.template.sh",
 );
+
+/** Build a cursor hook command that passes the event name as an argument. */
+function cursorHookCommand(hookScriptPath: string, event: string): string {
+	return IS_WINDOWS
+		? nodeHookCommand(hookScriptPath, event)
+		: `${hookScriptPath} ${event}`;
+}
 
 interface CursorHookEntry {
 	command: string;
@@ -74,13 +87,13 @@ export function getCursorHooksJsonContent(hookScriptPath: string): string {
 	}
 
 	const ourHooks: Record<string, CursorHookEntry> = {
-		beforeSubmitPrompt: { command: `${hookScriptPath} Start` },
-		stop: { command: `${hookScriptPath} Stop` },
+		beforeSubmitPrompt: { command: cursorHookCommand(hookScriptPath, "Start") },
+		stop: { command: cursorHookCommand(hookScriptPath, "Stop") },
 		beforeShellExecution: {
-			command: `${hookScriptPath} PermissionRequest`,
+			command: cursorHookCommand(hookScriptPath, "PermissionRequest"),
 		},
 		beforeMCPExecution: {
-			command: `${hookScriptPath} PermissionRequest`,
+			command: cursorHookCommand(hookScriptPath, "PermissionRequest"),
 		},
 	};
 

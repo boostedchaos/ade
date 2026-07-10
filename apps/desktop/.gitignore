@@ -10,6 +10,8 @@
 /build
 /dist
 /.native-modules
+# staged win32-x64 native binaries (produced by scripts/prepare-win-natives.ts)
+/.win32-natives
 
 # stale compiled bundles (real output lives in /dist)
 /index.js

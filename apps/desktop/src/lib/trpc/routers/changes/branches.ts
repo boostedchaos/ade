@@ -10,6 +10,7 @@ import {
 	unsetBranchBaseConfig,
 } from "../workspaces/utils/base-branch-config";
 import { getCurrentBranch } from "../workspaces/utils/git";
+import { canonicalizePath } from "./security/path-canonical";
 import {
 	assertRegisteredWorktree,
 	getRegisteredWorktree,
@@ -212,6 +213,10 @@ async function getCheckedOutBranches(
 	try {
 		const worktreeList = await git.raw(["worktree", "list", "--porcelain"]);
 		const lines = worktreeList.split("\n");
+		// git porcelain output uses forward slashes; currentWorktreePath comes
+		// from the DB (backslashes on Windows). Canonicalize both so a worktree
+		// isn't mistaken for a different one on win32 (unchanged on POSIX).
+		const currentCanonical = canonicalizePath(currentWorktreePath);
 		let currentPath: string | null = null;
 
 		for (const line of lines) {
@@ -219,7 +224,7 @@ async function getCheckedOutBranches(
 				currentPath = line.substring(9).trim();
 			} else if (line.startsWith("branch ")) {
 				const branch = line.substring(7).trim().replace("refs/heads/", "");
-				if (currentPath && currentPath !== currentWorktreePath) {
+				if (currentPath && canonicalizePath(currentPath) !== currentCanonical) {
 					checkedOutBranches[branch] = currentPath;
 				}
 			}

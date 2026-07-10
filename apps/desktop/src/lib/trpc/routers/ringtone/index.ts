@@ -10,6 +10,7 @@ import {
 	importCustomRingtoneFromPath,
 } from "main/lib/custom-ringtones";
 import { getSoundPath } from "main/lib/sound-paths";
+import { WIN_PLAY_SOUND_SCRIPT, WIN_SOUND_PATH_ENV } from "main/lib/win-sound";
 import {
 	CUSTOM_RINGTONE_ID,
 	getRingtoneFilename,
@@ -69,7 +70,8 @@ function playSoundFile(soundPath: string): void {
 	} else if (process.platform === "win32") {
 		currentSession.process = execFile(
 			"powershell",
-			["-c", `(New-Object Media.SoundPlayer '${soundPath}').PlaySync()`],
+			["-NoProfile", "-Command", WIN_PLAY_SOUND_SCRIPT],
+			{ env: { ...process.env, [WIN_SOUND_PATH_ENV]: soundPath } },
 			() => {
 				if (currentSession?.id === sessionId) {
 					currentSession = null;

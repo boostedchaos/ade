@@ -113,6 +113,82 @@ function copyModuleIfSymlink(
 	return true;
 }
 
+function copyNodePtyPlatformPackages(nodeModulesDir: string): void {
+	// node-pty is aliased to the @lydell/node-pty wrapper, which requires
+	// `@lydell/node-pty-${platform}-${arch}` at runtime. Bun keeps that binary
+	// package in the store and exposes it via a symlink NESTED inside the
+	// wrapper's own node_modules. Copying the wrapper verbatim would leave that
+	// nested symlink pointing at an absolute store path that does not exist in
+	// the packaged app. Instead we materialize the platform package at the
+	// top-level node_modules/@lydell/<name> (where Node resolution walks up to
+	// find it) and strip the wrapper's nested node_modules.
+	const wrapperPath = join(nodeModulesDir, "node-pty");
+	const wrapperPkgJsonPath = join(wrapperPath, "package.json");
+	if (!existsSync(wrapperPkgJsonPath)) return;
+
+	type WrapperPackageJson = {
+		name?: string;
+		optionalDependencies?: Record<string, string>;
+	};
+	const wrapperPkg = JSON.parse(
+		readFileSync(wrapperPkgJsonPath, "utf8"),
+	) as WrapperPackageJson;
+
+	// Only act on the lydell wrapper (defensive: legacy node-pty has no
+	// @lydell/* optional deps and needs no special handling here).
+	if (wrapperPkg.name !== "@lydell/node-pty") return;
+
+	const optionalDeps = wrapperPkg.optionalDependencies ?? {};
+	const bunStoreDir = getBunStoreDir(nodeModulesDir);
+	let materializedPlatformPackage = false;
+
+	for (const [name, version] of Object.entries(optionalDeps)) {
+		if (!name.startsWith("@lydell/node-pty-")) continue;
+
+		const destPath = join(nodeModulesDir, name);
+		if (existsSync(destPath)) {
+			materializedPlatformPackage =
+				copyModuleIfSymlink(nodeModulesDir, name, false) ||
+				materializedPlatformPackage;
+			continue;
+		}
+
+		const bunStoreFolderName = findBunStoreFolderName(
+			bunStoreDir,
+			name,
+			version,
+		);
+		if (!bunStoreFolderName) continue; // Not installed for this platform.
+
+		const sourcePath = join(
+			bunStoreDir,
+			bunStoreFolderName,
+			"node_modules",
+			name,
+		);
+		if (!existsSync(sourcePath)) continue;
+
+		console.log(`  ${name}: copying from Bun store`);
+		mkdirSync(dirname(destPath), { recursive: true });
+		cpSync(realpathSync(sourcePath), destPath, { recursive: true });
+		materializedPlatformPackage = true;
+	}
+
+	// Remove the wrapper's nested node_modules so the platform package resolves
+	// from the top-level scope (avoids dangling absolute symlinks in the asar).
+	const wrapperNestedNodeModules = join(wrapperPath, "node_modules");
+	if (existsSync(wrapperNestedNodeModules)) {
+		rmSync(wrapperNestedNodeModules, { recursive: true, force: true });
+	}
+
+	if (!materializedPlatformPackage) {
+		console.error(
+			"  [ERROR] No `@lydell/node-pty-<platform>` runtime package was materialized",
+		);
+		process.exit(1);
+	}
+}
+
 function copyAstGrepPlatformPackages(nodeModulesDir: string): void {
 	const astGrepNapiPath = join(nodeModulesDir, "@ast-grep", "napi");
 	if (!existsSync(astGrepNapiPath)) return;
@@ -246,6 +322,9 @@ function prepareNativeModules() {
 	for (const moduleName of NATIVE_MODULE_DEPS) {
 		copyModuleIfSymlink(nodeModulesDir, moduleName, false);
 	}
+
+	console.log("\nPreparing node-pty platform package...");
+	copyNodePtyPlatformPackages(nodeModulesDir);
 
 	console.log("\nPreparing ast-grep platform package...");
 	copyAstGrepPlatformPackages(nodeModulesDir);

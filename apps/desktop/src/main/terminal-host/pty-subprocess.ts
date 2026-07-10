@@ -423,6 +423,18 @@ function handleSignal(payload: Buffer): void {
 		return;
 	}
 
+	// On Windows, node-pty (ConPTY) ignores POSIX signals like kill("SIGINT"),
+	// so Ctrl+C never reaches the child. Emulate an interrupt by writing the ETX
+	// control character (\x03) into the PTY instead, routed through the normal
+	// write queue. Non-interrupt signals have no ConPTY equivalent, so we drop
+	// them rather than terminate the process (this path must not escalate).
+	if (process.platform === "win32") {
+		if (signal === "SIGINT") {
+			queueWriteBuffer(Buffer.from("\x03", "utf8"));
+		}
+		return;
+	}
+
 	try {
 		ptyProcess.kill(signal);
 	} catch {

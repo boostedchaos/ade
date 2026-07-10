@@ -10,6 +10,7 @@ import {
 	type SettingsSection,
 	useSettingsSearchQuery,
 } from "renderer/stores/settings-state";
+import { WindowControls } from "renderer/routes/_authenticated/_dashboard/components/TopBar/components/WindowControls";
 import { SettingsSidebar } from "./components/SettingsSidebar";
 import { getMatchCountBySection } from "./utils/settings-search";
 
@@ -100,13 +101,16 @@ function SettingsLayout() {
 
 	return (
 		<div className="flex flex-col h-screen w-screen bg-tertiary">
-			{/* Top bar with Mac spacing - invisible but reserves space */}
+			{/* Top bar: reserves space for mac traffic lights; hosts the custom
+			    window controls on Windows/Linux (frameless window). */}
 			<div
-				className="drag h-8 w-full bg-tertiary"
+				className="drag h-8 w-full bg-tertiary flex items-center justify-end"
 				style={{
 					paddingLeft: isMac ? "88px" : "16px",
 				}}
-			/>
+			>
+				{!isMac && <WindowControls />}
+			</div>
 
 			{/* Main content */}
 			<div className="flex flex-1 overflow-hidden">

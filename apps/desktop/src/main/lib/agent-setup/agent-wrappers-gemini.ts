@@ -5,21 +5,27 @@ import { env } from "shared/env.shared";
 import {
 	buildWrapperScript,
 	createWrapper,
+	IS_WINDOWS,
 	isSupersetManagedHookCommand,
+	nodeHookCommand,
 	writeFileIfChanged,
 } from "./agent-wrappers-common";
 import { HOOKS_DIR } from "./paths";
 
-export const GEMINI_HOOK_SCRIPT_NAME = "gemini-hook.sh";
+export const GEMINI_HOOK_SCRIPT_NAME = IS_WINDOWS
+	? "gemini-hook.mjs"
+	: "gemini-hook.sh";
 
-const GEMINI_HOOK_SIGNATURE = "# Superset gemini hook";
+const GEMINI_HOOK_SIGNATURE = IS_WINDOWS
+	? "// Superset gemini hook"
+	: "# Superset gemini hook";
 const GEMINI_HOOK_VERSION = "v1";
 export const GEMINI_HOOK_MARKER = `${GEMINI_HOOK_SIGNATURE} ${GEMINI_HOOK_VERSION}`;
 
 const GEMINI_HOOK_TEMPLATE_PATH = path.join(
 	__dirname,
 	"templates",
-	"gemini-hook.template.sh",
+	IS_WINDOWS ? "gemini-hook.template.mjs" : "gemini-hook.template.sh",
 );
 
 interface GeminiHookConfig {
@@ -79,6 +85,11 @@ export function getGeminiSettingsJsonContent(hookScriptPath: string): string {
 		existing.hooks = {};
 	}
 
+	// On Windows Gemini must run the .mjs hook via node.
+	const geminiCommand = IS_WINDOWS
+		? nodeHookCommand(hookScriptPath)
+		: hookScriptPath;
+
 	const eventNames = ["BeforeAgent", "AfterAgent", "AfterTool"];
 
 	for (const eventName of eventNames) {
@@ -93,13 +104,13 @@ export function getGeminiSettingsJsonContent(hookScriptPath: string): string {
 					),
 			);
 			filtered.push({
-				hooks: [{ type: "command", command: hookScriptPath }],
+				hooks: [{ type: "command", command: geminiCommand }],
 			});
 			existing.hooks[eventName] = filtered;
 		} else {
 			existing.hooks[eventName] = [
 				{
-					hooks: [{ type: "command", command: hookScriptPath }],
+					hooks: [{ type: "command", command: geminiCommand }],
 				},
 			];
 		}

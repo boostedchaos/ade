@@ -474,10 +474,17 @@ describe("env", () => {
 		});
 
 		describe("Windows platform case-insensitivity", () => {
-			it("should include Path (Windows casing) when platform is win32", () => {
+			// On win32, buildSafeEnv matches allowlisted vars case-insensitively AND
+			// canonicalizes the stored key to uppercase, so downstream code reading
+			// env.PATH / env.SYSTEMROOT finds the value regardless of the OS's casing
+			// (Windows reports "Path", "SystemRoot", etc.). PowerShell needs SystemRoot
+			// present or it refuses to start.
+			it("should include Path as canonical PATH when platform is win32", () => {
 				const env = { Path: "C:\\Windows\\System32", HOME: "/home/user" };
 				const result = buildSafeEnv(env, { platform: "win32" });
-				expect(result.Path).toBe("C:\\Windows\\System32");
+				expect(result.PATH).toBe("C:\\Windows\\System32");
+				// Original mixed casing must not survive (it would shadow env.PATH reads)
+				expect(result.Path).toBeUndefined();
 			});
 
 			it("should NOT include Path on non-Windows (case-sensitive)", () => {
@@ -487,20 +494,21 @@ describe("env", () => {
 				expect(result.HOME).toBe("/home/user");
 			});
 
-			it("should include SystemRoot (Windows casing) when platform is win32", () => {
+			it("should include SystemRoot as canonical SYSTEMROOT when platform is win32", () => {
 				const env = { SystemRoot: "C:\\Windows", PATH: "/usr/bin" };
 				const result = buildSafeEnv(env, { platform: "win32" });
-				expect(result.SystemRoot).toBe("C:\\Windows");
+				expect(result.SYSTEMROOT).toBe("C:\\Windows");
+				expect(result.SystemRoot).toBeUndefined();
 			});
 
-			it("should include TEMP and TMP on Windows", () => {
+			it("should include TEMP and TMP (canonical uppercase) on Windows", () => {
 				const env = {
 					Temp: "C:\\Users\\test\\AppData\\Local\\Temp",
 					TMP: "C:\\Users\\test\\AppData\\Local\\Temp",
 					PATH: "/usr/bin",
 				};
 				const result = buildSafeEnv(env, { platform: "win32" });
-				expect(result.Temp).toBe("C:\\Users\\test\\AppData\\Local\\Temp");
+				expect(result.TEMP).toBe("C:\\Users\\test\\AppData\\Local\\Temp");
 				expect(result.TMP).toBe("C:\\Users\\test\\AppData\\Local\\Temp");
 			});
 
@@ -513,28 +521,52 @@ describe("env", () => {
 				expect(result.PATHEXT).toBe(".COM;.EXE;.BAT;.CMD");
 			});
 
-			it("should include Superset_* prefix vars case-insensitively on Windows", () => {
+			it("should preserve the Windows console vars PowerShell requires", () => {
+				// Regression guard: these must survive the allowlist under any casing
+				// or PowerShell/pwsh fails to launch.
+				const env = {
+					SystemRoot: "C:\\Windows",
+					windir: "C:\\Windows",
+					ComSpec: "C:\\Windows\\System32\\cmd.exe",
+					PATHEXT: ".COM;.EXE;.BAT;.CMD",
+					UserProfile: "C:\\Users\\test",
+					AppData: "C:\\Users\\test\\AppData\\Roaming",
+					LocalAppData: "C:\\Users\\test\\AppData\\Local",
+				};
+				const result = buildSafeEnv(env, { platform: "win32" });
+				expect(result.SYSTEMROOT).toBe("C:\\Windows");
+				expect(result.WINDIR).toBe("C:\\Windows");
+				expect(result.COMSPEC).toBe("C:\\Windows\\System32\\cmd.exe");
+				expect(result.PATHEXT).toBe(".COM;.EXE;.BAT;.CMD");
+				expect(result.USERPROFILE).toBe("C:\\Users\\test");
+				expect(result.APPDATA).toBe("C:\\Users\\test\\AppData\\Roaming");
+				expect(result.LOCALAPPDATA).toBe("C:\\Users\\test\\AppData\\Local");
+			});
+
+			it("should include Superset_* prefix vars as canonical uppercase on Windows", () => {
 				const env = {
 					Superset_Pane_Id: "pane-1",
 					SUPERSET_TAB_ID: "tab-1",
 					PATH: "/usr/bin",
 				};
 				const result = buildSafeEnv(env, { platform: "win32" });
-				expect(result.Superset_Pane_Id).toBe("pane-1");
+				expect(result.SUPERSET_PANE_ID).toBe("pane-1");
 				expect(result.SUPERSET_TAB_ID).toBe("tab-1");
 			});
 
-			it("should preserve original key casing in output", () => {
+			it("should canonicalize keys to uppercase on Windows", () => {
 				const env = {
 					Path: "C:\\Windows\\System32",
 					systemroot: "C:\\Windows",
 					HOME: "/home/user",
 				};
 				const result = buildSafeEnv(env, { platform: "win32" });
-				// Keys should preserve their original casing
-				expect(result.Path).toBe("C:\\Windows\\System32");
-				expect(result.systemroot).toBe("C:\\Windows");
+				expect(result.PATH).toBe("C:\\Windows\\System32");
+				expect(result.SYSTEMROOT).toBe("C:\\Windows");
 				expect(result.HOME).toBe("/home/user");
+				// Non-canonical casings should not leak through
+				expect(result.Path).toBeUndefined();
+				expect(result.systemroot).toBeUndefined();
 			});
 		});
 	});

@@ -22,7 +22,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { createServer, type Server, Socket } from "node:net";
-import { homedir } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { SUPERSET_DIR_NAME } from "shared/constants";
 import {
@@ -57,8 +57,30 @@ const DAEMON_VERSION = "1.0.0";
 // This allows workspace-specific home directories (e.g., ~/.superset-my-feature)
 const SUPERSET_HOME_DIR = join(homedir(), SUPERSET_DIR_NAME);
 
-// Socket and token paths
-const SOCKET_PATH = join(SUPERSET_HOME_DIR, "terminal-host.sock");
+// On Windows the terminal-host IPC transport is a named pipe rather than a Unix
+// domain socket file. The pipe name must be computed identically here and in the
+// client (client.ts getWindowsPipeName). It is namespaced by username (cross-user
+// isolation) and by SUPERSET_DIR_NAME (per-worktree isolation, mirroring how the
+// POSIX socket path lives under the worktree-specific home dir).
+const IS_WINDOWS = process.platform === "win32";
+
+function getWindowsPipeName(): string {
+	const sanitize = (s: string) => s.replace(/[^A-Za-z0-9]/g, "_") || "x";
+	let username = "";
+	try {
+		username = userInfo().username;
+	} catch {
+		username = process.env.USERNAME || process.env.USER || "user";
+	}
+	return `\\\\.\\pipe\\ade-terminal-host-${sanitize(username)}-${sanitize(
+		SUPERSET_DIR_NAME,
+	)}`;
+}
+
+// Socket (POSIX Unix domain socket file) or named pipe (Windows) for IPC.
+const SOCKET_PATH = IS_WINDOWS
+	? getWindowsPipeName()
+	: join(SUPERSET_HOME_DIR, "terminal-host.sock");
 const TOKEN_PATH = join(SUPERSET_HOME_DIR, "terminal-host.token");
 const PID_PATH = join(SUPERSET_HOME_DIR, "terminal-host.pid");
 
@@ -636,7 +658,9 @@ function handleConnection(socket: Socket) {
  */
 function isSocketLive(): Promise<boolean> {
 	return new Promise((resolve) => {
-		if (!existsSync(SOCKET_PATH)) {
+		// On Windows SOCKET_PATH is a pipe name, not a file, so existsSync is
+		// meaningless — a failed connect is the only reliable staleness signal.
+		if (!IS_WINDOWS && !existsSync(SOCKET_PATH)) {
 			resolve(false);
 			return;
 		}
@@ -676,9 +700,17 @@ async function startServer(): Promise<void> {
 		// May fail if not owner, that's okay
 	}
 
-	// Check if socket is live before removing it
-	// This prevents orphaning a running daemon
-	if (existsSync(SOCKET_PATH)) {
+	// Check if a daemon is already listening before we bind.
+	// POSIX: a leftover socket file must be unlinked before we can re-listen.
+	// Windows: a named pipe has no file to unlink — a failed connect means it's
+	// stale, and the pipe is destroyed automatically when its owner exits, so we
+	// just probe liveness and let listen() re-create it.
+	if (IS_WINDOWS) {
+		if (await isSocketLive()) {
+			log("error", "Another daemon is already running and responsive");
+			throw new Error("Another daemon is already running");
+		}
+	} else if (existsSync(SOCKET_PATH)) {
 		const isLive = await isSocketLive();
 		if (isLive) {
 			log("error", "Another daemon is already running and responsive");
@@ -741,11 +773,15 @@ async function startServer(): Promise<void> {
 		});
 
 		newServer.listen(SOCKET_PATH, () => {
-			// Set socket permissions (readable/writable by owner only)
-			try {
-				chmodSync(SOCKET_PATH, 0o600);
-			} catch {
-				// May fail on some systems, that's okay - directory permissions protect us
+			// Set socket permissions (readable/writable by owner only).
+			// Not applicable to Windows named pipes, whose ACL defaults to the
+			// creating user; chmod on a pipe name is meaningless.
+			if (!IS_WINDOWS) {
+				try {
+					chmodSync(SOCKET_PATH, 0o600);
+				} catch {
+					// May fail on some systems, that's okay - directory permissions protect us
+				}
 			}
 
 			// Write PID file
@@ -777,7 +813,9 @@ async function stopServer(): Promise<void> {
 	});
 
 	try {
-		if (existsSync(SOCKET_PATH)) unlinkSync(SOCKET_PATH);
+		// Windows named pipes are torn down automatically when the server closes;
+		// there is no file to unlink (and unlinkSync on a pipe name would throw).
+		if (!IS_WINDOWS && existsSync(SOCKET_PATH)) unlinkSync(SOCKET_PATH);
 		if (existsSync(PID_PATH)) unlinkSync(PID_PATH);
 	} catch {
 		// Best effort cleanup
@@ -798,6 +836,11 @@ function setupSignalHandlers() {
 	process.on("SIGINT", () => shutdown("SIGINT"));
 	process.on("SIGTERM", () => shutdown("SIGTERM"));
 	process.on("SIGHUP", () => shutdown("SIGHUP"));
+	// Windows does not deliver SIGHUP/SIGTERM to a detached process; SIGBREAK
+	// (Ctrl+Break / console close) is the closest equivalent. Registering it on
+	// POSIX is harmless — the signal is simply never raised there. The IPC
+	// `shutdown` request remains the primary graceful-stop path on Windows.
+	process.on("SIGBREAK", () => shutdown("SIGBREAK"));
 
 	// Handle uncaught errors
 	process.on("uncaughtException", (error) => {

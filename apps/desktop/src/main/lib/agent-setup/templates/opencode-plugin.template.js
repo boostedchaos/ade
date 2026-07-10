@@ -49,7 +49,7 @@ export const SupersetNotifyPlugin = async ({ $, client }) => {
     const payload = JSON.stringify({ hook_event_name: hookEventName });
     log('Sending notification:', hookEventName);
     try {
-      await $`bash ${notifyPath} ${payload}`;
+      await $`{{NOTIFY_RUNNER}} ${notifyPath} ${payload}`;
       log('Notification sent successfully');
     } catch (err) {
       log('Notification failed:', err?.message || err);

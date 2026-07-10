@@ -4,6 +4,8 @@ import path from "node:path";
 import {
 	buildWrapperScript,
 	createWrapper,
+	IS_WINDOWS,
+	nodeHookCommand,
 	writeFileIfChanged,
 } from "./agent-wrappers-common";
 import { getNotifyScriptPath } from "./notify-hook";
@@ -44,19 +46,21 @@ export function getOpenCodeGlobalPluginPath(): string {
 	return path.join(configHome, "opencode", "plugin", OPENCODE_PLUGIN_FILE);
 }
 
-export function getClaudeSettingsContent(notifyPath: string): string {
+export function getClaudeSettingsContent(notifyCommand: string): string {
 	const settings = {
 		hooks: {
-			UserPromptSubmit: [{ hooks: [{ type: "command", command: notifyPath }] }],
-			Stop: [{ hooks: [{ type: "command", command: notifyPath }] }],
+			UserPromptSubmit: [
+				{ hooks: [{ type: "command", command: notifyCommand }] },
+			],
+			Stop: [{ hooks: [{ type: "command", command: notifyCommand }] }],
 			PostToolUse: [
-				{ matcher: "*", hooks: [{ type: "command", command: notifyPath }] },
+				{ matcher: "*", hooks: [{ type: "command", command: notifyCommand }] },
 			],
 			PostToolUseFailure: [
-				{ matcher: "*", hooks: [{ type: "command", command: notifyPath }] },
+				{ matcher: "*", hooks: [{ type: "command", command: notifyCommand }] },
 			],
 			PermissionRequest: [
-				{ matcher: "*", hooks: [{ type: "command", command: notifyPath }] },
+				{ matcher: "*", hooks: [{ type: "command", command: notifyCommand }] },
 			],
 		},
 	};
@@ -66,15 +70,22 @@ export function getClaudeSettingsContent(notifyPath: string): string {
 
 export function getOpenCodePluginContent(notifyPath: string): string {
 	const template = fs.readFileSync(OPENCODE_PLUGIN_TEMPLATE_PATH, "utf-8");
+	// On Windows the notify hook is a .mjs run via node; POSIX runs the .sh via bash.
+	const notifyRunner = IS_WINDOWS ? "node" : "bash";
 	return template
 		.replace("{{MARKER}}", OPENCODE_PLUGIN_MARKER)
+		.replace("{{NOTIFY_RUNNER}}", notifyRunner)
 		.replace("{{NOTIFY_PATH}}", notifyPath);
 }
 
 function createClaudeSettings(): string {
 	const settingsPath = getClaudeSettingsPath();
 	const notifyPath = getNotifyScriptPath();
-	const settings = getClaudeSettingsContent(notifyPath);
+	// On Windows the hook is a .mjs that Claude must run via node.
+	const notifyCommand = IS_WINDOWS
+		? nodeHookCommand(notifyPath)
+		: notifyPath;
+	const settings = getClaudeSettingsContent(notifyCommand);
 
 	writeFileIfChanged(settingsPath, settings, 0o644);
 	return settingsPath;

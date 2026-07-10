@@ -347,15 +347,23 @@ export function buildSafeEnv(
 	const safe: Record<string, string> = {};
 
 	for (const [key, value] of Object.entries(env)) {
+		// On Windows the OS reports keys with arbitrary casing (e.g. "Path",
+		// "SystemRoot"). We match case-insensitively AND canonicalize the stored
+		// key to uppercase so downstream code that reads env.PATH / env.SYSTEMROOT
+		// finds them. Without this, an allowlisted "Path" survives as "Path" and
+		// PowerShell fails to start (it needs SystemRoot) or PATH injection misses.
+		// Windows env vars are case-insensitive, so collapsing to uppercase is safe.
+		const outKey = isWindows ? key.toUpperCase() : key;
+
 		// Check exact match (case-insensitive on Windows)
 		if (isAllowedVar(key, isWindows)) {
-			safe[key] = value;
+			safe[outKey] = value;
 			continue;
 		}
 
 		// Check prefix match (case-insensitive on Windows)
 		if (hasAllowedPrefix(key, isWindows)) {
-			safe[key] = value;
+			safe[outKey] = value;
 		}
 	}
 
@@ -403,10 +411,17 @@ function linkSharedCodexAuth(codexHome: string): void {
 		fs.mkdirSync(codexHome, { recursive: true });
 
 		const agentAuth = join(codexHome, "auth.json");
-		// existsSync follows symlinks, so an existing (valid) link is left alone.
+		// existsSync follows symlinks, so an existing (valid) link/copy is left alone.
 		if (fs.existsSync(agentAuth)) return;
 
-		fs.symlinkSync(sharedAuth, agentAuth);
+		// Windows symlinks require admin or Developer Mode; copy the file instead so
+		// the shared login still propagates. On POSIX we keep the symlink so a later
+		// `codex login` that rewrites the shared auth.json is reflected live.
+		if (os.platform() === "win32") {
+			fs.copyFileSync(sharedAuth, agentAuth);
+		} else {
+			fs.symlinkSync(sharedAuth, agentAuth);
+		}
 	} catch {
 		// Auth sharing is a convenience; a failure here must not break the terminal.
 	}

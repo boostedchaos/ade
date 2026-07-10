@@ -67,6 +67,13 @@ const {
 	getMastraHooksJsonContent,
 } = await import("./agent-wrappers");
 
+const {
+	createShimRuntime,
+	createWindowsShim,
+	getShimRuntimePath,
+	nodeHookCommand,
+} = await import("./agent-wrappers-common");
+
 describe("agent-wrappers copilot", () => {
 	beforeEach(() => {
 		mockedHomeDir = path.join(TEST_ROOT, "home");
@@ -153,15 +160,73 @@ describe("agent-wrappers copilot", () => {
 		const wrapperPath = path.join(TEST_BIN_DIR, "mastracode");
 		const wrapper = readFileSync(wrapperPath, "utf-8");
 
-		expect(wrapper).toContain("# Superset wrapper for mastracode");
+		expect(wrapper).toContain("# ADE wrapper for mastracode");
 		expect(wrapper).toContain('REAL_BIN="$(find_real_binary "mastracode")"');
 		expect(wrapper).toContain('exec "$REAL_BIN" "$@"');
 	});
 
+	describe("windows shims", () => {
+		it("nodeHookCommand quotes the path and appends the event arg", () => {
+			expect(nodeHookCommand("C:\\Users\\dev\\.ade\\hooks\\notify.mjs")).toBe(
+				'node "C:\\Users\\dev\\.ade\\hooks\\notify.mjs"',
+			);
+			expect(
+				nodeHookCommand("C:\\Users\\dev\\.ade\\hooks\\cursor-hook.mjs", "Start"),
+			).toBe('node "C:\\Users\\dev\\.ade\\hooks\\cursor-hook.mjs" Start');
+		});
+
+		it("createWindowsShim writes .cmd and .ps1 that delegate to the node launcher", () => {
+			createWindowsShim("claude");
+
+			const shimPath = getShimRuntimePath();
+			const cmd = readFileSync(path.join(TEST_BIN_DIR, "claude.cmd"), "utf-8");
+			const ps1 = readFileSync(path.join(TEST_BIN_DIR, "claude.ps1"), "utf-8");
+
+			expect(cmd).toContain("@echo off");
+			// Header carries the "agent-wrapper" needle so the resolver skips it.
+			expect(cmd).toContain("agent-wrapper");
+			expect(cmd).toContain(`node "${shimPath}" claude %*`);
+
+			expect(ps1).toContain("agent-wrapper");
+			expect(ps1).toContain(`& node '${shimPath}' claude @args`);
+			expect(ps1).toContain("exit $LASTEXITCODE");
+		});
+
+		it("createShimRuntime bakes the per-agent config into agent-shim.mjs", () => {
+			const shimPath = getShimRuntimePath();
+			createShimRuntime({
+				binDir: TEST_BIN_DIR,
+				notifyMjs: path.join(TEST_HOOKS_DIR, "notify.mjs"),
+				installInfo: {
+					claude: {
+						label: "Claude Code",
+						command: "npm i -g @anthropic-ai/claude-code",
+						url: "https://claude.com/claude-code",
+					},
+				},
+				agents: {
+					claude: { extraArgs: ["--settings", "C:\\settings.json"] },
+					codex: { codexWatcher: true },
+				},
+			});
+
+			const runtime = readFileSync(shimPath, "utf-8");
+			// The template's static launcher logic survives substitution...
+			expect(runtime).toContain("function findRealBinary");
+			expect(runtime).toContain("startCodexWatcher");
+			// ...and the baked config is valid, parseable JSON in the CONFIG slot.
+			expect(runtime).toContain("const CONFIG = {");
+			expect(runtime).toContain('"codexWatcher": true');
+			expect(runtime).toContain('"--settings"');
+			expect(runtime).not.toContain("{{CONFIG}}");
+			expect(runtime).not.toContain("{{MARKER}}");
+		});
+	});
+
 	it("replaces stale Cursor hook commands from old superset paths", () => {
 		const cursorHooksPath = path.join(mockedHomeDir, ".cursor", "hooks.json");
-		const staleHookPath = "/tmp/.superset-old/hooks/cursor-hook.sh";
-		const currentHookPath = "/tmp/.superset-new/hooks/cursor-hook.sh";
+		const staleHookPath = "/tmp/.ade-old/hooks/cursor-hook.sh";
+		const currentHookPath = "/tmp/.ade-new/hooks/cursor-hook.sh";
 
 		mkdirSync(path.dirname(cursorHooksPath), { recursive: true });
 		writeFileSync(
@@ -215,8 +280,8 @@ describe("agent-wrappers copilot", () => {
 			".gemini",
 			"settings.json",
 		);
-		const staleHookPath = "/tmp/.superset-old/hooks/gemini-hook.sh";
-		const currentHookPath = "/tmp/.superset-new/hooks/gemini-hook.sh";
+		const staleHookPath = "/tmp/.ade-old/hooks/gemini-hook.sh";
+		const currentHookPath = "/tmp/.ade-new/hooks/gemini-hook.sh";
 
 		mkdirSync(path.dirname(geminiSettingsPath), { recursive: true });
 		writeFileSync(
@@ -322,8 +387,8 @@ describe("agent-wrappers copilot", () => {
 			".mastracode",
 			"hooks.json",
 		);
-		const staleHookPath = "/tmp/.superset-old/hooks/notify.sh";
-		const currentHookPath = "/tmp/.superset-new/hooks/notify.sh";
+		const staleHookPath = "/tmp/.ade-old/hooks/notify.sh";
+		const currentHookPath = "/tmp/.ade-new/hooks/notify.sh";
 
 		mkdirSync(path.dirname(mastraHooksPath), { recursive: true });
 		writeFileSync(

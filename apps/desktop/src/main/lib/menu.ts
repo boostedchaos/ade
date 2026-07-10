@@ -1,5 +1,5 @@
 import { COMPANY } from "@superset/shared/constants";
-import { app, BrowserWindow, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, Menu, shell } from "electron";
 import { env } from "main/env.main";
 import { appState } from "main/lib/app-state";
 import { hotkeysEmitter } from "main/lib/hotkeys-events";
@@ -182,6 +182,50 @@ export function createApplicationMenu() {
 				{ role: "quit" },
 			],
 		});
+	} else {
+		// Windows/Linux have no application menu, so Settings, Quit, About, and
+		// the update check would otherwise be unreachable. autoHideMenuBar keeps
+		// this bar hidden until Alt is pressed. checkForUpdatesInteractive
+		// self-gates (shows "only on macOS and Linux" on Windows), matching the
+		// current update gating.
+		template.unshift({
+			label: "File",
+			submenu: [
+				{
+					label: "Settings...",
+					accelerator: openSettingsAccelerator,
+					click: () => {
+						menuEmitter.emit("open-settings");
+					},
+				},
+				{ type: "separator" },
+				{ role: "quit" },
+			],
+		});
+
+		const helpMenu = template.find((item) => item.label === "Help");
+		if (helpMenu && Array.isArray(helpMenu.submenu)) {
+			helpMenu.submenu.push(
+				{ type: "separator" },
+				{
+					label: `About ${app.name}`,
+					click: () => {
+						dialog.showMessageBox({
+							type: "info",
+							title: `About ${app.name}`,
+							message: app.name,
+							detail: `Version ${app.getVersion()}`,
+						});
+					},
+				},
+				{
+					label: "Check for Updates...",
+					click: () => {
+						checkForUpdatesInteractive();
+					},
+				},
+			);
+		}
 	}
 
 	const menu = Menu.buildFromTemplate(template);

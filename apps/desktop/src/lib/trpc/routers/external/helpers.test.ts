@@ -1,7 +1,36 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import os from "node:os";
 import path from "node:path";
-import { getAppCommand, resolvePath, stripPathWrappers } from "./helpers";
+import {
+	getAppCommand,
+	looksLikePath,
+	resolvePath,
+	stripPathWrappers,
+} from "./helpers";
+
+describe("looksLikePath", () => {
+	test("recognizes POSIX paths", () => {
+		expect(looksLikePath("src/file.ts")).toBe(true);
+		expect(looksLikePath("/abs/path")).toBe(true);
+		expect(looksLikePath("./rel")).toBe(true);
+		expect(looksLikePath("~/home")).toBe(true);
+	});
+
+	test("recognizes Windows drive-letter paths", () => {
+		expect(looksLikePath("C:\\Users\\dev\\file.ts")).toBe(true);
+		expect(looksLikePath("C:/Users/dev/file.ts")).toBe(true);
+		expect(looksLikePath("d:\\project")).toBe(true);
+	});
+
+	test("recognizes backslash-separated paths", () => {
+		expect(looksLikePath("src\\components\\App.tsx")).toBe(true);
+	});
+
+	test("rejects plain words", () => {
+		expect(looksLikePath("hello")).toBe(false);
+		expect(looksLikePath("word")).toBe(false);
+	});
+});
 
 describe("getAppCommand", () => {
 	test("returns null for finder (handled specially)", () => {

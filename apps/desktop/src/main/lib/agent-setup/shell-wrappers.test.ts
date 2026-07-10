@@ -7,6 +7,7 @@ import {
 	createZshWrapper,
 	getCommandShellArgs,
 	getShellArgs,
+	getShellName,
 	type ShellWrapperPaths,
 } from "./shell-wrappers";
 
@@ -110,7 +111,50 @@ describe("shell-wrappers", () => {
 
 	it("returns empty args for unrecognized shells", () => {
 		expect(getShellArgs("/bin/csh")).toEqual([]);
-		expect(getShellArgs("powershell")).toEqual([]);
+	});
+
+	describe("windows shells", () => {
+		it("normalizes backslash paths and strips .exe in getShellName", () => {
+			expect(getShellName("C:\\WINDOWS\\System32\\cmd.exe")).toBe("cmd");
+			expect(
+				getShellName(
+					"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+				),
+			).toBe("powershell");
+			expect(getShellName("C:\\Program Files\\PowerShell\\7\\pwsh.exe")).toBe(
+				"pwsh",
+			);
+			// Case-insensitive .exe strip and POSIX paths still work.
+			expect(getShellName("D:\\tools\\PWSH.EXE")).toBe("PWSH");
+			expect(getShellName("/bin/zsh")).toBe("zsh");
+		});
+
+		it("uses interactive args for powershell/pwsh and none for cmd", () => {
+			expect(getShellArgs("C:\\WINDOWS\\System32\\cmd.exe")).toEqual([]);
+			expect(getShellArgs("powershell.exe")).toEqual(["-NoLogo"]);
+			expect(getShellArgs("pwsh.exe")).toEqual(["-NoLogo"]);
+		});
+
+		it("builds command args for cmd and powershell (no -lc)", () => {
+			expect(getCommandShellArgs("C:\\WINDOWS\\System32\\cmd.exe", "echo ok")).toEqual([
+				"/d",
+				"/s",
+				"/c",
+				"echo ok",
+			]);
+			expect(getCommandShellArgs("powershell.exe", "echo ok")).toEqual([
+				"-NoProfile",
+				"-NonInteractive",
+				"-Command",
+				"echo ok",
+			]);
+			expect(getCommandShellArgs("pwsh.exe", "echo ok")).toEqual([
+				"-NoProfile",
+				"-NonInteractive",
+				"-Command",
+				"echo ok",
+			]);
+		});
 	});
 
 	describe("fish shell", () => {

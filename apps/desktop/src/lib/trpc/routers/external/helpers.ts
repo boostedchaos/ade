@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import nodePath from "node:path";
 import type { ExternalApp } from "@superset/local-db";
 
@@ -41,15 +42,91 @@ const BUNDLE_ID_CANDIDATES: Partial<Record<ExternalApp, string[]>> = {
 };
 
 /**
+ * Windows editor CLI shims. These are the launchers installers place on PATH
+ * (`code.cmd`, `cursor.cmd`, `subl.exe`, …). Apps with no Windows CLI are
+ * absent — the caller then falls back to Electron's `shell.openPath`, which
+ * opens the file with the OS default handler.
+ */
+const WIN32_CLI_SHIMS: Partial<Record<ExternalApp, string>> = {
+	vscode: "code",
+	"vscode-insiders": "code-insiders",
+	cursor: "cursor",
+	antigravity: "antigravity",
+	zed: "zed",
+	sublime: "subl",
+};
+
+/**
+ * Resolve an executable/shim name to its full path via PATH + PATHEXT.
+ * Windows shims are often `.cmd`/`.bat`, which Node cannot spawn directly, so
+ * callers must know the real extension. Returns null if not found on PATH.
+ */
+function resolveOnPath(name: string): string | null {
+	const pathEnv = process.env.PATH || process.env.Path || "";
+	const dirs = pathEnv.split(nodePath.delimiter).filter(Boolean);
+	const isWin = process.platform === "win32";
+	const exts = isWin
+		? (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+				.split(";")
+				.map((e) => e.trim())
+				.filter(Boolean)
+		: [""];
+
+	for (const dir of dirs) {
+		// name may already carry an extension
+		const asIs = nodePath.join(dir, name);
+		if (existsSync(asIs)) return asIs;
+		for (const ext of exts) {
+			const candidate = nodePath.join(dir, name + ext);
+			if (existsSync(candidate)) return candidate;
+		}
+	}
+	return null;
+}
+
+/**
+ * Windows variant of getAppCommand. Resolves the editor's CLI shim on PATH and,
+ * because `.cmd`/`.bat` shims cannot be spawned directly by Node, routes those
+ * through `cmd.exe /d /s /c`. Returns null (→ shell.openPath fallback) when the
+ * app has no Windows CLI or its shim isn't installed.
+ */
+function getWin32AppCommand(
+	app: ExternalApp,
+	targetPath: string,
+): { command: string; args: string[] }[] | null {
+	const shim = WIN32_CLI_SHIMS[app];
+	if (!shim) return null;
+
+	const resolved = resolveOnPath(shim);
+	if (!resolved) return null;
+
+	const ext = nodePath.extname(resolved).toLowerCase();
+	if (ext === ".cmd" || ext === ".bat") {
+		return [
+			{
+				command: process.env.COMSPEC || "cmd.exe",
+				args: ["/d", "/s", "/c", resolved, targetPath],
+			},
+		];
+	}
+	return [{ command: resolved, args: [targetPath] }];
+}
+
+/**
  * Get candidate commands to open a path in the specified app.
  * Returns an array of commands to try in order — for multi-edition apps (IntelliJ, PyCharm),
  * multiple bundle IDs are returned so the caller can fall back if one isn't installed.
  * Uses `open -b` (bundle ID) for multi-edition apps and `open -a` (app name) for others.
+ * On Windows, resolves editor CLI shims on PATH (see getWin32AppCommand).
  */
 export function getAppCommand(
 	app: ExternalApp,
 	targetPath: string,
 ): { command: string; args: string[] }[] | null {
+	if (process.platform === "win32") {
+		return getWin32AppCommand(app, targetPath);
+	}
+
 	const bundleIds = BUNDLE_ID_CANDIDATES[app];
 	if (bundleIds) {
 		return bundleIds.map((id) => ({
@@ -84,11 +161,14 @@ const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 
 /**
  * Check if a string looks like a file path.
- * A path typically contains forward slashes, or starts with ., ~, or /
+ * A path typically contains a separator (`/` or Windows `\`), a drive-letter
+ * prefix (`C:\`, `C:/`), or starts with ., ~, or /.
  */
-function looksLikePath(str: string): boolean {
+export function looksLikePath(str: string): boolean {
 	return (
 		str.includes("/") ||
+		str.includes("\\") ||
+		/^[a-zA-Z]:[\\/]/.test(str) ||
 		str.startsWith(".") ||
 		str.startsWith("~") ||
 		str.startsWith("/")

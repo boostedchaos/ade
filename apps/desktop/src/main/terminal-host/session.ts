@@ -10,6 +10,7 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import type { Socket } from "node:net";
+import { homedir } from "node:os";
 import * as path from "node:path";
 import { getShellArgs } from "../lib/agent-setup/shell-wrappers";
 import { buildSafeEnv } from "../lib/terminal/env";
@@ -954,7 +955,10 @@ export function createSession(request: CreateOrAttachRequest): Session {
 		tabId: request.tabId,
 		cols: request.cols,
 		rows: request.rows,
-		cwd: request.cwd || process.env.HOME || "/",
+		// HOME is unset on Windows; fall back to USERPROFILE then os.homedir()
+		// so we never hand the PTY a bogus "/" cwd there.
+		cwd:
+			request.cwd || process.env.HOME || process.env.USERPROFILE || homedir(),
 		env: request.env,
 		shell: request.shell,
 		workspaceName: request.workspaceName,

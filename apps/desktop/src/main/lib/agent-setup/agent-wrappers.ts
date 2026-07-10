@@ -28,6 +28,7 @@ export {
 	getCopilotHookScriptContent,
 	getCopilotHookScriptPath,
 	getCopilotHooksJsonContent,
+	getCopilotHooksObject,
 } from "./agent-wrappers-copilot";
 export {
 	CURSOR_HOOK_MARKER,

@@ -6,7 +6,14 @@
  * 2) required native runtime packages are missing from apps/desktop/node_modules
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+	closeSync,
+	existsSync,
+	openSync,
+	readdirSync,
+	readFileSync,
+	readSync,
+} from "node:fs";
 import { join } from "node:path";
 
 const projectRoot = join(import.meta.dirname, "..");
@@ -156,8 +163,84 @@ function validateNativeModulesPrepared(): void {
 	);
 }
 
+function parseTargetPlatform(): NodeJS.Platform {
+	const arg = process.argv
+		.slice(2)
+		.find((a) => a.startsWith("--platform="));
+	if (!arg) return process.platform;
+	const value = arg.slice("--platform=".length);
+	return value as NodeJS.Platform;
+}
+
+/**
+ * Windows cross-build guard: assert every win32-x64 native binary was staged by
+ * `scripts/prepare-win-natives.ts` before electron-builder packages them. This
+ * runs on macOS (or any host) so it inspects the staged `.win32-natives/` tree
+ * rather than the host's node_modules.
+ */
+function validateWin32NativesStaged(): void {
+	const stagingDir = join(projectRoot, ".win32-natives");
+	assertExists(
+		stagingDir,
+		"Win32 natives not staged. Run `bun run scripts/prepare-win-natives.ts` first.",
+	);
+
+	const requiredBinaries = [
+		// node-pty (lydell) win32 — conpty agent binaries + winpty console list
+		"@lydell/node-pty-win32-x64/prebuilds/win32-x64/conpty.node",
+		"@lydell/node-pty-win32-x64/prebuilds/win32-x64/conpty_console_list.node",
+		"@lydell/node-pty-win32-x64/prebuilds/win32-x64/conpty/conpty.dll",
+		"@lydell/node-pty-win32-x64/prebuilds/win32-x64/conpty/OpenConsole.exe",
+		// libsql win32 native
+		"@libsql/win32-x64-msvc/index.node",
+		// ast-grep win32 native
+		"@ast-grep/napi-win32-x64-msvc/ast-grep-napi.win32-x64-msvc.node",
+		// better-sqlite3 win32 Electron prebuild (staged copy)
+		"better-sqlite3/build/Release/better_sqlite3.node",
+	];
+
+	for (const relPath of requiredBinaries) {
+		const filePath = join(stagingDir, relPath);
+		assertExists(
+			filePath,
+			`Required staged win32-x64 native binary is missing: ${relPath}`,
+		);
+		if (!isPeBinary(filePath)) {
+			fail(
+				`Staged win32 binary is not a PE (Windows) file: ${filePath}\nRe-run prepare-win-natives.`,
+			);
+		}
+	}
+
+	console.log(
+		"[validate:native-runtime] OK: all win32-x64 native binaries staged and PE-valid",
+	);
+}
+
+/** A PE (Windows) executable/DLL starts with the ASCII bytes "MZ". */
+function isPeBinary(filePath: string): boolean {
+	if (!existsSync(filePath)) return false;
+	const fd = openSync(filePath, "r");
+	try {
+		const buf = Buffer.alloc(2);
+		const bytes = readSync(fd, buf, 0, 2, 0);
+		return bytes === 2 && buf[0] === 0x4d && buf[1] === 0x5a;
+	} finally {
+		closeSync(fd);
+	}
+}
+
 function main(): void {
+	const targetPlatform = parseTargetPlatform();
 	validateLibsqlNotBundled();
+
+	if (targetPlatform === "win32" && process.platform !== "win32") {
+		// Cross-build: validate staged win32 binaries instead of host node_modules.
+		validateWin32NativesStaged();
+		console.log("[validate:native-runtime] All checks passed (win32 target)");
+		return;
+	}
+
 	validateNativeModulesPrepared();
 	console.log("[validate:native-runtime] All checks passed");
 }

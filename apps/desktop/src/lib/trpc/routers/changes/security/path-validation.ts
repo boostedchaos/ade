@@ -2,6 +2,7 @@ import { isAbsolute, normalize, resolve, sep } from "node:path";
 import { projects, worktrees } from "@superset/local-db";
 import { eq } from "drizzle-orm";
 import { localDb } from "main/lib/local-db";
+import { canonicalizePath } from "./path-canonical";
 
 /**
  * Security model for desktop app filesystem access:
@@ -61,7 +62,8 @@ export class PathValidationError extends Error {
  * @throws PathValidationError if path is not registered
  */
 export function assertRegisteredWorktree(workspacePath: string): void {
-	// Check worktrees table first (most common case)
+	// Exact-match fast path (indexed). On POSIX the stored path is already
+	// canonical, so this is the sole path taken and behavior is unchanged.
 	const worktreeExists = localDb
 		.select()
 		.from(worktrees)
@@ -80,6 +82,27 @@ export function assertRegisteredWorktree(workspacePath: string): void {
 		.get();
 
 	if (projectExists) {
+		return;
+	}
+
+	// Canonical fallback: on Windows the incoming path may differ from the
+	// stored one only by separator style or drive-letter case. Compare
+	// canonical forms on BOTH sides without rewriting what's stored.
+	const target = canonicalizePath(workspacePath);
+	const worktreeMatch = localDb
+		.select()
+		.from(worktrees)
+		.all()
+		.some((w) => canonicalizePath(w.path) === target);
+	if (worktreeMatch) {
+		return;
+	}
+	const projectMatch = localDb
+		.select()
+		.from(projects)
+		.all()
+		.some((p) => p.mainRepoPath && canonicalizePath(p.mainRepoPath) === target);
+	if (projectMatch) {
 		return;
 	}
 
@@ -104,14 +127,27 @@ export function getRegisteredWorktree(
 		.where(eq(worktrees.path, worktreePath))
 		.get();
 
-	if (!worktree) {
+	if (worktree) {
+		return worktree;
+	}
+
+	// Canonical fallback for Windows separator/case drift (see
+	// assertRegisteredWorktree). POSIX exact-matches above, so this never runs.
+	const target = canonicalizePath(worktreePath);
+	const match = localDb
+		.select()
+		.from(worktrees)
+		.all()
+		.find((w) => canonicalizePath(w.path) === target);
+
+	if (!match) {
 		throw new PathValidationError(
 			"Worktree not registered in database",
 			"UNREGISTERED_WORKTREE",
 		);
 	}
 
-	return worktree;
+	return match;
 }
 
 /**

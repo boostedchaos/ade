@@ -15,8 +15,11 @@ const DEFAULT_PATHS: ShellWrapperPaths = {
 	BASH_DIR,
 };
 
-function getShellName(shell: string): string {
-	return shell.split("/").pop() || shell;
+export function getShellName(shell: string): string {
+	// Handle both POSIX (`/bin/zsh`) and Windows (`C:\WINDOWS\...\powershell.exe`)
+	// paths, and strip a trailing `.exe` so `powershell.exe` -> `powershell`.
+	const base = shell.split(/[\\/]/).pop() || shell;
+	return base.replace(/\.exe$/i, "");
 }
 
 function writeFileIfChanged(
@@ -183,6 +186,21 @@ export function getShellEnv(
 	shell: string,
 	paths: ShellWrapperPaths = DEFAULT_PATHS,
 ): Record<string, string> {
+	// Windows has no rc files to source our shims from, so PATH interception is
+	// done here: prepend BIN_DIR (where the .cmd/.ps1 shims live) to PATH. The
+	// terminal env spreads this after the allowlisted base env, so it wins.
+	if (process.platform === "win32") {
+		const existing = process.env.PATH ?? process.env.Path ?? "";
+		const binDir = paths.BIN_DIR.replace(/[\\/]+$/, "");
+		const already = existing
+			.split(path.delimiter)
+			.some((p) => p.replace(/[\\/]+$/, "").toLowerCase() === binDir.toLowerCase());
+		const newPath = already
+			? existing
+			: `${paths.BIN_DIR}${path.delimiter}${existing}`;
+		return { PATH: newPath };
+	}
+
 	const shellName = getShellName(shell);
 	if (shellName === "zsh") {
 		return {
@@ -214,6 +232,14 @@ export function getShellArgs(
 	if (["zsh", "sh", "ksh"].includes(shellName)) {
 		return ["-l"];
 	}
+	// Windows interactive shells: PATH prepend (getShellEnv) handles interception,
+	// so we only pass args that keep the shell tidy for an interactive session.
+	if (shellName === "powershell" || shellName === "pwsh") {
+		return ["-NoLogo"];
+	}
+	if (shellName === "cmd") {
+		return [];
+	}
 	return [];
 }
 
@@ -232,6 +258,14 @@ export function getCommandShellArgs(
 	paths: ShellWrapperPaths = DEFAULT_PATHS,
 ): string[] {
 	const shellName = getShellName(shell);
+	// Windows shells: no profile-sourcing needed — BIN_DIR is already on PATH via
+	// getShellEnv. `-lc` is POSIX-only and would be rejected by cmd/PowerShell.
+	if (shellName === "cmd") {
+		return ["/d", "/s", "/c", command];
+	}
+	if (shellName === "powershell" || shellName === "pwsh") {
+		return ["-NoProfile", "-NonInteractive", "-Command", command];
+	}
 	const zshRc = path.join(paths.ZSH_DIR, ".zshrc");
 	const bashRcfile = path.join(paths.BASH_DIR, "rcfile");
 	if (shellName === "zsh" && fs.existsSync(zshRc)) {

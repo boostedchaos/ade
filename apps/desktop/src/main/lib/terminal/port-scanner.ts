@@ -196,6 +196,21 @@ async function getListeningPortsWindows(pids: number[]): Promise<PortInfo[]> {
  * Get process name for a PID on Windows
  */
 async function getProcessNameWindows(pid: number): Promise<string> {
+	// wmic is removed on Windows 11 24H2+, so prefer PowerShell/CIM as the primary
+	// lookup and only fall back to wmic on older systems where it still exists.
+	try {
+		const { stdout: output } = await execAsync(
+			`powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').Name"`,
+			{ timeout: EXEC_TIMEOUT_MS },
+		);
+		const name = output.trim();
+		if (name) {
+			return name.replace(/\.exe$/i, "") || "unknown";
+		}
+	} catch {
+		// PowerShell unavailable or blocked; fall through to wmic below.
+	}
+
 	try {
 		const { stdout: output } = await execAsync(
 			`wmic process where processid=${pid} get name 2>nul`,
@@ -207,15 +222,9 @@ async function getProcessNameWindows(pid: number): Promise<string> {
 			return name.replace(/\.exe$/i, "") || "unknown";
 		}
 	} catch {
-		// wmic is deprecated, try PowerShell as fallback
-		try {
-			const { stdout: output } = await execAsync(
-				`powershell -Command "(Get-Process -Id ${pid}).ProcessName"`,
-				{ timeout: EXEC_TIMEOUT_MS },
-			);
-			return output.trim() || "unknown";
-		} catch {}
+		// Both strategies failed.
 	}
+
 	return "unknown";
 }
 
