@@ -169,6 +169,8 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
+        env:
+          ADE_SKIP_INSTALL_APP_DEPS: "1"
         run: bun install --frozen
 
       - name: Set version suffix
@@ -213,6 +215,10 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: bun run package:win
+
+      - name: Verify packaged native modules
+        working-directory: apps/desktop
+        run: bun run verify:win-package
 
       - name: Verify NSIS installer + portable zip exist
         working-directory: apps/desktop

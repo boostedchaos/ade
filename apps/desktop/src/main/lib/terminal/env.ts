@@ -541,6 +541,7 @@ export function buildTerminalEnv(params: {
 	};
 
 	delete terminalEnv.GOOGLE_API_KEY;
+	delete terminalEnv.OPENROUTER_API_KEY;
 
 	// Inject the stored OpenRouter key so the OpenRouter-routed runtimes
 	// (kimi/minimax/glm) authenticate without depending on the user's shell rc.

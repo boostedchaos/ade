@@ -38,9 +38,8 @@ jobs:
           bun run generate:routes
           bunx tsc --noEmit
 
-      - name: Unit tests (desktop, advisory)
+      - name: Unit tests (desktop)
         working-directory: apps/desktop
-        continue-on-error: true
         # Bounded hard: a hung test must not eat the job budget (the terminal
         # suite is excluded — reconcile-timeout.test.ts hangs under bun on
         # Windows runners; the real Windows verification is the smoke tests).

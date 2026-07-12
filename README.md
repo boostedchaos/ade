@@ -1,6 +1,10 @@
 # ADE
 
-An agentic development environment for macOS. ADE is a local-first, single-user desktop app where you build a roster of persistent coding agents and work alongside them in the terminal. Every agent is a durable identity — its own name, photo, git repository, runtime CLI, and long-lived memory — not a throwaway chat session. You come back to the same agent tomorrow and it remembers what it learned today.
+> **Windows port notice:** This repository is a modified version of ADE adding
+> Windows 11 x64 support. The Windows port is maintained by `boostedchaos` and
+> is not an official upstream release.
+
+An agentic development environment for macOS and Windows 11. ADE is a local-first, single-user desktop app where you build a roster of persistent coding agents and work alongside them in the terminal. Every agent is a durable identity — its own name, photo, git repository, runtime CLI, and long-lived memory — not a throwaway chat session. You come back to the same agent tomorrow and it remembers what it learned today.
 
 The interface is a two-level left rail. **Teams** group your work (a name and a square photo); inside each team live **Agents** (a name and a circular photo). Selecting an agent opens its workspace: a strip of **session** tabs, each a real terminal running the agent's coding CLI inside that agent's own git worktree. A **model bar** under the tabs lets you spawn a session on a different model without leaving the agent. On the right, the **Agent Files** panel shows the agent's memory growing as it works.
 
@@ -16,7 +20,14 @@ ADE runs whatever CLI coding agents you already have installed. Claude Code, Ope
 
 ### Download (recommended)
 
-Download the signed DMG from the [latest release](https://github.com/per-simmons/damon-ade/releases/latest), open it, and drag ADE to your Applications folder. macOS only.
+Windows 11 x64 users can download the installer or portable zip from the
+[`boostedchaos/ade-windows-port` releases](https://github.com/boostedchaos/ade-windows-port/releases).
+The Windows build is currently unsigned, so Windows SmartScreen will require
+**More info -> Run anyway**. Git, Node.js LTS, and at least one supported agent
+CLI are required.
+
+macOS users should use the signed DMG from the
+[upstream release](https://github.com/per-simmons/damon-ade/releases/latest).
 
 
 ### Build from source

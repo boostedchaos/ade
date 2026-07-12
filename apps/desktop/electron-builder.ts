@@ -17,12 +17,10 @@ const currentYear = new Date().getFullYear();
 const author = pkg.author?.name ?? pkg.author;
 const productName = pkg.productName;
 
-// Release repo — single source of truth for where artifacts + update manifests
-// are published. TODO(release): confirm GitHub owner/org and set the public repo
-// name before publishing. Must stay in sync with RELEASE_REPO_* in
-// src/main/lib/auto-updater.ts.
-const RELEASE_REPO_OWNER = "per-simmons"; // TODO(release): confirm GitHub owner/org
-const RELEASE_REPO_NAME = "damon-ade"; // TODO(release): set public repo name
+// Release repo for artifacts and update manifests. Must stay in sync with
+// RELEASE_REPO_* in src/main/lib/auto-updater.ts.
+const RELEASE_REPO_OWNER = "boostedchaos";
+const RELEASE_REPO_NAME = "ade-windows-port";
 
 // Notarize only when Apple credentials are present in the environment
 // (CI signing job, or a local signed build). electron-builder reads the
