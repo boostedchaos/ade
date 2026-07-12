@@ -1,8 +1,9 @@
 # ADE
 
-> **Windows port notice:** This repository is a modified version of ADE adding
-> Windows 11 x64 support. The Windows port is maintained by `boostedchaos` and
-> is not an official upstream release.
+> **Windows port notice:** This repository is a fork of
+> [`per-simmons/damon-ade`](https://github.com/per-simmons/damon-ade), modified
+> to add Windows 11 x64 support. The port is maintained by `boostedchaos` and is
+> not an official upstream release.
 
 An agentic development environment for macOS and Windows 11. ADE is a local-first, single-user desktop app where you build a roster of persistent coding agents and work alongside them in the terminal. Every agent is a durable identity — its own name, photo, git repository, runtime CLI, and long-lived memory — not a throwaway chat session. You come back to the same agent tomorrow and it remembers what it learned today.
 
