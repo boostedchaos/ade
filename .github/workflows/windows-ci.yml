@@ -44,7 +44,10 @@ jobs:
         # suite is excluded — reconcile-timeout.test.ts hangs under bun on
         # Windows runners; the real Windows verification is the smoke tests).
         timeout-minutes: 8
-        run: bun test --timeout 15000 src/main/lib/agent-setup src/lib/trpc/routers/changes
+        run: |
+          bun test --timeout 15000 src/main/lib/terminal/env.test.ts src/main/lib/agent-setup/utils.test.ts src/lib/trpc/routers/changes/security/path-canonical.test.ts
+          bun test --timeout 15000 src/main/lib/agent-setup/agent-wrappers.test.ts --test-name-pattern "windows shims"
+          bun test --timeout 15000 src/main/lib/agent-setup/shell-wrappers.test.ts --test-name-pattern "windows shells"
 
       - name: Build Windows package (full pipeline incl. verify)
         working-directory: apps/desktop
