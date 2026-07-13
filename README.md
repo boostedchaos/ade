@@ -119,14 +119,12 @@ The same canonical files feed every runtime through thin, auto-generated bridge 
 
 ## Where your data lives
 
-ADE is local-first; everything below stays on your machine.
-
-- **Agent homes** (worktrees, memory, skills): `~/.superset` — on Windows,
-  `C:\Users\<you>\.superset`. Back this up to keep your agents' memory.
-- **App settings** (including the encrypted OpenRouter key): the app data folder —
-  on Windows `%APPDATA%\ADE`, on macOS `~/Library/Application Support/ADE`.
-
-Deleting both resets ADE completely.
+ADE is local-first; everything stays on your machine in one place: `~/.ade` — on
+Windows, `C:\Users\<you>\.ade`. That directory holds your agents (worktrees,
+memory, skills under `agents/`), the settings database (`local.db`, including the
+encrypted OpenRouter key), and ADE's CLI shims (`bin/`). ADE also points Electron's
+app-data path there. Back up `~/.ade` to keep your agents' memory; deleting it
+resets ADE completely. (Development builds use `~/.ade-<workspace>` instead.)
 
 ## Contributing
 

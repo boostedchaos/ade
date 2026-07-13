@@ -13,7 +13,7 @@ The system is adapted from the [Hermes agent](https://github.com/NousResearch/he
 
 ## The files
 
-Each agent has a home directory containing its worktree, its memory, and its skills. Agent homes live under `~/.superset` — on Windows that is `C:\Users\<you>\.superset`, on macOS `/Users/<you>/.superset`. Back up that directory to preserve your agents' memory.
+Each agent has a home directory containing its worktree, its memory, and its skills. Agent homes live under `~/.ade/agents/<id>` — on Windows that is `C:\Users\<you>\.ade`, on macOS `/Users/<you>/.ade`. Back up that directory to preserve your agents' memory.
 
 ```
 <agent-home>/
