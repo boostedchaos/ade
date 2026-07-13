@@ -1,6 +1,7 @@
 import { AGENT_RUNTIMES } from "@superset/local-db";
 import {
 	type AgentBinary,
+	BINARY_INSTALL,
 	type CheckedBinary,
 	RUNTIME_BINARY,
 } from "@superset/shared/agent-binaries";
@@ -309,11 +310,14 @@ export function NewAgentModal() {
 						<p className="font-medium text-foreground">Git is required</p>
 						<p className="text-muted-foreground">
 							Creating an agent sets up a git repository, and Git isn't installed.
-							Install Apple's Command Line Tools, then re-check:
+							Run the command below, then re-check:
 						</p>
 						<code className="select-all rounded bg-background/60 px-2 py-1 font-mono">
-							xcode-select --install
+							{BINARY_INSTALL.git.command}
 						</code>
+						{BINARY_INSTALL.git.note && (
+							<p className="text-muted-foreground">{BINARY_INSTALL.git.note}</p>
+						)}
 						<button
 							type="button"
 							onClick={recheck}

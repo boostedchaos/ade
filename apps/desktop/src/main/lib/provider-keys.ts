@@ -40,7 +40,9 @@ export function setProviderKey(provider: ProviderId, key: string): void {
 		throw new Error("Provider API key must not be empty");
 	}
 	if (!safeStorage.isEncryptionAvailable()) {
-		throw new Error("Secure storage is not available on this system");
+		throw new Error(
+			"Secure storage (DPAPI on Windows, Keychain on macOS) is unavailable on this system, so the API key cannot be saved",
+		);
 	}
 
 	const encrypted = safeStorage.encryptString(trimmed).toString("base64");

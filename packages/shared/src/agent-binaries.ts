@@ -67,9 +67,9 @@ export const BINARY_INSTALL: Record<AgentBinary, BinaryInstallInfo> = {
 	},
 	git: {
 		label: "Git",
-		command: "xcode-select --install",
+		command: "winget install Git.Git",
 		url: "https://git-scm.com/downloads",
-		note: "On macOS, Git ships with Apple's Command Line Tools.",
+		note: "On macOS, install Apple's Command Line Tools instead: xcode-select --install",
 	},
 };
 

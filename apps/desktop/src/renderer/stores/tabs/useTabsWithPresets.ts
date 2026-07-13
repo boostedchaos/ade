@@ -2,6 +2,7 @@ import {
 	normalizeExecutionMode,
 	type TerminalPreset,
 } from "@superset/local-db/schema/zod";
+import { toast } from "@superset/ui/sonner";
 import { useCallback, useMemo } from "react";
 import type { MosaicBranch } from "react-mosaic-component";
 import { useCreateOrAttachWithTheme } from "renderer/hooks/useCreateOrAttachWithTheme";
@@ -106,12 +107,17 @@ export function useTabsWithPresets() {
 				createOrAttach: (input) => createOrAttach.mutateAsync(input),
 				write: (input) => writeToTerminal.mutateAsync(input),
 			}).catch((error) => {
+				const message = error instanceof Error ? error.message : String(error);
 				console.error("[useTabsWithPresets] Failed to launch preset command:", {
 					paneId,
 					tabId,
 					workspaceId,
-					error: error instanceof Error ? error.message : String(error),
+					error: message,
 				});
+				// Every session launch (auto-spawn, model bar, new tab) funnels through
+				// here; without a toast a failed createOrAttach dies silently in the
+				// console and the user just sees a dead pane.
+				toast.error(`Couldn't start terminal session: ${message}`);
 			});
 		},
 		[createOrAttach, writeToTerminal],
