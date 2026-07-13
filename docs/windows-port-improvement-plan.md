@@ -1,141 +1,110 @@
 # Windows Port Improvement Plan
 
-2026-07-12. Based on a three-track audit (platform code, build/CI/release, docs/UX) of
-`boostedchaos/ade-windows-port` at commit `85c221c`.
+2026-07-12, revised 2026-07-13 after a cross-AI review (Codex CLI, gpt-5.6-sol) verified the
+plan against the code and corrected several claims. Original three-track audit at `85c221c`.
 
-**Overall verdict:** the runtime port is solid — no outright-broken Windows code paths were
-found. Shell selection, ConPTY signals, env canonicalization, `.cmd` shims, DPAPI key storage,
-path canonicalization at the security boundary, and native-binary staging are all deliberate
-and correct. The remaining work is concentrated in four areas: docs that still describe the
-macOS/upstream project, no first-run prerequisite detection, no signing/auto-update on
-Windows, and Windows CI that runs only 5 hand-picked test files.
+**Overall verdict:** the terminal/PTY/shim engineering is solid, and the port already ships
+more first-run infrastructure than the first audit credited (runtime/git detection, install
+dialogs, shim missing-binary messages). The one genuinely **broken** first-party Windows path
+is agent command construction (below). Remaining work: distribution (signing/auto-update),
+CI coverage, and shell-semantics hardening.
 
-Phases are ordered by impact-per-hour. Each is shippable independently.
+## Status
 
----
+- **Phase 1 (docs) — DONE** (commits `1396315`..`831c51a`), plus a corrective commit
+  (`5b36838`): the data-location section originally said `~/.superset` / `%APPDATA%\ADE`;
+  the real location for everything is `~/.ade` (`SUPERSET_HOME_DIR`, redirected Electron
+  `userData`).
+- **Phase 2 (first-run UX) — DONE, rescoped** (commit `6248a7b`). The original phase
+  ("no prerequisite detection") overstated the gap: `computeRuntimeAvailability` +
+  `BinaryInstallDialog` + NewAgentModal git preflight + the shim's missing-binary message
+  already exist. What was actually missing and is now fixed: Windows-correct git install
+  info (was `xcode-select --install`), the NewAgentModal banner hardcoding macOS copy,
+  session-launch failures swallowed into `console.error` (now toasted at
+  `launchPresetCommand`, the funnel for all launches), and a vague safeStorage error.
+  Deliberately NOT added: a `createOrAttach` guard — the PTY spawns a shell, not the agent
+  CLI, so a main-process block would be wrong-layer; the shim message is the designed
+  fallback.
 
-## Phase 1 — Fix the docs that are wrong (≈1 hour, zero risk)
+## Phase A — Fix POSIX-only agent commands (NEW, highest priority — broken feature)
 
-These actively mislead anyone (human or agent) touching the repo.
+`packages/shared/src/agent-command.ts` builds the Kimi / MiniMax / GLM launch commands with
+POSIX env-prefix syntax (`ANTHROPIC_BASE_URL="…" ANTHROPIC_AUTH_TOKEN="$OPENROUTER_API_KEY"
+claude …`) and task-prompt launches with `$(cat <<'EOF' …)` heredocs. These strings are
+written verbatim into the session's shell — PowerShell/cmd on Windows — where both constructs
+fail. The model bar's OpenRouter models (a headline README feature) and task-prompt agent
+launches are broken on Windows.
 
-1. **README "Build from source" clones the wrong repo** (`README.md:38-45`): points at
-   `per-simmons/damon-ade.git` (upstream, no Windows pipeline) and has a literal `cd REPO`
-   placeholder. Change to clone this fork, `cd ade-windows-port`, and add the Windows build
-   path: `bun install` (with `ADE_SKIP_INSTALL_APP_DEPS=1` note), `bun run build:win`.
-2. **README keychain claim is false on Windows** (`README.md:90`): "encrypted with the macOS
-   keychain" → "your OS credential store (DPAPI on Windows, Keychain on macOS)". The code
-   (`provider-keys.ts`) already does the right thing; only the copy lies.
-3. **README Git prerequisite is macOS-only** (`README.md:53`): `xcode-select --install` →
-   add `winget install Git.Git` / git-scm.com for Windows.
-4. **AGENTS.md describes a different project** (the Superset web monorepo — Next.js, Neon,
-   Drizzle; none of it exists here). CODEX.md and WARP.md are `@AGENTS.md` so they inherit the
-   damage. Rewrite AGENTS.md as an accurate brief of this repo (Electron desktop app,
-   Bun + turbo, `apps/desktop`, Windows build pipeline, test commands).
-5. **CONTRIBUTING.md routes issues to upstream** (`CONTRIBUTING.md:1`) and
-   **`apps/desktop/package.json` `repository.url` still points at `per-simmons/damon-ade`**.
-   Point both at `boostedchaos/ade-windows-port`.
-6. **Document Windows data locations** (nowhere today, bad for a "local-first" product):
-   settings DB under `%APPDATA%\ADE`, agent homes/worktrees/memory under
-   `C:\Users\<you>\.superset`. Add to README and state the concrete path in `docs/memory.md`
-   (which currently only says "outside the git worktree").
-7. **Delete `docs/mastracode-fork-workflow.md`** (Superset-internal, unix-only, linked as
-   authoritative from AGENTS.md).
+Fix direction: stop encoding env vars in the command string — inject them into the terminal
+env at session creation (the env-injection path already exists for `OPENROUTER_API_KEY`),
+and build the prompt-passing per shell (PowerShell here-string / temp file) or pass via
+stdin. Prefer structured {command, args, env} over quoted shell strings.
 
-## Phase 2 — First-run prerequisite detection (≈half a day, highest UX win)
+## Phase B — Distribution: signing + auto-update as one unit
 
-The most likely fresh-Windows failure: no proactive check that git or any agent CLI exists.
+Revised from the original Phase 3 after review: an unsigned *self-updating* binary is a
+worse trust posture than an unsigned download, so signing should land before or atomically
+with enabling the updater, not as an optional later step.
 
-- Missing git currently throws at first git operation (`workspaces/utils/git.ts:163,1151`).
-- **A missing agent CLI (claude/codex/opencode) isn't validated at all** — the PTY spawns it
-  and the user gets a raw "not recognized" inside the terminal tab.
+1. Code signing (Azure Trusted Signing or similar; verify current pricing independently).
+2. Enable auto-update on Windows: `AUTO_UPDATE_ENABLED` + `IS_AUTO_UPDATE_PLATFORM` in
+   `auto-updater.ts` both gate it off. Packaging is already compatible (NSIS,
+   electron-updater, `latest.yml`, publish repo correct).
+3. Release plumbing found by review:
+   - **Windows canary builds ignore `electron-builder.canary.ts`** — `package:win`
+     hardcodes `electron-builder.win.ts` (`build-desktop.yml:213`), so canaries miss the
+     canary appId/name/artifacts. Fix before enabling updates.
+   - Validate packaged `resources/app-update.yml`; upload every generated channel manifest
+     (`if-no-files-found: error`). Stable-named `.exe`/`.zip` copies are convenience only,
+     not an updater requirement.
+   - Fix stale RELEASE.md manifest URLs (still `per-simmons/damon-ade`, mac/linux only).
 
-Fix: before spawning a session, resolve the runtime CLI with the existing PATH+PATHEXT
-resolver (`external/helpers.ts:60-90` already does this correctly for `.cmd`/`.bat` shims).
-If unresolved, show a dialog naming the missing tool and the install command
-(`npm i -g @anthropic-ai/claude-code`, etc.) instead of a dead terminal. Do the same for git
-at app start (one `where git` equivalent, cached). Also give
-`safeStorage.isEncryptionAvailable() === false` (`provider-keys.ts:42`) a friendly message
-while in there.
+## Phase C — Windows CI coverage
 
-## Phase 3 — Distribution: auto-update, then signing (≈half a day + an external decision)
+1. **Add a `pull_request` trigger to `windows-ci.yml`** — it currently runs only on push to
+   main + manual dispatch, so Windows regressions can merge unseen. Cheapest high-value CI
+   change.
+2. Align toolchain drift: release build uses Bun 1.3.2 / setup-bun v1; windows-ci and root
+   package use Bun 1.3.6 / setup-bun v2.
+3. Widen the unit run from the 5-file allow-list to full-suite-minus-skip-list. Note: the
+   excluded `reconcile-timeout.test.ts` hang is a bun-runner/`Promise.race` timing issue,
+   NOT ConPTY (review corrected the original diagnosis) — root-cause it as such.
+4. Deepen the packaged smoke test at the **application** level: today CI proves natives
+   load and a raw node-pty shell echoes; what's untested is ADE's own terminal daemon /
+   session wiring. Drive one real session end-to-end.
 
-1. **Enable auto-update on Windows.** It's code-gated off twice in `auto-updater.ts`:
-   `AUTO_UPDATE_ENABLED = false` and `IS_AUTO_UPDATE_PLATFORM = mac || linux`. The packaging
-   side is already compatible: NSIS target, `electron-updater` present, `latest.yml`
-   generated, publish repo already `boostedchaos/ade-windows-port`. Include win32 in the
-   platform gate, flip the flag, and fix the release workflow gaps: stable-named copies for
-   `.exe`/`.zip` (release job currently only handles `.dmg`/linux) and make the `latest.yml`
-   upload `if-no-files-found: error`. Also fix stale RELEASE.md manifest URLs (still
-   `per-simmons/damon-ade`, mac/linux only).
-2. **Code signing — a decision, not just a task.** Unsigned NSIS means SmartScreen "unknown
-   publisher" forever, and unsigned updates are the weak link once auto-update is on.
-   Cheapest viable path: Azure Trusted Signing (~$10/mo, works with electron-builder's
-   `win.azureSignOptions`). If the port stays private/personal, skipping is defensible —
-   but do it before any wider release.
+## Phase D — Shell-semantics hardening
 
-## Phase 4 — Windows test coverage (≈1 day, the diagnostic one)
+1. Setup/teardown command chains: entries are joined with `&&` (`launch-command.ts:38`,
+   `teardown.ts:39`). Modern cmd and pwsh 7 accept `&&`; **Windows PowerShell 5.1 — ADE's
+   middle fallback shell — does not**, so multi-entry configs fail there even with valid
+   Windows commands. Prefer per-platform config keys (`setup.win`) or shell-aware joining
+   over the originally proposed POSIX-token warning heuristic.
+2. macOS-authored `.superset/config.json` setup commands (`./setup.sh`, `chmod`) still fail
+   under any Windows shell — per-platform keys cover this too.
+3. PATH shadowing of the shim dir by PowerShell profiles: real but not trivially guardable
+   from the main process (it can't observe post-profile resolution). Fold into the Phase A
+   structured-invocation work rather than a bolt-on check.
 
-Windows CI (`windows-ci.yml`) runs only 5 hand-picked test files; the full desktop suite never
-runs on Windows because `reconcile-timeout.test.ts` (terminal suite) hangs under bun on
-Windows runners — worked around by exclusion (commit `8fe55c0`), never diagnosed.
+## Phase E — Polish + upstream
 
-1. Root-cause the hang (likely ConPTY teardown + bun test runner interaction, same family as
-   the exit-code corruption CI already routes around with marker files).
-2. Widen the Windows unit run to the full suite minus an explicit, commented skip-list —
-   inverse of today's allow-list, so new tests run on Windows by default.
-3. Deepen the packaged smoke test: today it's "natives load" + "alive after 20s". Add one
-   real assertion of app health (tRPC/IPC ping or spawning an actual terminal session and
-   seeing shell output) so a broken-but-running build fails CI.
+1. Window controls: 46×32 caption-button sizing and a maximize/restore glyph swap
+   (`WindowControls.tsx`).
+2. Add `upstream` remote + document the sync strategy. Review caution: the port touches
+   terminal hosting, permissions, menus, agent setup, renderer, and packaging — do NOT
+   assume clean rebases; document the merge base and choose merge vs rebase deliberately.
+3. Release scripts (`create-release.sh`) are bash+gh+jq — document "run from Git Bash" in
+   RELEASE.md rather than rewriting.
 
-## Phase 5 — Runtime hardening (small items, as-touched)
+## What NOT to do (unchanged, review-confirmed)
 
-From the fragile list, in value order:
-
-1. **macOS-authored `.superset/config.json` setup/teardown commands fail under
-   PowerShell/cmd** (`setup.ts:44`, `teardown.ts:45-56`) — the highest real-world friction
-   for repos brought over from a Mac. Minimum fix: detect obviously-POSIX commands
-   (`./…`, `sh`, `chmod`, `&&` under cmd) on win32 and surface a clear warning naming the
-   command. Optional later: per-platform keys (`setup.win`).
-2. **Window-control polish**: caption buttons are 32×32 rounded instead of Windows-standard
-   46×32, and the maximize button never switches to a restore glyph
-   (`WindowControls.tsx:26-42`). Small, makes it feel native.
-3. **PATH-shadowing of the shim dir**: agent interception relies on BIN_DIR being prepended
-   in `getShellEnv` (`shell-wrappers.ts:189-201`); a user PowerShell profile that rewrites
-   PATH silently bypasses memory/hooks. Cheap guard: after spawn, verify the resolved
-   `claude` is the shim and warn if not.
-
-Skipped deliberately (YAGNI): win32 ENOENT PATH-recovery retry parity (`shell-env.ts:162` is
-darwin-only, but Windows has no GUI-minimal-PATH problem); MAX_PATH guards (Win11 long paths).
-
-## Phase 6 — Upstream tracking (≈1 hour, prevents future pain)
-
-The fork is 13 commits with no `upstream` remote and no documented merge strategy. Add
-`upstream = per-simmons/damon-ade`, document the rebase/cherry-pick workflow (the Windows
-work is well-isolated: mostly `apps/desktop` scripts + platform-gated branches, so rebases
-should be clean), and optionally a weekly CI job that reports divergence count.
-
-## Release tooling (fold into whichever phase touches it first)
-
-`create-release.sh` / `release-canary.sh` are bash+gh+jq — not runnable from native Windows
-shells. Don't rewrite them; they run fine from Git Bash (already a de-facto prerequisite).
-Just document that in RELEASE.md. Rewrite only if a native-Windows release flow becomes a
-real need.
-
----
-
-## What NOT to do
-
-- Don't re-port anything in the terminal/PTY/shim layer — the adversarial-review pass
-  (`0b59a28`) already caught the subtle bugs (TOML literal strings across the cmd hop,
-  JSON.stringify for backslash paths, `.ps1` removal, pwsh→powershell→cmd resolution).
-- Don't add a `.ps1` shim "for completeness" — its absence is a documented, correct decision
-  (execution-policy hard-fail with no fallback).
-- Don't touch the native staging pipeline (`prepare-win-natives.ts`, `verify-win-package.ts`)
-  except to keep versions derived from node_modules as it already does — it's the strongest
-  part of the port.
+- Don't re-port the terminal/PTY/shim layer; the adversarial-review pass caught the subtle
+  bugs and the native staging pipeline is the strongest part of the port.
+- Don't add `.ps1` shims — their absence is a documented, correct decision.
+- Don't put agent-CLI validation in `createOrAttach` — the PTY spawns a shell, not the CLI;
+  gate at agent-launch entry points and keep the shim message as the fallback.
 
 ## Suggested order
 
-Phase 1 → 2 → 3.1 (auto-update) → 6 → 4 → 5, with 3.2 (signing) whenever the
-public/private decision is made. Phases 1+2+6 together are roughly one focused day and
-remove nearly all first-contact friction.
+A (broken feature) → C.1–C.2 (PR CI, cheap) → B (signing+updates together) → C.3–C.4 →
+D → E.
