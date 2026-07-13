@@ -1,0 +1,78 @@
+(fail) Claude Code bridge > CLAUDE.md @imports the live canonical AGENT/USER files
+(fail) FilePathLinkProvider > filtering false positives > should skip URLs with http://
+(fail) FilePathLinkProvider > filtering false positives > should skip URLs with https://
+(fail) Terminal Host Daemon > authentication requirement > should allow listSessions after authentication
+(fail) Terminal Host Daemon > authentication requirement > should reject requests before authentication
+(fail) Terminal Host Daemon > hello handshake > should accept valid hello request with correct token
+(fail) Terminal Host Daemon > hello handshake > should reject hello request with invalid token
+(fail) Terminal Host Daemon > hello handshake > should reject hello request with wrong protocol version
+(fail) Terminal Host Daemon > unknown requests > should return error for unknown request type
+(fail) Terminal Host Session Lifecycle > session creation > should create a new session and return snapshot
+(fail) agent-wrappers copilot > creates mastracode wrapper passthrough
+(fail) agent-wrappers copilot > injects codex message-start watcher + completion notifications in wrapper
+(fail) agent-wrappers copilot > replaces stale Cursor hook commands from old superset paths
+(fail) agent-wrappers copilot > replaces stale Gemini hook commands from old superset paths
+(fail) agent-wrappers copilot > replaces stale Mastra hook commands from old superset paths
+(fail) agent-wrappers copilot > rewrites stale superset-notify.json with current hook path
+(fail) env > buildSafeEnv > includes allowlisted shell environment vars > should include proxy vars (both cases)
+(fail) env > buildTerminalEnv > CODEX_HOME for codex runtime > sets CODEX_HOME to the agent .codex home and it survives the terminal-host buildSafeEnv re-filter
+(fail) getAppCommand > JetBrains IDEs > returns bundle ID candidates for intellij (multi-edition)
+(fail) getAppCommand > JetBrains IDEs > returns bundle ID candidates for pycharm (multi-edition)
+(fail) getAppCommand > JetBrains IDEs > returns single-element array for goland (single-edition)
+(fail) getAppCommand > JetBrains IDEs > returns single-element array for rustrover (single-edition)
+(fail) getAppCommand > JetBrains IDEs > returns single-element array for webstorm (single-edition)
+(fail) getAppCommand > preserves paths with spaces
+(fail) getAppCommand > returns single-element array for cursor
+(fail) getAppCommand > returns single-element array for ghostty
+(fail) getAppCommand > returns single-element array for iterm
+(fail) getAppCommand > returns single-element array for sublime
+(fail) getAppCommand > returns single-element array for terminal
+(fail) getAppCommand > returns single-element array for vscode
+(fail) getAppCommand > returns single-element array for warp
+(fail) getAppCommand > returns single-element array for xcode
+(fail) hasStaticPortsConfig > returns true even when ports.json is invalid
+(fail) hasStaticPortsConfig > returns true when ports.json exists
+(fail) loadSetupConfig > falls back to main repo when user override has invalid JSON
+(fail) loadSetupConfig > falls back to main repo when worktree has no config
+(fail) loadSetupConfig > falls back to worktree/main when no user override exists
+(fail) loadSetupConfig > loads valid setup config from main repo
+(fail) loadSetupConfig > prefers worktree config over main repo config
+(fail) loadSetupConfig > works when projectId is not provided (backwards compat)
+(fail) loadStaticPorts > accepts valid boundary port numbers
+(fail) loadStaticPorts > handles empty ports array
+(fail) loadStaticPorts > loads valid ports.json with multiple ports
+(fail) loadStaticPorts > loads valid ports.json with single port
+(fail) loadStaticPorts > returns error for invalid JSON syntax
+(fail) loadStaticPorts > returns error when label field is missing
+(fail) loadStaticPorts > returns error when label is empty
+(fail) loadStaticPorts > returns error when label is not a string
+(fail) loadStaticPorts > returns error when label is only whitespace
+(fail) loadStaticPorts > returns error when port entry is not an object
+(fail) loadStaticPorts > returns error when port field is missing
+(fail) loadStaticPorts > returns error when port is above 65535
+(fail) loadStaticPorts > returns error when port is below 1
+(fail) loadStaticPorts > returns error when port is not a number
+(fail) loadStaticPorts > returns error when port is not an integer
+(fail) loadStaticPorts > returns error when ports is not an array
+(fail) loadStaticPorts > returns error when ports key is missing
+(fail) loadStaticPorts > returns error when ports.json is not an object
+(fail) loadStaticPorts > returns error with correct index for second invalid entry
+(fail) loadStaticPorts > trims whitespace from labels
+(fail) preloadActiveOrganizationCollections > logs preload errors from fire-and-forget call
+(fail) preloadActiveOrganizationCollections > preloads active org collections with includeChatCollections disabled
+(fail) resolvePath > combined expansion > expands ~ then resolves (already absolute after expansion)
+(fail) resolvePath > home directory expansion > expands ~ to home directory
+(fail) resolvePath > relative paths > resolves ../prefixed path against cwd
+(fail) resolvePath > relative paths > resolves ./prefixed path against cwd
+(fail) resolvePath > relative paths > resolves relative path against cwd
+(fail) resolvePath > wrapper character stripping > handles wrappers combined with relative paths
+(fail) resolvePath > wrapper character stripping > handles wrappers combined with ~ expansion
+(fail) runTeardown > chains multiple teardown commands with &&
+(fail) runTeardown > falls back to mainRepoPath when no user override exists
+(fail) runTeardown > prefers worktreePath config over mainRepoPath config
+(fail) runTeardown > reads config from mainRepoPath and executes teardown
+(fail) runTeardown > reads from user override when projectId is provided
+(fail) runTeardown > returns error when teardown command fails
+(fail) runTeardown > sets environment variables for teardown scripts
+(fail) runTeardown > uses worktreePath config when present
+(fail) shell-wrappers > fish shell > uses --init-command to prepend BIN_DIR to PATH for fish

@@ -71,19 +71,39 @@ with enabling the updater, not as an optional later step.
      not an updater requirement.
    - Fix stale RELEASE.md manifest URLs (still `per-simmons/damon-ade`, mac/linux only).
 
-## Phase C — Windows CI coverage
+## Phase C — Windows CI coverage — DONE 2026-07-13
 
-1. **Add a `pull_request` trigger to `windows-ci.yml`** — it currently runs only on push to
-   main + manual dispatch, so Windows regressions can merge unseen. Cheapest high-value CI
-   change.
-2. Align toolchain drift: release build uses Bun 1.3.2 / setup-bun v1; windows-ci and root
-   package use Bun 1.3.6 / setup-bun v2.
-3. Widen the unit run from the 5-file allow-list to full-suite-minus-skip-list. Note: the
-   excluded `reconcile-timeout.test.ts` hang is a bun-runner/`Promise.race` timing issue,
-   NOT ConPTY (review corrected the original diagnosis) — root-cause it as such.
-4. Deepen the packaged smoke test at the **application** level: today CI proves natives
-   load and a raw node-pty shell echoes; what's untested is ADE's own terminal daemon /
-   session wiring. Drive one real session end-to-end.
+1. `pull_request: branches: [main]` trigger added to `windows-ci.yml`.
+2. Toolchain aligned: `build-desktop.yml` bumped from setup-bun v1 / Bun 1.3.2 to v2 / 1.3.6
+   (matches root `packageManager` and windows-ci). Inherited deploy-* web workflows left
+   untouched (out of the port's CI scope).
+3. **The test hang was root-caused — both prior diagnoses were wrong.** Not ConPTY (original
+   commit) and not `Promise.race` (cross-AI review): under bun's Windows test runner, an
+   **unref'd timer that is the only pending event-loop handle never fires**, and a fully
+   quiescent hang is also invisible to bun's per-test `--timeout`. One-line repro pinned it;
+   fixed by dropping the defensive `unref()` in `terminal/reconcile.ts` (the timer is
+   cleared on settle, so nothing can leak). With that fix the FULL desktop suite completes
+   on Windows: 955 tests / 63 files in ~20s, 876 pass, 78 known failures — deterministic
+   across runs.
+4. CI now runs the full suite behind a **failure ratchet** (`scripts/check-win-tests.ts` +
+   `scripts/win-test-baseline.txt`, `bun run test:win`): bun test has no exclude flag, so
+   instead of an allow-list, everything runs and only NEW failures fail CI; newly-passing
+   tests are reported for baseline pruning. Verified locally in both directions. Caveat:
+   baseline generated on a local Win11 box — the first windows-latest run may need a
+   baseline touch-up (the script prints the exact lines).
+5. Packaged smoke deepened to app level: the boot smoke now redirects `USERPROFILE` to a
+   scratch dir and asserts `local.db` is created under `.ade` — real main-process init
+   through better-sqlite3 inside the packaged app, not just "process alive for 20s".
+
+Backlog surfaced by the full-suite run (future work, not blocking):
+
+- Terminal-host daemon tests fail with `connect ENOENT …\.superset-test\terminal-host.sock`
+  — the test harness assumes a Unix socket path; needs the named-pipe transport the
+  production daemon uses. Fixing this unlocks real daemon/session coverage in CI (the
+  original C.4 ambition).
+- Most of the 78 baseline failures assert macOS behavior (`getAppCommand` `open -a`,
+  static-ports, setup/teardown paths) — candidates for platform-gating so the baseline
+  shrinks toward zero.
 
 ## Phase D — Shell-semantics hardening
 

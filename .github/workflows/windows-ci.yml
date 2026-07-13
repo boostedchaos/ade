@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build-and-smoke:
@@ -38,16 +40,17 @@ jobs:
           bun run generate:routes
           bunx tsc --noEmit
 
-      - name: Unit tests (desktop)
+      - name: Unit tests (desktop, full suite vs Windows baseline)
         working-directory: apps/desktop
-        # Bounded hard: a hung test must not eat the job budget (the terminal
-        # suite is excluded — reconcile-timeout.test.ts hangs under bun on
-        # Windows runners; the real Windows verification is the smoke tests).
-        timeout-minutes: 8
-        run: |
-          bun test --timeout 15000 src/main/lib/terminal/env.test.ts src/main/lib/agent-setup/utils.test.ts src/lib/trpc/routers/changes/security/path-canonical.test.ts
-          bun test --timeout 15000 src/main/lib/agent-setup/agent-wrappers.test.ts --test-name-pattern "windows shims"
-          bun test --timeout 15000 src/main/lib/agent-setup/shell-wrappers.test.ts --test-name-pattern "windows shells"
+        # Full suite with a failure ratchet: known Windows failures live in
+        # scripts/win-test-baseline.txt; only NEW failures fail this step.
+        # (The old reconcile-timeout hang was root-caused to an unref'd timer
+        # being the only pending handle under bun's Windows runner — fixed in
+        # reconcile.ts — so the terminal suite runs again. The step timeout
+        # stays as the guard: bun's per-test timeout cannot interrupt a fully
+        # quiescent hang on Windows.)
+        timeout-minutes: 10
+        run: bun run test:win
 
       - name: Build Windows package (full pipeline incl. verify)
         working-directory: apps/desktop
@@ -96,17 +99,30 @@ jobs:
           Write-Output "NATIVES_SMOKE_PASS"
           exit 0
 
-      - name: "Smoke: packaged app boots and stays alive"
+      - name: "Smoke: packaged app boots, initializes ~/.ade, stays alive"
         working-directory: apps/desktop
         shell: pwsh
         run: |
+          # Redirect the app's data dir (homedir() follows USERPROFILE) so the
+          # smoke asserts real app-level init — local.db created via
+          # better-sqlite3 inside the packaged app — not just "process alive".
+          $smokeProfile = Join-Path $env:RUNNER_TEMP "ade-smoke-profile"
+          New-Item -ItemType Directory -Force $smokeProfile | Out-Null
+          $env:USERPROFILE = $smokeProfile
           $p = Start-Process -FilePath "release/win-unpacked/ADE.exe" -PassThru
-          Start-Sleep -Seconds 20
+          Start-Sleep -Seconds 25
           if ($p.HasExited) {
             Write-Error "ADE.exe exited early with code $($p.ExitCode)"
             exit 1
           }
-          Write-Output "APP_ALIVE_20S"
+          $db = Join-Path $smokeProfile ".ade\local.db"
+          if (!(Test-Path $db)) {
+            Get-ChildItem -Recurse $smokeProfile | Select-Object -First 20 | Format-Table -AutoSize | Out-String | Write-Output
+            Write-Error "local.db missing under $smokeProfile\.ade — app-level init failed"
+            Stop-Process -Id $p.Id -Force
+            exit 1
+          }
+          Write-Output "APP_ALIVE_AND_DB_INITIALIZED"
           Stop-Process -Id $p.Id -Force
           exit 0
 

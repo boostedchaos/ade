@@ -34,7 +34,8 @@
 		"generate:routes": "tsr generate",
 		"pretypecheck": "bun run generate:routes",
 		"typecheck": "tsc --noEmit",
-		"test": "bun test"
+		"test": "bun test",
+		"test:win": "bun scripts/check-win-tests.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/react": "^3.0.0",
