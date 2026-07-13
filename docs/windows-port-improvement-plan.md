@@ -26,7 +26,19 @@ CI coverage, and shell-semantics hardening.
   CLI, so a main-process block would be wrong-layer; the shim message is the designed
   fallback.
 
-## Phase A — Fix POSIX-only agent commands (NEW, highest priority — broken feature)
+## Phase A — Fix POSIX-only agent commands — DONE 2026-07-13
+
+Implemented as platform-aware command strings rather than main-process env injection: the
+model bar can run an OpenRouter model in a workspace whose stored runtime differs, and
+`createOrAttach` only carries the workspace runtime, so injecting env in main would have
+required threading a per-session runtime through the terminal-host protocol. On win32 the
+builders emit PowerShell (`$env:` statements; literal here-string for prompts) — valid in
+both pwsh 7 and Windows PowerShell 5.1, verified by executing generated commands in both.
+POSIX output is byte-identical to before. Known ceiling: a cmd.exe-only session (no
+PowerShell resolvable) still can't run these; win32 shell resolution always finds
+powershell.exe in practice.
+
+Original finding, for the record:
 
 `packages/shared/src/agent-command.ts` builds the Kimi / MiniMax / GLM launch commands with
 POSIX env-prefix syntax (`ANTHROPIC_BASE_URL="…" ANTHROPIC_AUTH_TOKEN="$OPENROUTER_API_KEY"
