@@ -22,14 +22,16 @@ export interface ReconcilableManager {
 /**
  * Resolve to `true` if `p` settles before `ms`, `false` if the timeout wins.
  * `p`'s own rejection still propagates (so the caller's catch runs). The timer
- * is unref'd so it can never keep the process alive and is cleared once `p`
- * settles.
+ * is cleared once `p` settles, so it holds the event loop open for at most
+ * `ms` — it is deliberately NOT unref'd: under bun's Windows test runner an
+ * unref'd timer that is the only pending handle never fires (the loop parks
+ * and even bun's per-test timeout can't interrupt), which hard-hung this
+ * module's tests and got the whole terminal suite excluded from Windows CI.
  */
 async function settledWithin(p: Promise<unknown>, ms: number): Promise<boolean> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const timeout = new Promise<false>((resolve) => {
 		timer = setTimeout(() => resolve(false), ms);
-		timer.unref?.();
 	});
 	try {
 		return await Promise.race([p.then(() => true), timeout]);
