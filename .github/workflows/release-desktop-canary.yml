@@ -75,6 +75,7 @@ jobs:
       channel: canary
       version_suffix: "-canary.${{ needs.check-changes.outputs.version_timestamp }}"
       electron_builder_config: electron-builder.canary.ts
+      win_package_script: package:win:canary
       artifact_prefix: desktop-canary
       artifact_retention_days: 7
     secrets: inherit

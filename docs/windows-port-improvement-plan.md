@@ -52,24 +52,36 @@ env at session creation (the env-injection path already exists for `OPENROUTER_A
 and build the prompt-passing per shell (PowerShell here-string / temp file) or pass via
 stdin. Prefer structured {command, args, env} over quoted shell strings.
 
-## Phase B — Distribution: signing + auto-update as one unit
+## Phase B — Distribution: signing + auto-update as one unit — RESOLVED 2026-07-13 (signing skipped)
 
 Revised from the original Phase 3 after review: an unsigned *self-updating* binary is a
 worse trust posture than an unsigned download, so signing should land before or atomically
 with enabling the updater, not as an optional later step.
 
-1. Code signing (Azure Trusted Signing or similar; verify current pricing independently).
-2. Enable auto-update on Windows: `AUTO_UPDATE_ENABLED` + `IS_AUTO_UPDATE_PLATFORM` in
-   `auto-updater.ts` both gate it off. Packaging is already compatible (NSIS,
-   electron-updater, `latest.yml`, publish repo correct).
-3. Release plumbing found by review:
-   - **Windows canary builds ignore `electron-builder.canary.ts`** — `package:win`
-     hardcodes `electron-builder.win.ts` (`build-desktop.yml:213`), so canaries miss the
-     canary appId/name/artifacts. Fix before enabling updates.
-   - Validate packaged `resources/app-update.yml`; upload every generated channel manifest
-     (`if-no-files-found: error`). Stable-named `.exe`/`.zip` copies are convenience only,
-     not an updater requirement.
-   - Fix stale RELEASE.md manifest URLs (still `per-simmons/damon-ade`, mac/linux only).
+**Decision 2026-07-13:** signing skipped — the port is personal-use; $120/yr (Azure
+Artifact Signing, née Trusted Signing, $9.99/mo, verified current) isn't justified, and
+SignPath OSS eligibility for a fork is uncertain. Per the trust-posture rule above,
+**auto-update therefore stays gated off** (`AUTO_UPDATE_ENABLED` /
+`IS_AUTO_UPDATE_PLATFORM` untouched). Revisit both together before any wider
+distribution. The release plumbing below was fixed anyway:
+
+1. Code signing — SKIPPED by decision (see above).
+2. Enable auto-update on Windows — DEFERRED with signing, as one unit.
+3. Release plumbing — DONE:
+   - **Windows canary builds ignore `electron-builder.canary.ts`** — fixed:
+     `electron-builder.canary.ts` is now a target-aware factory (`createCanaryConfig`),
+     `electron-builder.canary.win.ts` layers canary overrides on the `"win"` target's
+     `.win32-natives` staging, and `build-desktop.yml` takes a `win_package_script`
+     input (`package:win:canary` from the canary workflow). Verified by evaluating the
+     config: canary appId/productName/artifactName + win32-natives staging + npmRebuild
+     off + prerelease publish.
+   - Windows update-manifest upload now grabs every channel manifest
+     (`release/*.yml` minus `builder-debug.yml`) with `if-no-files-found: error`
+     (was `latest.yml` + `warn`). Packaged `app-update.yml` validation deferred with
+     the updater.
+   - RELEASE.md fixed: URLs → `boostedchaos/ade-windows-port`, Windows manifest added,
+     signing/auto-update decision recorded, "run create-release.sh from Git Bash" noted
+     (covers Phase E.3).
 
 ## Phase C — Windows CI coverage — DONE 2026-07-13, CI-verified
 
@@ -144,4 +156,5 @@ Backlog surfaced by the full-suite run (future work, not blocking):
 ## Suggested order
 
 A (broken feature) → C.1–C.2 (PR CI, cheap) → B (signing+updates together) → C.3–C.4 →
-D → E.
+D → E. Status: A, B (rescoped), C done — next up is D (shell-semantics hardening),
+then E (E.3 already covered by the Phase B RELEASE.md pass).

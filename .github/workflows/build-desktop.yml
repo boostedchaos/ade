@@ -13,10 +13,15 @@ on:
         type: string
         default: ""
       electron_builder_config:
-        description: "Electron builder config file"
+        description: "Electron builder config file (macOS/Linux)"
         required: false
         type: string
         default: "electron-builder.ts"
+      win_package_script:
+        description: "Windows package script (package:win or package:win:canary — each pins its own electron-builder config)"
+        required: false
+        type: string
+        default: "package:win"
       artifact_prefix:
         description: "Prefix for artifact names"
         required: false
@@ -216,7 +221,7 @@ jobs:
         working-directory: apps/desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: bun run package:win
+        run: bun run ${{ inputs.win_package_script }}
 
       - name: Verify packaged native modules
         working-directory: apps/desktop
@@ -256,9 +261,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact_prefix }}-win-update-manifest
-          path: apps/desktop/release/latest.yml
+          # Every channel manifest (latest.yml, canary.yml, ...) — Windows
+          # manifests have no -win suffix, so exclude builder-debug.yml.
+          path: |
+            apps/desktop/release/*.yml
+            !apps/desktop/release/builder-debug.yml
           retention-days: ${{ inputs.artifact_retention_days }}
-          if-no-files-found: warn
+          if-no-files-found: error
 
   build-linux:
     name: Build - Linux (x64)

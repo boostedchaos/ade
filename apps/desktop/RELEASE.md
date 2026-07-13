@@ -8,7 +8,10 @@ From the monorepo root:
 ./apps/desktop/create-release.sh
 ```
 
+On Windows, run the script from Git Bash (it needs bash, `gh`, and `jq`).
+
 The script will:
+
 1. Show current version and prompt for new version (patch/minor/major/custom)
 2. Update `package.json` version
 3. Create and push a `desktop-v<version>` tag
@@ -53,20 +56,23 @@ This creates a draft release. Publish it manually at GitHub Releases.
 
 ## Auto-update
 
-Auto-update is DISABLED for the v1 public launch (see
-`src/main/lib/auto-updater.ts`, `AUTO_UPDATE_ENABLED = false`). Once enabled, the
-app checks for updates at launch and every few hours using the public repo's
-Releases. Replace `ade` (and confirm the owner) below:
+Auto-update is DISABLED (see `src/main/lib/auto-updater.ts`,
+`AUTO_UPDATE_ENABLED = false`; Windows is additionally excluded by
+`IS_AUTO_UPDATE_PLATFORM` until builds are code-signed — decision 2026-07-13:
+Windows builds ship unsigned, so the updater stays off there). Once enabled, the
+app checks for updates at launch and every few hours using this repo's Releases:
 
-- **macOS manifest**: `https://github.com/per-simmons/damon-ade/releases/latest/download/latest-mac.yml`
-- **Linux manifest**: `https://github.com/per-simmons/damon-ade/releases/latest/download/latest-linux.yml`
-- **macOS installer**: `https://github.com/per-simmons/damon-ade/releases/latest/download/ADE-arm64.dmg`
-- **Linux installer**: `https://github.com/per-simmons/damon-ade/releases/latest/download/ADE-x64.AppImage`
+- **macOS manifest**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/latest-mac.yml`
+- **Linux manifest**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/latest-linux.yml`
+- **Windows manifest**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/latest.yml`
+- **macOS installer**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/ADE-arm64.dmg`
+- **Linux installer**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/ADE-x64.AppImage`
 
 The workflow creates stable-named copies (without version) so these URLs always point to the latest build.
 
-To turn auto-update on: set `RELEASE_REPO_NAME` and flip `AUTO_UPDATE_ENABLED`
-to `true` in `src/main/lib/auto-updater.ts`, then ship a build.
+To turn auto-update on: flip `AUTO_UPDATE_ENABLED` to `true` in
+`src/main/lib/auto-updater.ts` (and, for Windows, sign the builds and add
+`PLATFORM.IS_WINDOWS` to `IS_AUTO_UPDATE_PLATFORM`), then ship a build.
 
 ## Code Signing
 
@@ -74,6 +80,11 @@ macOS code signing uses these repository secrets:
 
 - `MAC_CERTIFICATE` / `MAC_CERTIFICATE_PASSWORD`
 - `APPLE_ID` / `APPLE_ID_PASSWORD` / `APPLE_TEAM_ID`
+
+Windows builds are intentionally unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`).
+Signing was evaluated 2026-07-13 (Azure Artifact Signing $9.99/mo, SignPath OSS)
+and skipped — the port is personal-use; revisit before any wider distribution,
+and land signing before (or with) enabling Windows auto-update.
 
 ## Local Testing
 
