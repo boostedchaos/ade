@@ -179,5 +179,9 @@ typecheck clean.
 A (broken feature) → C.1–C.2 (PR CI, cheap) → B (signing+updates together) → C.3–C.4 →
 D → E. Status: A, B (rescoped), C, D done — remaining: E.1 (window controls) and E.2
 (upstream remote + sync strategy); E.3 already covered by the Phase B RELEASE.md pass.
-Backlog: canary macOS dep-collection failure (fix shipped `a63f707`, pending CI
-verification) and the C.3 terminal-host named-pipe test transport.
+Backlog: the C.3 terminal-host named-pipe test transport. The canary macOS failure
+(empty MAC_CERTIFICATE secret → CSC_LINK="" → electron-builder "not a file") is FIXED
+and CI-verified: run 29288595270 on `a63f707` went green on all three platforms and
+`Update Canary Release` published the desktop-canary prerelease (exe/zip/dmg/AppImage,
+all canary-named, + latest/latest-mac/latest-linux manifests) — the first canary
+release this fork has ever published.
