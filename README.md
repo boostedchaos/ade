@@ -30,14 +30,14 @@ CLI are required.
 macOS users should use the signed DMG from the
 [upstream release](https://github.com/per-simmons/damon-ade/releases/latest).
 
-
 ### Build from source
 
-Requires [Bun](https://bun.sh) 1.0+.
+Requires [Bun](https://bun.sh) 1.0+. The Windows build pipeline lives only in this
+fork — building upstream will not produce a Windows app.
 
 ```bash
-git clone https://github.com/per-simmons/damon-ade.git
-cd REPO
+git clone https://github.com/boostedchaos/ade-windows-port.git
+cd ade-windows-port
 bun install
 cd apps/desktop
 bun run compile:app        # builds main + preload + renderer into dist/
@@ -46,11 +46,21 @@ bunx electron .            # launches the built app
 
 `compile:app` runs the full production build; `bunx electron .` then launches it directly. (Avoid `electron-vite preview` for a full run — it can exhaust memory.)
 
+To produce the Windows installer and portable zip:
+
+```bash
+bun run build:win          # from apps/desktop; outputs NSIS .exe + .zip into release/
+```
+
+`build:win` uses prebuilt native binaries (no Visual Studio toolchain needed). If
+`bun install` tries to rebuild natives on a machine without one, set
+`ADE_SKIP_INSTALL_APP_DEPS=1` for the install step — this is what Windows CI does.
+
 ## Prerequisites
 
 ADE orchestrates coding CLIs; it does not bundle them. You need:
 
-- **Git** — required. Each agent gets its own repository or worktree. Install Apple's command line tools with `xcode-select --install`.
+- **Git** — required. Each agent gets its own repository or worktree. On Windows, install [Git for Windows](https://git-scm.com/download/win) (`winget install Git.Git`). On macOS, install Apple's command line tools with `xcode-select --install`.
 - **At least one agent CLI.** Claude Code is recommended, because it also powers the Kimi, MiniMax, and GLM sessions from the model bar (they run Claude Code pointed at OpenRouter):
 
   ```bash
@@ -74,10 +84,11 @@ ADE orchestrates coding CLIs; it does not bundle them. You need:
 **2. Create a team.** Give it a name (for example, `Newsletter`). Optionally click the square photo thumbnail to pick an image — teams are the top level of the rail, so a photo makes them easy to find at a glance. The team appears in the left rail.
 
 **3. Create an agent.** Hover the team's header in the rail and click the **+** button ("New agent"). In the New Agent dialog:
-   - **Name** — required (for example, `Scout`).
-   - **Role** — optional. A sentence describing what this agent is for. Leave it blank if you'd rather shape the agent by talking to it — ADE seeds the agent's identity file either way, and it refines itself over time.
-   - **Runtime** — the coding CLI this agent runs: **Claude**, **Codex**, or **OpenCode**. Claude is the default.
-   - **Repository** — start a new empty repo, clone from a URL, or point at an existing local path.
+
+- **Name** — required (for example, `Scout`).
+- **Role** — optional. A sentence describing what this agent is for. Leave it blank if you'd rather shape the agent by talking to it — ADE seeds the agent's identity file either way, and it refines itself over time.
+- **Runtime** — the coding CLI this agent runs: **Claude**, **Codex**, or **OpenCode**. Claude is the default.
+- **Repository** — start a new empty repo, clone from a URL, or point at an existing local path.
 
    ADE creates the agent, gives it its own git worktree, and scaffolds its memory in the background.
 
@@ -87,7 +98,7 @@ ADE orchestrates coding CLIs; it does not bundle them. You need:
 
 **6. Switch models from the model bar.** Below the session tabs is a quiet row of model logos: **Claude** (the default), **OpenAI** (Codex on GPT-5.5), **Kimi K2.7**, **MiniMax M3**, and **GLM 5.2**. Click any logo to open a new session in the current agent's worktree running that model — the same code, a different model, no context switch.
 
-**7. Connect OpenRouter (first open model only).** The first time you click Kimi, MiniMax, or GLM, ADE asks for your OpenRouter API key (get one at [openrouter.ai/keys](https://openrouter.ai/keys)). Paste it and choose **Save & Launch**. The key is encrypted with the macOS keychain, stored locally, and injected only into the agent's terminal — it never leaves your machine and is never shown back to the app's UI. You enter it once; later open-model sessions launch straight away.
+**7. Connect OpenRouter (first open model only).** The first time you click Kimi, MiniMax, or GLM, ADE asks for your OpenRouter API key (get one at [openrouter.ai/keys](https://openrouter.ai/keys)). Paste it and choose **Save & Launch**. The key is encrypted with your operating system's credential store (DPAPI on Windows, Keychain on macOS), stored locally, and injected only into the agent's terminal — it never leaves your machine and is never shown back to the app's UI. You enter it once; later open-model sessions launch straight away.
 
 **8. Watch the memory grow.** The **Agent Files** panel on the right lists the agent's memory surface, grouped into **Memory**, **Skills**, and **Worktree**. It starts nearly empty and fills in as the agent learns — its identity, your profile, its notes, and any skills it writes for itself. Click a file to open it in a viewer tab.
 
@@ -105,6 +116,17 @@ Each agent's memory is a small set of files:
 A write-back protocol travels with the memory, telling the agent when to save (a stated preference, a correction, a durable fact), when to skip (trivia, one-off state, anything easily re-discovered), and to consolidate rather than endlessly append. A session-end reflection loop prompts the agent to review the conversation and update its memory and skills before it finishes, so the next session starts smarter. On Claude Code this reflection is enforced by a native stop hook; on the other runtimes it runs by convention at session boundaries.
 
 The same canonical files feed every runtime through thin, auto-generated bridge files — a `CLAUDE.md`, an OpenCode config, or a regenerated Codex `AGENTS.md` — so you can switch an agent's runtime without losing its memory. See [docs/memory.md](docs/memory.md) for the full design.
+
+## Where your data lives
+
+ADE is local-first; everything below stays on your machine.
+
+- **Agent homes** (worktrees, memory, skills): `~/.superset` — on Windows,
+  `C:\Users\<you>\.superset`. Back this up to keep your agents' memory.
+- **App settings** (including the encrypted OpenRouter key): the app data folder —
+  on Windows `%APPDATA%\ADE`, on macOS `~/Library/Application Support/ADE`.
+
+Deleting both resets ADE completely.
 
 ## Contributing
 

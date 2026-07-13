@@ -13,7 +13,7 @@ The system is adapted from the [Hermes agent](https://github.com/NousResearch/he
 
 ## The files
 
-Each agent has a home directory containing its worktree, its memory, and its skills:
+Each agent has a home directory containing its worktree, its memory, and its skills. Agent homes live under `~/.superset` — on Windows that is `C:\Users\<you>\.superset`, on macOS `/Users/<you>/.superset`. Back up that directory to preserve your agents' memory.
 
 ```
 <agent-home>/
@@ -63,7 +63,7 @@ On the Claude Code runtime this reflection is enforced by a native stop hook: wh
 The canonical files are the same for every runtime; each CLI is pointed at them by a small generated bridge:
 
 | Runtime | Bridge | Mechanism | Native write-back |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Claude Code | `CLAUDE.md` + `.claude/settings.json` | `@import` for AGENT.md/USER.md; native auto-memory for MEMORY.md | Yes |
 | Codex | `.codex/AGENTS.md` | Concatenated text, regenerated on each launch (Codex can't import) | Driven by the protocol |
 | OpenCode | `opencode.json` | An `instructions` array referencing the canonical files | Driven by the protocol |
