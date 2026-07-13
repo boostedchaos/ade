@@ -71,7 +71,12 @@ with enabling the updater, not as an optional later step.
      not an updater requirement.
    - Fix stale RELEASE.md manifest URLs (still `per-simmons/damon-ade`, mac/linux only).
 
-## Phase C — Windows CI coverage — DONE 2026-07-13
+## Phase C — Windows CI coverage — DONE 2026-07-13, CI-verified
+
+windows-ci run 29271387357 (commit `08236dd`) is green end-to-end on the pinned toolchain:
+typecheck → full 955-test suite vs baseline → packaged build → natives smoke → app-init
+smoke. The first run flagged exactly one runner-vs-local baseline delta (createWorktree
+hook tolerance), which the ratchet named precisely — added to the baseline as designed.
 
 1. `pull_request: branches: [main]` trigger added to `windows-ci.yml`.
 2. Toolchain aligned: `build-desktop.yml` bumped from setup-bun v1 / Bun 1.3.2 to v2 / 1.3.6
