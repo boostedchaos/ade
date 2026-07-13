@@ -36,9 +36,6 @@ export async function runTeardown({
 		return { success: true };
 	}
 
-	const command = config.teardown.join(" && ");
-	console.log(`[teardown] Running for "${workspaceName}": ${command}`);
-
 	try {
 		// Mirror the terminal layer's shell selection. On win32 getDefaultShell
 		// resolves pwsh/powershell/ComSpec; SHELL is a POSIX-only convention.
@@ -47,6 +44,16 @@ export async function runTeardown({
 				? getDefaultShell()
 				: process.env.SHELL ||
 					(process.platform === "darwin" ? "/bin/zsh" : "/bin/bash");
+
+		// Windows PowerShell 5.1 rejects `&&`, so under any PowerShell chain
+		// with a fail-fast exit instead (runs via -Command, so `exit` cleanly
+		// propagates the failure). cmd.exe and POSIX shells keep `&&`.
+		const isPowerShell =
+			process.platform === "win32" && !/cmd(\.exe)?$/i.test(shell);
+		const command = isPowerShell
+			? config.teardown.join("; if (-not $?) { exit 1 }; ")
+			: config.teardown.join(" && ");
+		console.log(`[teardown] Running for "${workspaceName}": ${command}`);
 
 		const baseEnv = buildSafeEnv(sanitizeEnv(process.env) || {});
 		const wrapperEnv = getShellEnv(shell);

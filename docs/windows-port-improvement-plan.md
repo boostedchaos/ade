@@ -131,18 +131,30 @@ Backlog surfaced by the full-suite run (future work, not blocking):
   static-ports, setup/teardown paths) — candidates for platform-gating so the baseline
   shrinks toward zero.
 
-## Phase D — Shell-semantics hardening
+## Phase D — Shell-semantics hardening — DONE 2026-07-13
 
-1. Setup/teardown command chains: entries are joined with `&&` (`launch-command.ts:38`,
-   `teardown.ts:39`). Modern cmd and pwsh 7 accept `&&`; **Windows PowerShell 5.1 — ADE's
-   middle fallback shell — does not**, so multi-entry configs fail there even with valid
-   Windows commands. Prefer per-platform config keys (`setup.win`) or shell-aware joining
-   over the originally proposed POSIX-token warning heuristic.
-2. macOS-authored `.superset/config.json` setup commands (`./setup.sh`, `chmod`) still fail
-   under any Windows shell — per-platform keys cover this too.
-3. PATH shadowing of the shim dir by PowerShell profiles: real but not trivially guardable
-   from the main process (it can't observe post-profile resolution). Fold into the Phase A
-   structured-invocation work rather than a bolt-on check.
+1. `&&` chains — fixed with BOTH approaches (join + per-platform keys):
+   `buildTerminalCommand` (the one joiner for workspace setup AND tab presets) now joins
+   with `; if (-not $?) { throw "command failed" };` on Windows — valid in WinPS 5.1 and
+   pwsh 7, fail-fast, and `throw` keeps the interactive pane alive (verified by executing
+   both join forms in both shells, fail and success paths). `teardown.ts` joins with
+   `; if (-not $?) { exit 1 };` when the resolved shell is PowerShell (it runs under
+   `-Command`, so `exit` propagates the failure code); cmd/POSIX keep `&&`. Platform
+   detection reuses Phase A's dual-probe `IS_WINDOWS` (now exported from
+   `@superset/shared/agent-command`). Known ceiling, same as Phase A: a cmd.exe-only
+   PANE would get the PS join — out of scope, powershell.exe always resolves.
+2. Per-platform config keys — `"setup.win"` / `"teardown.win"` added to `SetupConfig`;
+   selection happens once in `loadSetupConfig`'s `readConfigFile`, so all consumers
+   (workspace create ×7, init, teardown) get platform-correct lists with no call-site
+   changes. macOS-authored configs keep working on mac; Windows users can supply native
+   equivalents.
+3. PATH shadowing by PowerShell profiles: unchanged by design — folds into future
+   structured-invocation work, not a bolt-on check.
+
+Verified: launch-command tests cover both join branches via an injectable `isWindows`
+param (8/8 pass); full Windows suite ratchet clean (957 tests, no new failures — the 14
+failing setup/teardown tests were already in the baseline, asserting POSIX behavior);
+typecheck clean.
 
 ## Phase E — Polish + upstream
 
@@ -165,5 +177,7 @@ Backlog surfaced by the full-suite run (future work, not blocking):
 ## Suggested order
 
 A (broken feature) → C.1–C.2 (PR CI, cheap) → B (signing+updates together) → C.3–C.4 →
-D → E. Status: A, B (rescoped), C done — next up is D (shell-semantics hardening),
-then E (E.3 already covered by the Phase B RELEASE.md pass).
+D → E. Status: A, B (rescoped), C, D done — remaining: E.1 (window controls) and E.2
+(upstream remote + sync strategy); E.3 already covered by the Phase B RELEASE.md pass.
+Backlog: canary macOS dep-collection failure (fix shipped `a63f707`, pending CI
+verification) and the C.3 terminal-host named-pipe test transport.

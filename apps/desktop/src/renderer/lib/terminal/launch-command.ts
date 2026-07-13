@@ -1,3 +1,5 @@
+import { IS_WINDOWS } from "@superset/shared/agent-command";
+
 interface TerminalCreateOrAttachInput {
 	paneId: string;
 	tabId: string;
@@ -37,8 +39,16 @@ interface WriteCommandsInPaneOptions {
 
 export function buildTerminalCommand(
 	commands: string[] | null | undefined,
+	isWindows: boolean = IS_WINDOWS,
 ): string | null {
 	if (!Array.isArray(commands) || commands.length === 0) return null;
+	// Windows panes run PowerShell (pwsh 7 or Windows PowerShell 5.1 — see
+	// agent-command.ts; cmd-only sessions are out of scope). `&&` is a parse
+	// error in 5.1, so chain with a fail-fast check both versions accept:
+	// `throw` aborts the rest of the line but keeps the interactive pane alive.
+	if (isWindows) {
+		return commands.join('; if (-not $?) { throw "command failed" }; ');
+	}
 	return commands.join(" && ");
 }
 

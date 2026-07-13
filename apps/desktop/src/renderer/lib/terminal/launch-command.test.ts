@@ -53,10 +53,21 @@ describe("launchCommandInPane", () => {
 });
 
 describe("buildTerminalCommand", () => {
-	it("joins commands with shell separators", () => {
-		expect(buildTerminalCommand(["echo one", "echo two"])).toBe(
+	it("joins with && on POSIX", () => {
+		expect(buildTerminalCommand(["echo one", "echo two"], false)).toBe(
 			"echo one && echo two",
 		);
+	});
+
+	it("joins with a PowerShell 5.1-safe fail-fast chain on Windows", () => {
+		expect(buildTerminalCommand(["echo one", "echo two"], true)).toBe(
+			'echo one; if (-not $?) { throw "command failed" }; echo two',
+		);
+	});
+
+	it("emits a single command unchanged on both platforms", () => {
+		expect(buildTerminalCommand(["echo one"], false)).toBe("echo one");
+		expect(buildTerminalCommand(["echo one"], true)).toBe("echo one");
 	});
 
 	it("returns null for empty commands", () => {
@@ -76,9 +87,11 @@ describe("writeCommandsInPane", () => {
 			write,
 		});
 
+		// Join text is platform-dependent (host default); assert consistency
+		// with buildTerminalCommand rather than duplicating the separator.
 		expect(write).toHaveBeenCalledWith({
 			paneId: "pane-1",
-			data: "echo one && echo two\n",
+			data: `${buildTerminalCommand(["echo one", "echo two"])}\n`,
 			throwOnError: true,
 		});
 	});

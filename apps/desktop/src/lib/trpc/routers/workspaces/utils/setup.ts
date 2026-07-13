@@ -40,12 +40,25 @@ function readConfigFile(configPath: string): SetupConfig | null {
 		const content = readFileSync(configPath, "utf-8");
 		const parsed = JSON.parse(content) as SetupConfig;
 
-		if (parsed.setup && !Array.isArray(parsed.setup)) {
-			throw new Error("'setup' field must be an array of strings");
+		for (const key of [
+			"setup",
+			"teardown",
+			"setup.win",
+			"teardown.win",
+		] as const) {
+			if (parsed[key] && !Array.isArray(parsed[key])) {
+				throw new Error(`'${key}' field must be an array of strings`);
+			}
 		}
 
-		if (parsed.teardown && !Array.isArray(parsed.teardown)) {
-			throw new Error("'teardown' field must be an array of strings");
+		// Resolve the platform here so every consumer (workspace init/create,
+		// teardown) gets the right command list without caring about the OS.
+		if (process.platform === "win32") {
+			return {
+				...parsed,
+				setup: parsed["setup.win"] ?? parsed.setup,
+				teardown: parsed["teardown.win"] ?? parsed.teardown,
+			};
 		}
 
 		return parsed;

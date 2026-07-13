@@ -34,7 +34,7 @@ export const AGENT_LABELS: Record<AgentType, string> = {
  * This module runs in both the Electron main process and the renderer, hence
  * the dual platform probe.
  */
-const IS_WINDOWS =
+export const IS_WINDOWS =
 	typeof process !== "undefined" && !!process.versions?.node
 		? process.platform === "win32"
 		: /windows/i.test(
