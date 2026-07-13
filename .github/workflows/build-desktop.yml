@@ -111,7 +111,17 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bun run package -- --publish never --config ${{ inputs.electron_builder_config }}
+        # Missing signing secrets expand to EMPTY STRINGS, which pass
+        # electron-builder's `cscLink == null` check and then fail as
+        # "<projectDir> not a file" (importCertificate resolves "" to the
+        # project dir). Unset them so absent secrets mean an unsigned build.
+        run: |
+          if [ -z "$CSC_LINK" ]; then
+            echo "MAC_CERTIFICATE secret not configured - building unsigned"
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          bun run package -- --publish never --config ${{ inputs.electron_builder_config }}
 
       - name: Verify app-update.yml exists
         working-directory: apps/desktop
