@@ -72,9 +72,18 @@ distribution. The release plumbing below was fixed anyway:
      `electron-builder.canary.ts` is now a target-aware factory (`createCanaryConfig`),
      `electron-builder.canary.win.ts` layers canary overrides on the `"win"` target's
      `.win32-natives` staging, and `build-desktop.yml` takes a `win_package_script`
-     input (`package:win:canary` from the canary workflow). Verified by evaluating the
-     config: canary appId/productName/artifactName + win32-natives staging + npmRebuild
-     off + prerelease publish.
+     input (`package:win:canary` from the canary workflow). **CI-verified** (dispatched
+     canary run 29285813748 on `281700d`): Windows job green end-to-end, artifacts now
+     `ADE-Canary-0.1.0-canary.<ts>-x64.exe/.zip` (previously stable-named), manifest
+     uploaded under the new glob. Note: only `latest.yml` is generated — electron-builder
+     derives the channel from `publish.channel` (unset), not the prerelease version
+     suffix; fine while the updater is off, revisit if updates are ever enabled.
+   - **Pre-existing, NOT from this phase:** the canary macOS build job fails on every
+     run (also on `85c221c` runs predating Phase B) inside electron-builder's dependency
+     collection — "bun does not support any CLI for dependency tree extraction" → NPM
+     collector finds no node_modules → "apps/desktop not a file". The `Update Canary
+     Release` job is therefore always skipped, so no canary release gets published from
+     any platform. macOS-build backlog item, out of Windows-port scope.
    - Windows update-manifest upload now grabs every channel manifest
      (`release/*.yml` minus `builder-debug.yml`) with `if-no-files-found: error`
      (was `latest.yml` + `warn`). Packaged `app-update.yml` validation deferred with
