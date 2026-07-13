@@ -14,6 +14,7 @@
 (fail) agent-wrappers copilot > replaces stale Gemini hook commands from old superset paths
 (fail) agent-wrappers copilot > replaces stale Mastra hook commands from old superset paths
 (fail) agent-wrappers copilot > rewrites stale superset-notify.json with current hook path
+(fail) createWorktree hook tolerance > continues when post-checkout hook fails but worktree is created
 (fail) env > buildSafeEnv > includes allowlisted shell environment vars > should include proxy vars (both cases)
 (fail) env > buildTerminalEnv > CODEX_HOME for codex runtime > sets CODEX_HOME to the agent .codex home and it survives the terminal-host buildSafeEnv re-filter
 (fail) getAppCommand > JetBrains IDEs > returns bundle ID candidates for intellij (multi-edition)
