@@ -156,15 +156,24 @@ param (8/8 pass); full Windows suite ratchet clean (957 tests, no new failures �
 failing setup/teardown tests were already in the baseline, asserting POSIX behavior);
 typecheck clean.
 
-## Phase E — Polish + upstream
+## Phase E — Polish + upstream — DONE 2026-07-13
 
-1. Window controls: 46×32 caption-button sizing and a maximize/restore glyph swap
-   (`WindowControls.tsx`).
-2. Add `upstream` remote + document the sync strategy. Review caution: the port touches
-   terminal hosting, permissions, menus, agent setup, renderer, and packaging — do NOT
-   assume clean rebases; document the merge base and choose merge vs rebase deliberately.
-3. Release scripts (`create-release.sh`) are bash+gh+jq — document "run from Git Bash" in
-   RELEASE.md rather than rewriting.
+1. **DONE.** Window controls: `WindowControls.tsx` buttons now 46×32 (`w-[46px] h-8`)
+   with a maximize/restore glyph swap (`HiMiniStop` ↔ `HiMiniSquare2Stack`), driven by
+   the existing `window.isMaximized` query + a renderer `resize` listener so the glyph
+   stays correct after title-bar double-click / Win+Up / snap (not just button clicks).
+   Kept the existing rounded in-toolbar style — the cluster sits inside the padded TopBar
+   right group, not flush in the corner; true native-flush strip = a TopBar layout change,
+   out of scope. Typecheck clean.
+2. **DONE.** `upstream` remote added (`per-simmons/damon-ade`, the direct fork parent) and
+   sync strategy documented in `docs/upstream-sync.md`. Merge base = `8dd78d3` (upstream
+   `v0.1.0`, "ADE 0.1.0 — initial public release"); divergence **0 behind / 30 ahead** —
+   `upstream/main` has not advanced past 0.1.0, so nothing to pull today. Decision:
+   **merge, never rebase** (30 published commits across terminal/permissions/menus/agent/
+   renderer/packaging — rebase would raise the same conflict 30× and rewrite released SHAs).
+   Doc includes the re-check commands, the sync procedure, and a do-not-break list.
+3. **DONE (Phase B).** Release scripts (`create-release.sh`, bash+gh+jq) documented as
+   "run from Git Bash" in RELEASE.md during the Phase B pass.
 
 ## What NOT to do (unchanged, review-confirmed)
 
@@ -177,8 +186,9 @@ typecheck clean.
 ## Suggested order
 
 A (broken feature) → C.1–C.2 (PR CI, cheap) → B (signing+updates together) → C.3–C.4 →
-D → E. Status: A, B (rescoped), C, D done — remaining: E.1 (window controls) and E.2
-(upstream remote + sync strategy); E.3 already covered by the Phase B RELEASE.md pass.
+D → E. Status: **all phases done** — A, B (rescoped), C, D, E complete. E.1 (window
+controls) + E.2 (upstream remote + `docs/upstream-sync.md`) shipped 2026-07-13; E.3
+was covered by the Phase B RELEASE.md pass.
 Backlog: the C.3 terminal-host named-pipe test transport. The canary macOS failure
 (empty MAC_CERTIFICATE secret → CSC_LINK="" → electron-builder "not a file") is FIXED
 and CI-verified: run 29288595270 on `a63f707` went green on all three platforms and
