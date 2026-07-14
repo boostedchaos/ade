@@ -3,17 +3,21 @@ import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { eq } from "drizzle-orm";
 import { regenerateCodexAgentsMd } from "main/lib/agent-scaffold";
+import { appState } from "main/lib/app-state";
 import { requestAppleEventsAccessOnce } from "main/lib/apple-events-permission";
 import { MEMORY_SCAFFOLD_ENABLED } from "main/lib/feature-flags";
-import { appState } from "main/lib/app-state";
 import { localDb } from "main/lib/local-db";
-import { restartDaemon as restartDaemonShared } from "main/lib/terminal";
+import {
+	type DaemonConnectionStatus,
+	getDaemonTerminalManager,
+	restartDaemon as restartDaemonShared,
+} from "main/lib/terminal";
 import {
 	TERMINAL_SESSION_KILLED_MESSAGE,
 	TerminalKilledError,
 } from "main/lib/terminal/errors";
-import { getTerminalHostClient } from "main/lib/terminal-host/client";
 import { writeClaudeSessionIdToHistory } from "main/lib/terminal-history";
+import { getTerminalHostClient } from "main/lib/terminal-host/client";
 import { getWorkspaceRuntimeRegistry } from "main/lib/workspace-runtime";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
@@ -448,6 +452,27 @@ export const createTerminalRouter = () => {
 		/** Restart daemon to recover from stuck state. Kills all sessions. */
 		restartDaemon: publicProcedure.mutation(async () => {
 			return restartDaemonShared();
+		}),
+
+		/**
+		 * Global daemon connection status for the renderer's status indicator /
+		 * disconnected banner. Emits the current status immediately, then on every
+		 * change (connected | reconnecting | failed).
+		 */
+		daemonStatus: publicProcedure.subscription(() => {
+			return observable<DaemonConnectionStatus>((emit) => {
+				const manager = getDaemonTerminalManager();
+				emit.next(manager.getConnectionStatus());
+
+				const onChange = (status: DaemonConnectionStatus) => {
+					emit.next(status);
+				};
+				manager.on("daemonStatusChanged", onChange);
+
+				return () => {
+					manager.off("daemonStatusChanged", onChange);
+				};
+			});
 		}),
 
 		getSession: publicProcedure

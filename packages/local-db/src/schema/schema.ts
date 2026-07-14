@@ -166,6 +166,10 @@ export const settings = sqliteTable("settings", {
 	selectedRingtoneId: text("selected_ringtone_id"),
 	activeOrganizationId: text("active_organization_id"),
 	confirmOnQuit: integer("confirm_on_quit", { mode: "boolean" }),
+	// When true, quitting the app stops all agent sessions (daemon shutdown +
+	// forceKillAll). When false/null (default) the daemon and its sessions survive
+	// quit so agents keep running in the background — the designed behavior.
+	stopAgentsOnQuit: integer("stop_agents_on_quit", { mode: "boolean" }),
 	terminalLinkBehavior: text(
 		"terminal_link_behavior",
 	).$type<TerminalLinkBehavior>(),

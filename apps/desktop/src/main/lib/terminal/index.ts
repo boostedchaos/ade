@@ -3,7 +3,10 @@ import { getTerminalHostClient } from "main/lib/terminal-host/client";
 import type { ListSessionsResponse } from "main/lib/terminal-host/types";
 import { DaemonTerminalManager, getDaemonTerminalManager } from "./daemon";
 import { prewarmTerminalEnv, setOpenRouterKeyResolver } from "./env";
-import { RECONCILE_STARTUP_TIMEOUT_MS, reconcileWithTimeout } from "./reconcile";
+import {
+	RECONCILE_STARTUP_TIMEOUT_MS,
+	reconcileWithTimeout,
+} from "./reconcile";
 
 // Wire the encrypted key store into buildTerminalEnv from the main process. This
 // import lives here (main-only) rather than in env.ts, which is also loaded by
@@ -11,6 +14,7 @@ import { RECONCILE_STARTUP_TIMEOUT_MS, reconcileWithTimeout } from "./reconcile"
 setOpenRouterKeyResolver(() => getProviderKey("openrouter"));
 
 export { DaemonTerminalManager, getDaemonTerminalManager };
+export type { DaemonConnectionStatus } from "./daemon/daemon-manager";
 export type {
 	CreateSessionParams,
 	SessionResult,
@@ -67,6 +71,34 @@ export async function restartDaemon(): Promise<{ success: boolean }> {
 	console.log("[restartDaemon] Complete");
 
 	return { success: true };
+}
+
+/**
+ * Graceful-shutdown: flush terminal history (write `endedAt`) while leaving the
+ * daemon + its sessions running in the background. Stops the reconnect loop
+ * first so a pending backoff can't fire during quit.
+ */
+export async function flushTerminalHistoryOnQuit(): Promise<void> {
+	const manager = getDaemonTerminalManager();
+	manager.prepareForShutdown();
+	await manager.flushHistoryForQuit();
+}
+
+/**
+ * Graceful-shutdown: stop all agent sessions and shut the daemon down (the
+ * "stop agents on quit" policy). forceKillAll writes `endedAt` via its history
+ * flush, then the daemon itself is asked to exit.
+ */
+export async function stopAllAgentsOnQuit(): Promise<void> {
+	const manager = getDaemonTerminalManager();
+	manager.prepareForShutdown();
+	await manager.forceKillAll();
+	await getTerminalHostClient().shutdownIfRunning({ killSessions: true });
+}
+
+/** Graceful-shutdown: drop the daemon socket without stopping the daemon. */
+export function disconnectTerminalHostOnQuit(): void {
+	getTerminalHostClient().disconnect();
 }
 
 export async function tryListExistingDaemonSessions(): Promise<{

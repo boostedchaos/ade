@@ -1,0 +1,1 @@
+ALTER TABLE `settings` ADD `stop_agents_on_quit` integer;
