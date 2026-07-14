@@ -39,7 +39,15 @@ const sentryPlugin = process.env.SENTRY_AUTH_TOKEN
 		})
 	: null;
 
-export default defineConfig({
+export default defineConfig(({ command }) => {
+	// Keep sourcemaps in dev (devtools debugging) and in CI, where Sentry uploads
+	// them (SENTRY_AUTH_TOKEN is set only in CI). Drop them from plain local prod
+	// builds so they aren't generated needlessly. (Excluding shipped .map files
+	// from the asar is a separate electron-builder step.)
+	const sourcemap =
+		command !== "build" || Boolean(process.env.SENTRY_AUTH_TOKEN);
+
+	return {
 	main: {
 		plugins: [tsconfigPaths, copyResourcesPlugin()],
 
@@ -90,7 +98,7 @@ export default defineConfig({
 		},
 
 		build: {
-			sourcemap: true,
+			sourcemap,
 			rollupOptions: {
 				input: {
 					index: resolve("src/main/index.ts"),
@@ -236,7 +244,7 @@ export default defineConfig({
 		publicDir: resolve(resources, "public"),
 
 		build: {
-			sourcemap: true,
+			sourcemap,
 			outDir: resolve(devPath, "renderer"),
 
 			rollupOptions: {
@@ -254,4 +262,5 @@ export default defineConfig({
 			},
 		},
 	},
+	};
 });
