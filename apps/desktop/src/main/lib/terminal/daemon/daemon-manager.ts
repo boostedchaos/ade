@@ -19,8 +19,15 @@ import {
 	DEBUG_TERMINAL,
 	MAX_KILLED_SESSION_TOMBSTONES,
 	MAX_SCROLLBACK_BYTES,
+	RECONNECT_BASE_DELAY_MS,
+	RECONNECT_MAX_ATTEMPTS,
+	RECONNECT_MAX_DELAY_MS,
 	SESSION_CLEANUP_DELAY_MS,
 } from "./constants";
+
+/** Daemon connection status surfaced to the renderer for the status UX. */
+export type DaemonConnectionStatus = "connected" | "reconnecting" | "failed";
+
 import { HistoryManager } from "./history-manager";
 import { PrioritySemaphore } from "./priority-semaphore";
 import type { ColdRestoreInfo, SessionInfo } from "./types";
@@ -40,6 +47,15 @@ export class DaemonTerminalManager extends EventEmitter {
 
 	private coldRestoreInfo = new Map<string, ColdRestoreInfo>();
 	private cleanupTimeouts = new Map<string, NodeJS.Timeout>();
+
+	// Daemon connection resilience: track status + drive an exponential-backoff
+	// reconnect loop when the client drops. Optimistically "connected" at boot —
+	// the first failed op flips it to "reconnecting".
+	private connectionStatus: DaemonConnectionStatus = "connected";
+	private reconnectTimer: NodeJS.Timeout | null = null;
+	private reconnectAttempt = 0;
+	private reconnecting = false;
+	private shuttingDown = false;
 
 	constructor() {
 		super();
@@ -232,6 +248,7 @@ export class DaemonTerminalManager extends EventEmitter {
 					);
 				}
 			}
+			this.onConnectionLost();
 		});
 
 		this.client.on("error", (error: Error) => {
@@ -243,6 +260,7 @@ export class DaemonTerminalManager extends EventEmitter {
 					this.emit(`disconnect:${paneId}`, error.message);
 				}
 			}
+			this.onConnectionLost();
 		});
 
 		this.client.on(
@@ -267,6 +285,98 @@ export class DaemonTerminalManager extends EventEmitter {
 				this.emit(`error:${paneId}`, { error, code });
 			},
 		);
+	}
+
+	// ===========================================================================
+	// Connection status + auto-reconnect
+	// ===========================================================================
+
+	getConnectionStatus(): DaemonConnectionStatus {
+		return this.connectionStatus;
+	}
+
+	private setConnectionStatus(status: DaemonConnectionStatus): void {
+		if (this.connectionStatus === status) return;
+		this.connectionStatus = status;
+		this.emit("daemonStatusChanged", status);
+	}
+
+	/** Entry point from the client disconnect/error handlers. */
+	private onConnectionLost(): void {
+		if (this.shuttingDown || this.reconnecting) return;
+		this.reconnecting = true;
+		this.reconnectAttempt = 0;
+		this.setConnectionStatus("reconnecting");
+		this.scheduleReconnect();
+	}
+
+	private scheduleReconnect(): void {
+		const delay = Math.min(
+			RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempt,
+			RECONNECT_MAX_DELAY_MS,
+		);
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = setTimeout(() => {
+			void this.attemptReconnect();
+		}, delay);
+		this.reconnectTimer.unref();
+	}
+
+	private async attemptReconnect(): Promise<void> {
+		if (this.shuttingDown) return;
+		this.reconnectAttempt++;
+		try {
+			await this.client.ensureConnected();
+			// Re-attach alive sessions by reusing startup reconcile (idempotent by
+			// session id — safe to run repeatedly).
+			this.daemonSessionIdsHydrated = false;
+			await this.reconcileOnStartup();
+			this.reconnecting = false;
+			this.reconnectAttempt = 0;
+			this.setConnectionStatus("connected");
+			console.log("[DaemonTerminalManager] Reconnected to daemon");
+		} catch (error) {
+			console.warn(
+				`[DaemonTerminalManager] Reconnect attempt ${this.reconnectAttempt} failed:`,
+				error,
+			);
+			if (this.reconnectAttempt >= RECONNECT_MAX_ATTEMPTS) {
+				this.reconnecting = false;
+				this.setConnectionStatus("failed");
+				console.error(
+					"[DaemonTerminalManager] Reconnect attempts exhausted; surfacing failed state",
+				);
+				return;
+			}
+			this.scheduleReconnect();
+		}
+	}
+
+	// ===========================================================================
+	// Graceful shutdown helpers (see main/index.ts before-quit sequence)
+	// ===========================================================================
+
+	/**
+	 * Stop the reconnect loop before an intentional shutdown/restart so a pending
+	 * backoff timer can't race a fresh client or resurrect the daemon on quit.
+	 */
+	prepareForShutdown(): void {
+		this.shuttingDown = true;
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+		this.reconnecting = false;
+	}
+
+	/**
+	 * Flush + close all history writers (writes `endedAt` to each session's
+	 * meta.json) without killing the daemon sessions. Used on quit when agents
+	 * are kept running in the background, so a clean quit isn't recorded as a
+	 * crash on next launch.
+	 */
+	async flushHistoryForQuit(): Promise<void> {
+		await this.historyManager.cleanup();
 	}
 
 	async createOrAttach(params: CreateSessionParams): Promise<SessionResult> {
@@ -588,7 +698,8 @@ export class DaemonTerminalManager extends EventEmitter {
 		// auto-resume still works on Windows without relying on these regexes.
 		// Strip ANSI escape sequences for cleaner matching
 		const plain = scrollback.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
-		const UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+		const UUID_RE =
+			"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
 		// Pattern 1: `claude --resume <uuid>` — explicit resume command
 		const resumeMatch = plain.match(
@@ -959,6 +1070,16 @@ export class DaemonTerminalManager extends EventEmitter {
 
 	reset(): void {
 		console.log("[DaemonTerminalManager] Resetting...");
+
+		// Cancel any in-flight reconnect; a fresh client is about to be created.
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+		this.reconnecting = false;
+		this.reconnectAttempt = 0;
+		this.shuttingDown = false;
+		this.setConnectionStatus("connected");
 
 		for (const timeout of this.cleanupTimeouts.values()) {
 			clearTimeout(timeout);

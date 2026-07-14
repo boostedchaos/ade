@@ -13,6 +13,7 @@ import {
 import { makeAppSetup } from "lib/electron-app/factories/app/setup";
 import {
 	DEFAULT_CONFIRM_ON_QUIT,
+	DEFAULT_STOP_AGENTS_ON_QUIT,
 	PLATFORM,
 	PROTOCOL_SCHEME,
 } from "shared/constants";
@@ -25,15 +26,18 @@ import { startAppStateWatcher } from "./lib/app-state/watcher";
 import { setupAutoUpdater } from "./lib/auto-updater";
 import { setWorkspaceDockIcon } from "./lib/dock-icon";
 import { loadWebviewBrowserExtension } from "./lib/extensions";
-import { localDb } from "./lib/local-db";
+import { closeLocalDb, localDb } from "./lib/local-db";
 import {
 	ensureProjectIconsDir,
 	ensureWorkspaceIconsDir,
 	getIconPath,
 } from "./lib/project-icons";
 import {
+	disconnectTerminalHostOnQuit,
+	flushTerminalHistoryOnQuit,
 	prewarmTerminalRuntime,
 	reconcileDaemonSessions,
+	stopAllAgentsOnQuit,
 } from "./lib/terminal";
 import { disposeTray, initTray } from "./lib/tray";
 import { MainWindow } from "./windows/main";
@@ -146,6 +150,58 @@ function getConfirmOnQuitSetting(): boolean {
 	}
 }
 
+function getStopAgentsOnQuitSetting(): boolean {
+	try {
+		const row = localDb.select().from(settings).get();
+		return row?.stopAgentsOnQuit ?? DEFAULT_STOP_AGENTS_ON_QUIT;
+	} catch {
+		return DEFAULT_STOP_AGENTS_ON_QUIT;
+	}
+}
+
+// Hard ceiling on graceful shutdown. Quit must never hang: if cleanup can't
+// finish (wedged daemon, ConPTY teardown quirk), we exit anyway past this.
+const SHUTDOWN_TIMEOUT_MS = 4000;
+
+/**
+ * Orderly teardown on quit, strictly time-boxed. Reads the quit policy first
+ * (needs the DB), stops-or-flushes terminal sessions, drops the daemon socket,
+ * then checkpoints + closes the DB. Any step failing must not block exit.
+ */
+async function gracefulShutdown(): Promise<void> {
+	const cleanup = (async () => {
+		const stopAgents = getStopAgentsOnQuitSetting();
+		try {
+			if (stopAgents) {
+				// "Stop agents on quit": kill sessions + shut the daemon down.
+				await stopAllAgentsOnQuit();
+			} else {
+				// Default "keep running": flush history so meta.json gets endedAt
+				// (a clean quit must not look like a crash on next launch), then
+				// drop the socket while leaving the daemon + sessions alive.
+				await flushTerminalHistoryOnQuit();
+				disconnectTerminalHostOnQuit();
+			}
+		} catch (error) {
+			console.error("[main] Terminal shutdown step failed:", error);
+		}
+
+		// Checkpoint the WAL and close SQLite last (after settings were read).
+		closeLocalDb();
+	})();
+
+	await Promise.race([
+		cleanup,
+		new Promise<void>((resolve) => {
+			const timer = setTimeout(() => {
+				console.warn("[main] Graceful shutdown timed out; exiting anyway");
+				resolve();
+			}, SHUTDOWN_TIMEOUT_MS);
+			timer.unref();
+		}),
+	]);
+}
+
 export function setSkipQuitConfirmation(): void {
 	skipConfirmation = true;
 }
@@ -162,9 +218,11 @@ app.on("before-quit", async (event) => {
 	const shouldConfirm =
 		!skipConfirmation && !isDev && getConfirmOnQuitSetting();
 
-	if (shouldConfirm) {
-		event.preventDefault();
+	// Always intercept: we run an async, time-boxed cleanup before exiting, so we
+	// must stop Electron's synchronous default-quit and drive the exit ourselves.
+	event.preventDefault();
 
+	if (shouldConfirm) {
 		try {
 			const { response } = await dialog.showMessageBox({
 				type: "question",
@@ -182,6 +240,7 @@ app.on("before-quit", async (event) => {
 	}
 
 	isQuitting = true;
+	await gracefulShutdown();
 	disposeTray();
 	app.exit(0);
 });
@@ -262,7 +321,8 @@ if (!gotTheLock) {
 			// superset-icon://<namespace>/<id> — namespace is the URL host
 			// ("projects" for Category photos, "workspaces" for Agent avatars).
 			const url = new URL(request.url);
-			const namespace = url.hostname === "workspaces" ? "workspaces" : "projects";
+			const namespace =
+				url.hostname === "workspaces" ? "workspaces" : "projects";
 			const id = url.pathname.replace(/^\//, "");
 			const iconPath = getIconPath(namespace, id);
 			if (!iconPath) {
