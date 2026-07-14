@@ -96,6 +96,25 @@ async function getGitWithShellPath(worktreePath: string) {
 	return git;
 }
 
+async function resolveDefaultBranch(
+	git: ReturnType<typeof simpleGit>,
+): Promise<string> {
+	try {
+		const headRef = await git.raw(["symbolic-ref", "refs/remotes/origin/HEAD"]);
+		const match = headRef.match(/refs\/remotes\/origin\/(.+)/);
+		if (match) {
+			return match[1].trim();
+		}
+	} catch {}
+	// Fallback when origin/HEAD isn't set: prefer main, then master.
+	try {
+		const branches = await git.branch(["-r"]);
+		if (branches.all.includes("origin/main")) return "main";
+		if (branches.all.includes("origin/master")) return "master";
+	} catch {}
+	return "main";
+}
+
 export const createGitOperationsRouter = () => {
 	return router({
 		// NOTE: saveFile is defined in file-contents.ts with hardened path validation
@@ -303,5 +322,85 @@ export const createGitOperationsRouter = () => {
 					}
 				},
 			),
+
+		rebaseOntoDefault: publicProcedure
+			.input(z.object({ worktreePath: z.string() }))
+			.mutation(
+				async ({
+					input,
+				}): Promise<
+					| { success: true; rebasedOnto: string }
+					| {
+							success: false;
+							conflictedFiles: string[];
+							defaultBranch: string;
+					  }
+				> => {
+					assertRegisteredWorktree(input.worktreePath);
+
+					const git = await getGitWithShellPath(input.worktreePath);
+					const defaultBranch = await resolveDefaultBranch(git);
+
+					// Pull the latest default branch so we rebase onto current tip.
+					await git.fetch(["origin", defaultBranch]);
+
+					try {
+						// --autostash keeps a dirty worktree safe (stashed before,
+						// restored after) so the caller needn't pre-commit.
+						await git.rebase(["--autostash", `origin/${defaultBranch}`]);
+						return { success: true, rebasedOnto: defaultBranch };
+					} catch (error) {
+						// Conflict (or other failure): capture the conflicted paths,
+						// then abort to restore a clean checkout. Aborting also pops
+						// the autostash, so the worktree returns to its prior state.
+						let conflictedFiles: string[] = [];
+						try {
+							const diff = await git.raw([
+								"diff",
+								"--name-only",
+								"--diff-filter=U",
+							]);
+							conflictedFiles = diff
+								.split("\n")
+								.map((f) => f.trim())
+								.filter(Boolean);
+						} catch {}
+
+						try {
+							await git.rebase(["--abort"]);
+						} catch (abortError) {
+							console.error(
+								"[git/rebaseOntoDefault] Failed to abort rebase:",
+								abortError,
+							);
+						}
+
+						if (conflictedFiles.length === 0) {
+							// No parseable conflict — surface the underlying failure.
+							const message =
+								error instanceof Error ? error.message : String(error);
+							throw new TRPCError({
+								code: "INTERNAL_SERVER_ERROR",
+								message: `Failed to rebase onto ${defaultBranch}: ${message}`,
+							});
+						}
+
+						// Expected outcome: report conflicts as data, not an error, so
+						// the renderer can show the file list instead of a raw string.
+						return { success: false, conflictedFiles, defaultBranch };
+					}
+				},
+			),
+
+		ghAvailable: publicProcedure.query(
+			async (): Promise<{ available: boolean }> => {
+				try {
+					await execWithShellEnv("gh", ["--version"]);
+					return { available: true };
+				} catch {
+					return { available: false };
+				}
+			},
+		),
 	});
 };

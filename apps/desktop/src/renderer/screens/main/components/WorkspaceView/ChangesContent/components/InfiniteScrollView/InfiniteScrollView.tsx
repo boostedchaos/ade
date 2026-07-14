@@ -4,6 +4,7 @@ import type { GitChangesStatus } from "shared/changes-types";
 import { useScrollContext } from "../../context";
 import { sortFiles } from "../../utils";
 import { FileDiffSection } from "../FileDiffSection";
+import { LandingActions } from "../LandingActions";
 import { VirtualizedFileList } from "../VirtualizedFileList";
 import { CategoryHeader } from "./components/CategoryHeader";
 import { CommitSection } from "./components/CommitSection";
@@ -160,6 +161,8 @@ export function InfiniteScrollView({
 				isFirstFile={focusedIndex <= 0}
 				isLastFile={focusedIndex >= flatFileList.length - 1}
 			/>
+
+			<LandingActions worktreePath={worktreePath} />
 
 			{focusMode ? (
 				focusedEntry && (
