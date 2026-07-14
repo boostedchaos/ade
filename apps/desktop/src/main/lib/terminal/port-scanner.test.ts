@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { parseProcessNameCsv } from "./port-scanner";
 
 /**
  * Tests for lsof output parsing logic.
@@ -321,6 +322,29 @@ node      12345 kietho   23u  IPv4 0x1234567890ab          0t0                 T
 			expect(ports).toHaveLength(1);
 			expect(ports[0].port).toBe(3000);
 			expect(ports[0].pid).toBe(12345);
+		});
+	});
+
+	describe("parseProcessNameCsv (Windows batched name lookup)", () => {
+		it("parses ConvertTo-Csv rows, strips .exe, keeps names with spaces", () => {
+			// Shape verified against a real `Get-CimInstance Win32_Process ...
+			// | Select-Object ProcessId,Name | ConvertTo-Csv` run on Windows 11.
+			const csv = [
+				'"ProcessId","Name"',
+				'"2340","ADE Canary.exe"',
+				'"300","node.exe"',
+			].join("\r\n");
+
+			const names = parseProcessNameCsv(csv);
+
+			expect(names.get(2340)).toBe("ADE Canary");
+			expect(names.get(300)).toBe("node");
+			// Header is not a row; unrequested/missing PIDs are simply absent.
+			expect(names.size).toBe(2);
+		});
+
+		it("returns an empty map for empty output", () => {
+			expect(parseProcessNameCsv("").size).toBe(0);
 		});
 	});
 });

@@ -145,14 +145,10 @@ async function getListeningPortsWindows(pids: number[]): Promise<PortInfo[]> {
 			}
 		}
 
-		// Fetch process names in parallel
-		const nameResults = await Promise.all(
-			pidsToLookup.map(async (pid) => ({
-				pid,
-				name: await getProcessNameWindows(pid),
-			})),
-		);
-		for (const { pid, name } of nameResults) {
+		// Resolve every name in a SINGLE batched CIM query (cache-aware) instead
+		// of one PowerShell spawn per PID.
+		const nameMap = await resolveProcessNamesWindows(pidsToLookup);
+		for (const [pid, name] of nameMap) {
 			processNames.set(pid, name);
 		}
 
@@ -193,39 +189,126 @@ async function getListeningPortsWindows(pids: number[]): Promise<PortInfo[]> {
 }
 
 /**
- * Get process name for a PID on Windows
+ * Short-lived PID→name cache. A process's name never changes for the life of the
+ * PID, so a brief TTL collapses the repeated lookups a periodic scan (every
+ * 2.5s) would otherwise make, while still tolerating eventual PID reuse.
  */
-async function getProcessNameWindows(pid: number): Promise<string> {
-	// wmic is removed on Windows 11 24H2+, so prefer PowerShell/CIM as the primary
-	// lookup and only fall back to wmic on older systems where it still exists.
-	try {
-		const { stdout: output } = await execAsync(
-			`powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').Name"`,
-			{ timeout: EXEC_TIMEOUT_MS },
-		);
-		const name = output.trim();
-		if (name) {
-			return name.replace(/\.exe$/i, "") || "unknown";
-		}
-	} catch {
-		// PowerShell unavailable or blocked; fall through to wmic below.
-	}
+const NAME_CACHE_TTL_MS = 30_000;
+const nameCache = new Map<number, { name: string; ts: number }>();
 
+function cleanProcessName(raw: string): string {
+	return raw.trim().replace(/\.exe$/i, "") || "unknown";
+}
+
+/**
+ * Parse the CSV emitted by `... | Select-Object ProcessId,Name | ConvertTo-Csv`.
+ * Rows look like `"1234","node.exe"`; the header and any missing PIDs are simply
+ * absent from the result. Exported for unit testing.
+ */
+export function parseProcessNameCsv(csv: string): Map<number, string> {
+	const names = new Map<number, string>();
+	for (const line of csv.split(/\r?\n/)) {
+		const match = line.match(/^"(\d+)","(.*)"$/);
+		if (!match) continue; // header, blank lines
+		names.set(Number.parseInt(match[1], 10), cleanProcessName(match[2]));
+	}
+	return names;
+}
+
+/** Legacy per-PID wmic lookup (Windows versions before 24H2 removed wmic). */
+async function getProcessNameWmic(pid: number): Promise<string | null> {
 	try {
-		const { stdout: output } = await execAsync(
+		const { stdout } = await execAsync(
 			`wmic process where processid=${pid} get name 2>nul`,
 			{ timeout: EXEC_TIMEOUT_MS },
 		);
-		const lines = output.trim().split("\n");
-		if (lines.length >= 2) {
-			const name = lines[1].trim();
-			return name.replace(/\.exe$/i, "") || "unknown";
-		}
+		const lines = stdout.trim().split("\n");
+		if (lines.length >= 2) return cleanProcessName(lines[1]);
 	} catch {
-		// Both strategies failed.
+		// ignore
+	}
+	return null;
+}
+
+/**
+ * Resolve names for many PIDs in ONE PowerShell/CIM spawn instead of one spawn
+ * per PID. Falls back to per-PID wmic only when CIM is unavailable/blocked.
+ */
+async function queryProcessNamesWindows(
+	pids: number[],
+): Promise<Map<number, string>> {
+	if (pids.length === 0) return new Map();
+
+	// ponytail: WQL has no IN(), so OR-chain the ids. Process trees are tens of
+	// PIDs — far under the Windows command-line length limit. Revisit only if a
+	// single scan ever needs to resolve hundreds of PIDs at once.
+	const filter = pids.map((pid) => `ProcessId=${pid}`).join(" OR ");
+	try {
+		const { stdout } = await execAsync(
+			`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter '${filter}' | Select-Object ProcessId,Name | ConvertTo-Csv -NoTypeInformation"`,
+			{ maxBuffer: 10 * 1024 * 1024, timeout: EXEC_TIMEOUT_MS },
+		);
+		return parseProcessNameCsv(stdout);
+	} catch {
+		// CIM unavailable/blocked; fall back to per-PID wmic (legacy systems).
+		const names = new Map<number, string>();
+		await Promise.all(
+			pids.map(async (pid) => {
+				const name = await getProcessNameWmic(pid);
+				if (name) names.set(pid, name);
+			}),
+		);
+		return names;
+	}
+}
+
+/**
+ * Cache-aware batched resolver: returns a name for every requested PID, querying
+ * only the ones whose cached name is missing or stale.
+ */
+async function resolveProcessNamesWindows(
+	pids: number[],
+): Promise<Map<number, string>> {
+	const now = Date.now();
+
+	// Opportunistically drop expired entries so a long session with many
+	// short-lived dev-server PIDs can't grow the cache without bound.
+	if (nameCache.size > 256) {
+		for (const [pid, entry] of nameCache) {
+			if (now - entry.ts >= NAME_CACHE_TTL_MS) nameCache.delete(pid);
+		}
 	}
 
-	return "unknown";
+	const result = new Map<number, string>();
+	const missing: number[] = [];
+	for (const pid of pids) {
+		const cached = nameCache.get(pid);
+		if (cached && now - cached.ts < NAME_CACHE_TTL_MS) {
+			result.set(pid, cached.name);
+		} else {
+			missing.push(pid);
+		}
+	}
+
+	if (missing.length > 0) {
+		const queried = await queryProcessNamesWindows(missing);
+		for (const pid of missing) {
+			const name = queried.get(pid) ?? "unknown";
+			nameCache.set(pid, { name, ts: now });
+			result.set(pid, name);
+		}
+	}
+
+	return result;
+}
+
+/**
+ * Get process name for a single PID on Windows. Delegates to the batched,
+ * cache-aware resolver so single- and multi-PID callers share one query + cache.
+ */
+async function getProcessNameWindows(pid: number): Promise<string> {
+	const names = await resolveProcessNamesWindows([pid]);
+	return names.get(pid) ?? "unknown";
 }
 
 /**
