@@ -23,6 +23,7 @@ export const SETTING_ITEM_ID = {
 	KEYBOARD_SHORTCUTS: "keyboard-shortcuts",
 
 	BEHAVIOR_CONFIRM_QUIT: "behavior-confirm-quit",
+	BEHAVIOR_STOP_AGENTS_ON_QUIT: "behavior-stop-agents-on-quit",
 	BEHAVIOR_DELETE_LOCAL_BRANCH: "behavior-delete-local-branch",
 	BEHAVIOR_BRANCH_PREFIX: "behavior-branch-prefix",
 	BEHAVIOR_TELEMETRY: "behavior-telemetry",
@@ -353,6 +354,27 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 			"warning",
 			"prompt",
 			"unsaved",
+		],
+	},
+	{
+		id: SETTING_ITEM_ID.BEHAVIOR_STOP_AGENTS_ON_QUIT,
+		section: "behavior",
+		title: "Keep agents running when quitting",
+		description:
+			"Leave agent sessions running in the background after you quit ADE",
+		keywords: [
+			"features",
+			"agents",
+			"quit",
+			"quitting",
+			"exit",
+			"close",
+			"background",
+			"daemon",
+			"terminal",
+			"stop",
+			"keep",
+			"running",
 		],
 	},
 	{
