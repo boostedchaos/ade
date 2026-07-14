@@ -30,6 +30,7 @@ import {
 	DEFAULT_OPEN_LINKS_IN_APP,
 	DEFAULT_SHOW_PRESETS_BAR,
 	DEFAULT_SHOW_RESOURCE_MONITOR,
+	DEFAULT_STOP_AGENTS_ON_QUIT,
 	DEFAULT_TERMINAL_LINK_BEHAVIOR,
 	DEFAULT_USE_COMPACT_TERMINAL_ADD_BUTTON,
 } from "shared/constants";
@@ -399,6 +400,26 @@ export const createSettingsRouter = () => {
 				return { success: true };
 			}),
 
+		getStopAgentsOnQuit: publicProcedure.query(() => {
+			const row = getSettings();
+			return row.stopAgentsOnQuit ?? DEFAULT_STOP_AGENTS_ON_QUIT;
+		}),
+
+		setStopAgentsOnQuit: publicProcedure
+			.input(z.object({ enabled: z.boolean() }))
+			.mutation(({ input }) => {
+				localDb
+					.insert(settings)
+					.values({ id: 1, stopAgentsOnQuit: input.enabled })
+					.onConflictDoUpdate({
+						target: settings.id,
+						set: { stopAgentsOnQuit: input.enabled },
+					})
+					.run();
+
+				return { success: true };
+			}),
+
 		getShowPresetsBar: publicProcedure.query(() => {
 			const row = getSettings();
 			return row.showPresetsBar ?? DEFAULT_SHOW_PRESETS_BAR;
@@ -723,11 +744,9 @@ export const createSettingsRouter = () => {
 				.input(
 					z.object({
 						provider: z.enum(PROVIDER_IDS),
-						key: z
-							.string()
-							.refine((value) => value.trim().length > 0, {
-								message: "API key must not be empty",
-							}),
+						key: z.string().refine((value) => value.trim().length > 0, {
+							message: "API key must not be empty",
+						}),
 					}),
 				)
 				.mutation(({ input }) => {

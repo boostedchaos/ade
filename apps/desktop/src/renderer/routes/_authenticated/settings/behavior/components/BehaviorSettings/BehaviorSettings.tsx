@@ -32,6 +32,10 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 		SETTING_ITEM_ID.BEHAVIOR_CONFIRM_QUIT,
 		visibleItems,
 	);
+	const showStopAgentsOnQuit = isItemVisible(
+		SETTING_ITEM_ID.BEHAVIOR_STOP_AGENTS_ON_QUIT,
+		visibleItems,
+	);
 	const showDeleteLocalBranch = isItemVisible(
 		SETTING_ITEM_ID.BEHAVIOR_DELETE_LOCAL_BRANCH,
 		visibleItems,
@@ -84,6 +88,35 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 
 	const handleConfirmToggle = (enabled: boolean) => {
 		setConfirmOnQuit.mutate({ enabled });
+	};
+
+	const { data: stopAgentsOnQuit, isLoading: isStopAgentsLoading } =
+		electronTrpc.settings.getStopAgentsOnQuit.useQuery();
+	const setStopAgentsOnQuit =
+		electronTrpc.settings.setStopAgentsOnQuit.useMutation({
+			onMutate: async ({ enabled }) => {
+				await utils.settings.getStopAgentsOnQuit.cancel();
+				const previous = utils.settings.getStopAgentsOnQuit.getData();
+				utils.settings.getStopAgentsOnQuit.setData(undefined, enabled);
+				return { previous };
+			},
+			onError: (_err, _vars, context) => {
+				if (context?.previous !== undefined) {
+					utils.settings.getStopAgentsOnQuit.setData(
+						undefined,
+						context.previous,
+					);
+				}
+			},
+			onSettled: () => {
+				utils.settings.getStopAgentsOnQuit.invalidate();
+			},
+		});
+
+	// The switch is framed positively ("keep running"); the stored flag is the
+	// inverse ("stop on quit").
+	const handleKeepAgentsToggle = (keepRunning: boolean) => {
+		setStopAgentsOnQuit.mutate({ enabled: !keepRunning });
 	};
 
 	const { data: deleteLocalBranch, isLoading: isDeleteBranchLoading } =
@@ -309,6 +342,29 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 					</div>
 				)}
 
+				{showStopAgentsOnQuit && (
+					<div className="flex items-center justify-between">
+						<div className="space-y-0.5">
+							<Label
+								htmlFor="keep-agents-on-quit"
+								className="text-sm font-medium"
+							>
+								Keep agents running when quitting
+							</Label>
+							<p className="text-xs text-muted-foreground">
+								Leave agent sessions running in the background after you quit
+								ADE. Turn off to stop all agents when you quit.
+							</p>
+						</div>
+						<Switch
+							id="keep-agents-on-quit"
+							checked={!(stopAgentsOnQuit ?? false)}
+							onCheckedChange={handleKeepAgentsToggle}
+							disabled={isStopAgentsLoading || setStopAgentsOnQuit.isPending}
+						/>
+					</div>
+				)}
+
 				{showDeleteLocalBranch && (
 					<div className="flex items-center justify-between">
 						<div className="space-y-0.5">
@@ -319,8 +375,7 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 								Delete local branch on agent removal
 							</Label>
 							<p className="text-xs text-muted-foreground">
-								Also delete the local git branch when deleting a worktree
-								agent
+								Also delete the local git branch when deleting a worktree agent
 							</p>
 						</div>
 						<Switch

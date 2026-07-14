@@ -274,6 +274,13 @@
       "when": 1783367453477,
       "tag": "0038_curved_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1784048321809,
+      "tag": "0039_add_stop_agents_on_quit_setting",
+      "breakpoints": true
     }
   ]
 }

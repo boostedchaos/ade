@@ -1,9 +1,6 @@
-import {
-	createFileRoute,
-	Outlet,
-	useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { DndProvider } from "react-dnd";
+import { useDaemonStatusListener } from "renderer/components/DaemonStatusToast";
 import { NewAgentModal } from "renderer/components/NewAgentModal/NewAgentModal";
 import { NewCategoryModal } from "renderer/components/NewCategoryModal/NewCategoryModal";
 import { useUpdateListener } from "renderer/components/UpdateToast";
@@ -33,6 +30,7 @@ function AuthenticatedLayout() {
 
 	useAgentHookListener();
 	useUpdateListener();
+	useDaemonStatusListener();
 	useHotkeysSync();
 	useTabsSyncSubscription();
 
