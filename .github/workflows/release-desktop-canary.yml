@@ -1,9 +1,8 @@
 name: Release Desktop Canary
 
 on:
-  schedule:
-    # Every 12 hours at 12 AM and 12 PM UTC
-    - cron: "0 0,12 * * *"
+  # No schedule: canary builds are unsigned and carry the upstream ADE name,
+  # so they publish only on an explicit, reviewed dispatch — never unattended.
   workflow_dispatch:
     inputs:
       force_build:
