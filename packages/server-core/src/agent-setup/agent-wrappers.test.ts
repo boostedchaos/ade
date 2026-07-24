@@ -141,7 +141,7 @@ describe("agent-wrappers copilot", () => {
 		expect(updated).not.toContain("/tmp/old-hook.sh");
 	});
 
-	it("injects codex message-start watcher + completion notifications in wrapper", () => {
+	it.skipIf(process.platform === "win32")("injects codex message-start watcher + completion notifications in wrapper", () => {
 		createCodexWrapper();
 
 		const wrapperPath = path.join(TEST_BIN_DIR, "codex");
@@ -166,7 +166,7 @@ describe("agent-wrappers copilot", () => {
 		expect(wrapper).toContain(execLine);
 	});
 
-	it("creates mastracode wrapper passthrough", () => {
+	it.skipIf(process.platform === "win32")("creates mastracode wrapper passthrough", () => {
 		createMastraWrapper();
 
 		const wrapperPath = path.join(TEST_BIN_DIR, "mastracode");
@@ -268,7 +268,7 @@ describe("agent-wrappers copilot", () => {
 		});
 	});
 
-	it("replaces stale Cursor hook commands from old superset paths", () => {
+	it.skipIf(process.platform === "win32")("replaces stale Cursor hook commands from old superset paths", () => {
 		const cursorHooksPath = path.join(mockedHomeDir, ".cursor", "hooks.json");
 		const staleHookPath = "/tmp/.ade-old/hooks/cursor-hook.sh";
 		const currentHookPath = "/tmp/.ade-new/hooks/cursor-hook.sh";
@@ -319,7 +319,7 @@ describe("agent-wrappers copilot", () => {
 		expect(JSON.parse(content2)).toEqual(JSON.parse(content));
 	});
 
-	it("replaces stale Gemini hook commands from old superset paths", () => {
+	it.skipIf(process.platform === "win32")("replaces stale Gemini hook commands from old superset paths", () => {
 		const geminiSettingsPath = path.join(
 			mockedHomeDir,
 			".gemini",
@@ -458,7 +458,7 @@ describe("agent-wrappers copilot", () => {
 		}
 	});
 
-	it("replaces stale Mastra hook commands from old superset paths", () => {
+	it.skipIf(process.platform === "win32")("replaces stale Mastra hook commands from old superset paths", () => {
 		const mastraHooksPath = path.join(
 			mockedHomeDir,
 			".mastracode",

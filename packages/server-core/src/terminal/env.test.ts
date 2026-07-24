@@ -354,7 +354,10 @@ describe("env", () => {
 					no_proxy: "localhost",
 					PATH: "/usr/bin",
 				};
-				const result = buildSafeEnv(env);
+				// Pin POSIX: on win32 buildSafeEnv canonicalizes keys to uppercase,
+				// so lowercase proxy vars intentionally collapse into their
+				// uppercase forms there (covered by the win32 canonicalization tests).
+				const result = buildSafeEnv(env, { platform: "linux" });
 				expect(result.HTTP_PROXY).toBe("http://proxy:8080");
 				expect(result.HTTPS_PROXY).toBe("http://proxy:8080");
 				expect(result.http_proxy).toBe("http://proxy:8080");
