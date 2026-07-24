@@ -1,7 +1,7 @@
 {
 	"name": "@ade/server",
 	"version": "0.1.0",
-	"description": "ADE headless server \u00e2\u20ac\u201d agents, terminals, and files over tRPC (HTTP + WebSocket)",
+	"description": "ADE headless server â€” agents, terminals, and files over tRPC (HTTP + WebSocket)",
 	"type": "module",
 	"private": true,
 	"scripts": {
@@ -17,18 +17,18 @@
 		"@superset/local-db": "workspace:*",
 		"@trpc/server": "^11.7.1",
 		"better-sqlite3": "12.6.2",
+		"drizzle-orm": "0.45.1",
 		"node-pty": "1.1.0",
 		"simple-git": "^3.30.0",
 		"superjson": "^2.2.5",
 		"ws": "^8.18.0",
-		"zod": "^4.3.5",
-		"drizzle-orm": "0.45.1"
+		"zod": "^4.3.5"
 	},
 	"devDependencies": {
 		"@trpc/client": "^11.7.1",
-		"esbuild": "^0.25.12",
-		"@types/node": "^24.0.0",
+		"@types/node": "^24.9.1",
 		"@types/ws": "^8.18.1",
+		"esbuild": "^0.25.12",
 		"typescript": "^5.9.3"
 	}
 }

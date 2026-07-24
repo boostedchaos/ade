@@ -693,7 +693,7 @@ async function startServer(): Promise<void> {
 	// Windows: a named pipe has no file to unlink — a failed connect means it's
 	// stale, and the pipe is destroyed automatically when its owner exits, so we
 	// just probe liveness and let listen() re-create it.
-	if (IS_WINDOWS) {
+	if (isNamedPipePath(SOCKET_PATH)) {
 		if (await isSocketLive()) {
 			log("error", "Another daemon is already running and responsive");
 			throw new Error("Another daemon is already running");

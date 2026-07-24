@@ -10,7 +10,7 @@
 		"url": "https://github.com/boostedchaos/ade-windows-port.git"
 	},
 	"author": {
-		"name": "ADE"
+		"name": "Papyrus"
 	},
 	"scripts": {
 		"clean": "git clean -xdf .cache .turbo dist dist-electron release node_modules",
@@ -39,13 +39,13 @@
 		"test:win": "bun scripts/check-win-tests.ts"
 	},
 	"dependencies": {
+		"@ade/server-core": "workspace:*",
 		"@ai-sdk/react": "^3.0.0",
 		"@ast-grep/napi": "^0.41.0",
 		"@better-auth/stripe": "1.4.18",
 		"@dnd-kit/core": "^6.3.1",
 		"@dnd-kit/sortable": "^10.0.0",
 		"@dnd-kit/utilities": "^3.2.2",
-		"@durable-streams/client": "^0.2.1",
 		"@electric-sql/client": "1.5.7",
 		"@headless-tree/core": "^1.6.3",
 		"@headless-tree/react": "^1.6.3",
@@ -57,8 +57,6 @@
 		"@sentry/electron": "^7.7.0",
 		"@streamdown/mermaid": "^1.0.2",
 		"@superset/auth": "workspace:*",
-		"@superset/chat": "workspace:*",
-		"@superset/chat-mastra": "workspace:*",
 		"@superset/db": "workspace:*",
 		"@superset/desktop-mcp": "workspace:*",
 		"@superset/local-db": "workspace:*",

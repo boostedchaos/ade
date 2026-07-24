@@ -100,3 +100,23 @@ try {
 console.log("[local-db] Migrations complete");
 
 export type LocalDb = typeof localDb;
+
+/**
+ * Checkpoint the WAL into the main database and close the connection.
+ * Called on host-app quit so the DB is left clean (WAL truncated) instead of
+ * accumulating an unbounded WAL across the process lifetime. Best-effort and
+ * idempotent — safe to call once during the graceful-shutdown sequence.
+ */
+export function closeLocalDb(): void {
+	if (!sqlite.open) return;
+	try {
+		sqlite.pragma("wal_checkpoint(TRUNCATE)");
+	} catch (error) {
+		console.warn("[local-db] WAL checkpoint on close failed:", error);
+	}
+	try {
+		sqlite.close();
+	} catch (error) {
+		console.warn("[local-db] close failed:", error);
+	}
+}

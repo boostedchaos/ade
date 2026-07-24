@@ -66,7 +66,9 @@ describe("bootstrapOpenWorktree", () => {
 		expect(error).toBeNull();
 		expect(writeToTerminal).toHaveBeenCalledWith({
 			paneId: "pane-1",
-			data: "echo setup\n",
+			// A terminal submits a line on carriage return (\r = Enter), not \n
+			// (see launch-command.ts, issue #49 upstream).
+			data: "echo setup\r",
 			throwOnError: true,
 		});
 	});
