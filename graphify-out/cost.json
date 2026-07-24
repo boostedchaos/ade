@@ -1,0 +1,13 @@
+{
+  "runs": [
+    {
+      "date": "2026-07-15T18:41:54.533142+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 1264,
+      "note": "code-only incremental update; 79 doc + 56 image + 11 audio files deferred"
+    }
+  ],
+  "total_input_tokens": 0,
+  "total_output_tokens": 0
+}

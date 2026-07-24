@@ -1,8 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
 	buildAgentPromptCommand,
+	buildAgentSessionCommands,
 	getAgentPresetCommands,
+	isClaudeFamilyRuntime,
 } from "./agent-command";
+
+const SESSION_ID = "11111111-1111-4111-8111-111111111111";
 
 describe("buildAgentPromptCommand (posix)", () => {
 	it("adds `--` before codex prompt payload", () => {
@@ -121,5 +125,57 @@ describe("getAgentPresetCommands", () => {
 		] as const) {
 			expect(windows[agent]).toEqual(posix[agent]);
 		}
+	});
+});
+
+describe("buildAgentSessionCommands", () => {
+	it("injects --resume <id> for claude when a session exists", () => {
+		expect(
+			buildAgentSessionCommands({ runtime: "claude", sessionId: SESSION_ID }),
+		).toEqual([`claude --resume ${SESSION_ID} --dangerously-skip-permissions`]);
+	});
+
+	it("injects --resume after `claude` for OpenRouter (glm) variants", () => {
+		const [command] = buildAgentSessionCommands({
+			runtime: "glm",
+			sessionId: SESSION_ID,
+		});
+		if (command === undefined) throw new Error("expected a glm command");
+		// Env assignments stay in front; --resume lands right after `claude`,
+		// before the --model flag, so both the resume target and model apply.
+		expect(command).toContain(`claude --resume ${SESSION_ID} --model`);
+		expect(command).toStartWith('ANTHROPIC_BASE_URL="https://openrouter.ai/api"');
+		// Exactly one resume flag (regex replaces only the first `claude` token).
+		expect(command.match(/--resume/g)).toHaveLength(1);
+	});
+
+	it("starts fresh (base command) when there is no session id", () => {
+		expect(
+			buildAgentSessionCommands({ runtime: "claude", sessionId: null }),
+		).toEqual(["claude --dangerously-skip-permissions"]);
+	});
+
+	it("never resumes a non-claude runtime even with a session id", () => {
+		const commands = buildAgentSessionCommands({
+			runtime: "codex",
+			sessionId: SESSION_ID,
+		});
+		expect(commands.join(" ")).not.toContain("--resume");
+	});
+
+	it("ignores a malformed (non-UUID) session id", () => {
+		expect(
+			buildAgentSessionCommands({
+				runtime: "claude",
+				sessionId: "not-a-uuid; rm -rf /",
+			}),
+		).toEqual(["claude --dangerously-skip-permissions"]);
+	});
+
+	it("classifies claude-family runtimes", () => {
+		expect(isClaudeFamilyRuntime("claude")).toBe(true);
+		expect(isClaudeFamilyRuntime("glm")).toBe(true);
+		expect(isClaudeFamilyRuntime("codex")).toBe(false);
+		expect(isClaudeFamilyRuntime("gemini")).toBe(false);
 	});
 });

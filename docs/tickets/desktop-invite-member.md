@@ -1,3 +1,8 @@
+---
+type: reference
+tags: [repo/ade-windows-port]
+up: "[[ade-windows-port]]"
+---
 # Desktop: Invite Member
 
 ## What to Ship
@@ -903,3 +908,9 @@ bun install
 
 **Tests:**
 - [ ] `bun test packages/shared/src/auth/authorization/authorization.test.ts`
+
+## Related
+
+- [[Repos/ade-windows-port/docs/mastracode-fork-workflow|mastracode-fork-workflow]]
+- [[Repos/ade-windows-port/docs/memory|memory]]
+- [[ade-windows-port]]

@@ -170,10 +170,11 @@ function WorkspacePage() {
 	const spawnSession = useCallback(() => {
 		return spawnAgentSession({
 			id: workspaceId,
+			name: workspace?.name ?? null,
 			runtime: workspace?.runtime ?? null,
 			worktreePath: workspace?.worktreePath ?? null,
 		});
-	}, [spawnAgentSession, workspaceId, workspace?.runtime, workspace?.worktreePath]);
+	}, [spawnAgentSession, workspaceId, workspace?.name, workspace?.runtime, workspace?.worktreePath]);
 
 	// Wait for the persisted tabs store to hydrate before deciding whether an
 	// agent has any existing session — otherwise we'd race persistence and
@@ -199,7 +200,7 @@ function WorkspacePage() {
 		if (tabs.length > 0) return;
 		if (autoSpawnedRef.current.has(workspaceId)) return;
 		autoSpawnedRef.current.add(workspaceId);
-		spawnSession();
+		void spawnSession();
 	}, [tabsHydrated, workspace, showInitView, tabs.length, workspaceId, spawnSession]);
 
 	const { presets } = usePresets();
@@ -218,7 +219,9 @@ function WorkspacePage() {
 
 	// "New session" defaults to spawning the agent's runtime CLI in a new tab
 	// (falls back to a plain shell when the workspace has no runtime).
-	useAppHotkey("NEW_GROUP", () => spawnSession(), undefined, [spawnSession]);
+	useAppHotkey("NEW_GROUP", () => void spawnSession(), undefined, [
+		spawnSession,
+	]);
 	useAppHotkey(
 		"REOPEN_TAB",
 		() => {

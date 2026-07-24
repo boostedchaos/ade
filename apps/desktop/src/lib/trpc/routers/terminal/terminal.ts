@@ -76,6 +76,10 @@ export const createTerminalRouter = () => {
 					skipColdRestore: z.boolean().optional(),
 					allowKilled: z.boolean().optional(),
 					themeType: z.enum(["dark", "light"]).optional(),
+					// Multi-device attach policy (issue #7): identifies the calling
+					// UI surface. Accepted for contract parity with ade-server;
+					// the single-client desktop ignores it.
+					clientId: z.string().optional(),
 				}),
 			)
 			.mutation(async ({ input }) => {
@@ -192,6 +196,10 @@ export const createTerminalRouter = () => {
 						claudeSessionId: result.claudeSessionId,
 						// Include snapshot for daemon mode (renderer can use for rehydration)
 						snapshot: result.snapshot,
+						// Multi-device attach policy: the desktop is single-client, so
+						// an attach is always the writer. ade-server returns true
+						// here for concurrent web attaches (mirror-readonly v1).
+						readOnly: false,
 					};
 				} catch (error) {
 					const isKilledError =
@@ -232,6 +240,8 @@ export const createTerminalRouter = () => {
 					paneId: z.string(),
 					data: z.string(),
 					throwOnError: z.boolean().optional(),
+					// Contract parity with ade-server (issue #7); ignored here.
+					clientId: z.string().optional(),
 				}),
 			)
 			.mutation(async ({ input }) => {
@@ -297,6 +307,8 @@ export const createTerminalRouter = () => {
 					cols: z.number(),
 					rows: z.number(),
 					seq: z.number().optional(),
+					// Contract parity with ade-server (issue #7); ignored here.
+					clientId: z.string().optional(),
 				}),
 			)
 			.mutation(async ({ input }) => {
@@ -308,11 +320,23 @@ export const createTerminalRouter = () => {
 				z.object({
 					paneId: z.string(),
 					signal: z.string().optional(),
+					// Contract parity with ade-server (issue #7); ignored here.
+					clientId: z.string().optional(),
 				}),
 			)
 			.mutation(async ({ input }) => {
 				terminal.signal(input);
 			}),
+
+		/**
+		 * Multi-device attach policy (issue #7): explicit writer takeover.
+		 * Meaningful only on ade-server where concurrent web clients
+		 * contend for the writer lease; the single-client desktop is always
+		 * the writer, so this is a contract-parity no-op.
+		 */
+		takeWriter: publicProcedure
+			.input(z.object({ paneId: z.string(), clientId: z.string() }))
+			.mutation(() => ({ readOnly: false as boolean })),
 
 		kill: publicProcedure
 			.input(
@@ -328,6 +352,8 @@ export const createTerminalRouter = () => {
 			.input(
 				z.object({
 					paneId: z.string(),
+					// Contract parity with ade-server (issue #7); ignored here.
+					clientId: z.string().optional(),
 				}),
 			)
 			.mutation(async ({ input }) => {
@@ -347,6 +373,21 @@ export const createTerminalRouter = () => {
 		listDaemonSessions: publicProcedure.query(async () => {
 			const { sessions } = await terminal.management.listSessions();
 			return { sessions };
+		}),
+
+		/**
+		 * Latency fallback (issue #59): a cheap renderer→daemon round trip,
+		 * measured client-side by useTerminalLatency when the user hasn't
+		 * typed for >30s. The desktop router tree is the API contract the
+		 * renderer types against, so this mirrors ade-server's
+		 * terminal.ping (where it deliberately rides the WS link the
+		 * keystrokes use). list-sessions is the lightest existing daemon
+		 * request — no new protocol message needed.
+		 */
+		ping: publicProcedure.mutation(async () => {
+			const started = Date.now();
+			await terminal.management.listSessions();
+			return { daemonMs: Date.now() - started };
 		}),
 
 		killAllDaemonSessions: publicProcedure.mutation(async () => {
@@ -506,8 +547,18 @@ export const createTerminalRouter = () => {
 			}),
 
 		stream: publicProcedure
-			.input(z.string())
-			.subscription(({ input: paneId }) => {
+			// The object form carries the multi-device attach-policy clientId
+			// (issue #7). The desktop is single-client: it accepts both forms
+			// for contract parity but never emits `mode` events — the renderer
+			// therefore never shows a read-only state under Electron.
+			.input(
+				z.union([
+					z.string(),
+					z.object({ paneId: z.string(), clientId: z.string().optional() }),
+				]),
+			)
+			.subscription(({ input }) => {
+				const paneId = typeof input === "string" ? input : input.paneId;
 				return observable<
 					| { type: "data"; data: string }
 					| {
@@ -518,6 +569,7 @@ export const createTerminalRouter = () => {
 					  }
 					| { type: "disconnect"; reason: string }
 					| { type: "error"; error: string; code?: string }
+					| { type: "mode"; readOnly: boolean }
 				>((emit) => {
 					if (DEBUG_TERMINAL) {
 						console.log(`[Terminal Stream] Subscribe: ${paneId}`);

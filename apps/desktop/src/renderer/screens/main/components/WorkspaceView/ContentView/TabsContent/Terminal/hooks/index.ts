@@ -20,6 +20,9 @@ export type {
 	UseTerminalHotkeysReturn,
 } from "./useTerminalHotkeys";
 export { useTerminalHotkeys } from "./useTerminalHotkeys";
+export type { TerminalLatencySnapshot } from "./latency-tracker";
+export type { UseTerminalLatencyReturn } from "./useTerminalLatency";
+export { useTerminalLatency } from "./useTerminalLatency";
 export type {
 	UseTerminalLifecycleOptions,
 	UseTerminalLifecycleReturn,

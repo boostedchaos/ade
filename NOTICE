@@ -16,3 +16,26 @@ Use of this software remains subject to the Elastic License 2.0.
 
 Third-party components bundled with or adapted by this software are attributed
 in THIRD-PARTY-NOTICES.md.
+
+--------------------------------------------------------------------------------
+
+ADE Windows Port (this repository)
+
+This product is a modified derivative of ADE (itself a modified derivative of
+Superset, Copyright Superset, Inc.), distributed under the Elastic License 2.0.
+The full license terms are in LICENSE.md.
+
+Modifications made in this derivative include, but are not limited to:
+
+  - Added Windows 11 x64 support to the Electron desktop app (native module
+    prebuilds, named-pipe terminal-host IPC, .cmd/.mjs agent-CLI shims,
+    Windows CI, NSIS installer).
+  - Incorporated modifications from Papyrus
+    (https://github.com/CameronCrow/papyrus-ade), a sibling ADE derivative,
+    including: extraction of Electron-free business logic into a shared
+    server-core package; a headless server daemon and browser web UI; team
+    dashboard; agent mail; terminal latency improvements; and removal of the
+    remaining Superset hosted-cloud applications. The Papyrus product naming
+    was reverted to ADE in this derivative.
+
+Use of this software remains subject to the Elastic License 2.0.

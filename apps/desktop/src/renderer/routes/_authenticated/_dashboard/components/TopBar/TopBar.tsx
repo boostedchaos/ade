@@ -29,13 +29,16 @@ export function TopBar() {
 				}}
 			>
 				<SidebarToggle />
-				<NavigationControls />
-				<ResourceConsumption />
+				{/* hidden below md; display:contents at md+ so desktop layout is unchanged */}
+				<div className="hidden md:contents">
+					<NavigationControls />
+					<ResourceConsumption />
+				</div>
 			</div>
 
 			{workspace?.project?.name && (
 				<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-					<div className="flex items-center gap-2 max-w-[calc(100vw-36rem)] lg:max-w-[calc(100vw-52rem)]">
+					<div className="flex items-center gap-2 max-w-[50vw] md:max-w-[calc(100vw-36rem)] lg:max-w-[calc(100vw-52rem)]">
 						{workspace.iconUrl && (
 							<img
 								src={workspace.iconUrl}
@@ -65,11 +68,13 @@ export function TopBar() {
 					</div>
 				)}
 				{workspace?.worktreePath && (
-					<OpenInMenuButton
-						worktreePath={workspace.worktreePath}
-						branch={workspace.worktree?.branch}
-						projectId={workspace.project?.id}
-					/>
+					<div className="hidden md:contents">
+						<OpenInMenuButton
+							worktreePath={workspace.worktreePath}
+							branch={workspace.worktree?.branch}
+							projectId={workspace.project?.id}
+						/>
+					</div>
 				)}
 				<OrganizationDropdown />
 				{!isMac && <WindowControls />}

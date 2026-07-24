@@ -1,10 +1,11 @@
 import { useParams } from "@tanstack/react-router";
-import { useCallback, useMemo } from "react";
-import { LuFileText } from "react-icons/lu";
+import { useCallback, useMemo, useState } from "react";
+import { LuDownload, LuFileText } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useTabsStore } from "renderer/stores/tabs/store";
+import { ImportSessionDialog } from "./ImportSessionDialog";
 
-type AgentFileGroup = "Memory" | "Skills" | "Worktree";
+type AgentFileGroup = "Memory" | "Skills" | "Mail" | "Worktree" | "Imported";
 
 interface AgentFileEntry {
 	label: string;
@@ -13,10 +14,17 @@ interface AgentFileEntry {
 	relativeToWorktree: string | null;
 }
 
-const GROUP_ORDER: AgentFileGroup[] = ["Memory", "Skills", "Worktree"];
+const GROUP_ORDER: AgentFileGroup[] = [
+	"Memory",
+	"Skills",
+	"Mail",
+	"Worktree",
+	"Imported",
+];
 
 export function AgentFilesView() {
 	const { workspaceId } = useParams({ strict: false });
+	const [importOpen, setImportOpen] = useState(false);
 	const { data: files, isLoading } =
 		electronTrpc.workspaces.listAgentFiles.useQuery(
 			{ workspaceId: workspaceId ?? "" },
@@ -65,47 +73,68 @@ export function AgentFilesView() {
 		);
 	}
 
-	if (isLoading) {
-		return (
-			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-				Loading agent files…
-			</div>
-		);
-	}
-
-	if (!files || files.length === 0) {
-		return (
-			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-				No agent files yet
-			</div>
-		);
-	}
+	const hasFiles = !!files && files.length > 0;
 
 	return (
-		<div className="flex flex-col flex-1 min-h-0 overflow-auto py-1">
-			{GROUP_ORDER.map((group) => {
-				const entries = grouped.get(group);
-				if (!entries || entries.length === 0) return null;
-				return (
-					<div key={group} className="flex flex-col">
-						<div className="px-3 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-							{group}
-						</div>
-						{entries.map((entry) => (
-							<button
-								key={entry.absolutePath}
-								type="button"
-								onClick={() => handleActivate(entry)}
-								className="flex items-center gap-2 px-3 py-1 text-sm text-left text-foreground/90 hover:bg-tertiary/20 transition-colors"
-								title={entry.absolutePath}
-							>
-								<LuFileText className="size-3.5 shrink-0 text-muted-foreground" />
-								<span className="truncate">{entry.label}</span>
-							</button>
-						))}
+		<div className="flex flex-col flex-1 min-h-0">
+			<div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40">
+				<span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+					Agent files
+				</span>
+				<button
+					type="button"
+					onClick={() => setImportOpen(true)}
+					className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-tertiary/20 hover:text-foreground transition-colors"
+					title="Import a native Claude CLI session into this Workspace"
+				>
+					<LuDownload className="size-3.5 shrink-0" />
+					Import session
+				</button>
+			</div>
+
+			<div className="flex flex-col flex-1 min-h-0 overflow-auto py-1">
+				{isLoading && (
+					<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
+						Loading agent files…
 					</div>
-				);
-			})}
+				)}
+				{!isLoading && !hasFiles && (
+					<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
+						No agent files yet
+					</div>
+				)}
+				{!isLoading &&
+					hasFiles &&
+					GROUP_ORDER.map((group) => {
+						const entries = grouped.get(group);
+						if (!entries || entries.length === 0) return null;
+						return (
+							<div key={group} className="flex flex-col">
+								<div className="px-3 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+									{group}
+								</div>
+								{entries.map((entry) => (
+									<button
+										key={entry.absolutePath}
+										type="button"
+										onClick={() => handleActivate(entry)}
+										className="flex items-center gap-2 px-3 py-1 text-sm text-left text-foreground/90 hover:bg-tertiary/20 transition-colors"
+										title={entry.absolutePath}
+									>
+										<LuFileText className="size-3.5 shrink-0 text-muted-foreground" />
+										<span className="truncate">{entry.label}</span>
+									</button>
+								))}
+							</div>
+						);
+					})}
+			</div>
+
+			<ImportSessionDialog
+				workspaceId={workspaceId}
+				open={importOpen}
+				onOpenChange={setImportOpen}
+			/>
 		</div>
 	);
 }

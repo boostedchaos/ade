@@ -295,7 +295,9 @@ export function ProjectHeader({
 						) : (
 							<button
 								type="button"
-								onClick={onToggleCollapse}
+								onClick={() =>
+									navigate({ to: "/project/$projectId", params: { projectId } })
+								}
 								onDoubleClick={rename.startRename}
 								className="flex items-center gap-2 flex-1 min-w-0 py-0.5 text-left cursor-pointer"
 							>

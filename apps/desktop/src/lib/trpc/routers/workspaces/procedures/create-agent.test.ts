@@ -40,3 +40,36 @@ describe("createAgentInput role", () => {
 		).toThrow();
 	});
 });
+
+describe("createAgentInput duplicateFrom (create-from-existing, issue #41)", () => {
+	const base = { projectId: "cat-1", name: "Scout" };
+
+	it("defaults to undefined when omitted", () => {
+		expect(createAgentInput.parse(base).duplicateFrom).toBeUndefined();
+	});
+
+	it("accepts a source agent id and defaults includeLessons to false", () => {
+		const parsed = createAgentInput.parse({
+			...base,
+			duplicateFrom: { agentId: "agent-1" },
+		});
+		expect(parsed.duplicateFrom).toEqual({
+			agentId: "agent-1",
+			includeLessons: false,
+		});
+	});
+
+	it("passes includeLessons through when set", () => {
+		const parsed = createAgentInput.parse({
+			...base,
+			duplicateFrom: { agentId: "agent-1", includeLessons: true },
+		});
+		expect(parsed.duplicateFrom?.includeLessons).toBe(true);
+	});
+
+	it("rejects an empty source agent id", () => {
+		expect(() =>
+			createAgentInput.parse({ ...base, duplicateFrom: { agentId: "" } }),
+		).toThrow();
+	});
+});

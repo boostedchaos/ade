@@ -905,40 +905,6 @@ export const createFilesystemRouter = () => {
 				return { logPath: path.relative(input.rootPath, logPath) };
 			}),
 
-		/** List Claude Code sessions for a project by reading ~/.claude/projects/<hash>/*.jsonl */
-		listClaudeSessions: publicProcedure
-			.input(z.object({ projectPath: z.string() }))
-			.query(async ({ input }) => {
-				const homedir = os.homedir();
-				// Claude hashes project paths by replacing / with -
-				const projectHash = input.projectPath.replace(/[^a-zA-Z0-9-]/g, "-");
-				const sessionsDir = path.join(homedir, ".claude", "projects", projectHash);
-
-				try {
-					const files = await fs.readdir(sessionsDir);
-					const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
-
-					const sessions = await Promise.all(
-						jsonlFiles.map(async (file) => {
-							const filePath = path.join(sessionsDir, file);
-							const stat = await fs.stat(filePath);
-							return {
-								sessionId: file.replace(/\.jsonl$/, ""),
-								lastModified: stat.mtimeMs,
-								size: stat.size,
-							};
-						}),
-					);
-
-					// Sort by most recently modified first
-					return sessions
-						.sort((a, b) => b.lastModified - a.lastModified)
-						.slice(0, 10); // Last 10 sessions
-				} catch {
-					return [];
-				}
-			}),
-
 		createDirectory: publicProcedure
 			.input(
 				z.object({

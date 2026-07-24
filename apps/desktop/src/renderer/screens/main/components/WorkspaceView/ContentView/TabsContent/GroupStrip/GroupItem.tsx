@@ -1,3 +1,4 @@
+import { AGENT_LABELS } from "@superset/shared/agent-command";
 import { Button } from "@superset/ui/button";
 import {
 	ContextMenu,
@@ -16,12 +17,14 @@ import { getEmptyImage } from "react-dnd-html5-backend";
 import { HiMiniXMark } from "react-icons/hi2";
 import { LuCheck, LuPalette, LuPencil } from "react-icons/lu";
 import { MosaicDragType } from "react-mosaic-component";
+import { electronTrpc } from "renderer/lib/electron-trpc";
 import { StatusIndicator } from "renderer/screens/main/components/StatusIndicator";
 import { useDragPaneStore } from "renderer/stores/drag-pane-store";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import type { PaneStatus, Tab } from "renderer/stores/tabs/types";
 import { getTabDisplayName } from "renderer/stores/tabs/utils";
 import { TERMINAL_PROFILES } from "shared/terminal-profiles";
+import { SessionStatsBadge } from "./SessionStatsBadge";
 
 export const TAB_TYPE = "TAB";
 
@@ -52,7 +55,21 @@ export function GroupItem({
 	onPaneDrop,
 	onReorder,
 }: GroupItemProps) {
-	const displayName = getTabDisplayName(tab);
+	// Tabs spawned before issue #36 persisted a generic runtime label ("Claude",
+	// "Codex", ...) as their name. Substitute the agent's (workspace's) name at
+	// render time so legacy tabs pick up the identity too — an explicit user
+	// rename (userTitle) still wins via getTabDisplayName.
+	const { data: tabWorkspace } = electronTrpc.workspaces.get.useQuery(
+		{ id: tab.workspaceId },
+		{ enabled: !!tab.workspaceId },
+	);
+	const isGenericRuntimeName =
+		!tab.userTitle?.trim() &&
+		Object.values(AGENT_LABELS).includes(tab.name ?? "");
+	const displayName =
+		isGenericRuntimeName && tabWorkspace?.name?.trim()
+			? tabWorkspace.name
+			: getTabDisplayName(tab);
 	const focusedPaneId = useTabsStore((s) => s.focusedPaneIds[tab.id]);
 	const focusedPane = useTabsStore((s) =>
 		focusedPaneId ? s.panes[focusedPaneId] : undefined,
@@ -240,6 +257,11 @@ export function GroupItem({
 							<span className="text-sm truncate flex-1 text-left">
 								{displayName}
 							</span>
+							{/* Live model + context usage for the active session tab
+							    (issue #36); renders nothing for non-Claude sessions. */}
+							{isActive && isTerminalTab && (
+								<SessionStatsBadge workspaceId={tab.workspaceId} />
+							)}
 							{status && status !== "idle" && (
 								<StatusIndicator status={status} />
 							)}

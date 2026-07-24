@@ -1,0 +1,25 @@
+{
+	"name": "ADE",
+	"short_name": "ADE",
+	"description": "Self-hosted agentic development environment",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "any",
+	"background_color": "#252525",
+	"theme_color": "#252525",
+	"icons": [
+		{
+			"src": "/pwa-icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/pwa-icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any maskable"
+		}
+	]
+}

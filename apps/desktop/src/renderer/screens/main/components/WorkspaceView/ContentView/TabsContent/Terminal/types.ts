@@ -15,7 +15,11 @@ export type TerminalStreamEvent =
 			reason?: TerminalExitReason;
 	  }
 	| { type: "disconnect"; reason: string }
-	| { type: "error"; error: string; code?: string };
+	| { type: "error"; error: string; code?: string }
+	// Multi-device attach policy (issue #7): emitted by ade-server when
+	// this client's writer/mirror status is established or changes. The
+	// desktop Electron router never emits it.
+	| { type: "mode"; readOnly: boolean };
 
 export type CreateOrAttachResult = {
 	wasRecovered: boolean;

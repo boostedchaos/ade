@@ -9,6 +9,7 @@ import {
 	activateProject,
 	getMaxWorkspaceTabOrder,
 	getProject,
+	getWorkspace,
 	setLastActiveWorkspace,
 } from "../utils/db-helpers";
 
@@ -30,6 +31,29 @@ export const createAgentProcedures = () => {
 				const project = getProject(input.projectId);
 				if (!project) {
 					throw new Error(`Category ${input.projectId} not found`);
+				}
+
+				// Create-from-existing: resolve the source agent up front so a
+				// bad id fails the call instead of the background init job.
+				let duplicateFrom:
+					| {
+							sourceAgentId: string;
+							sourceAgentName: string;
+							includeLessons: boolean;
+					  }
+					| undefined;
+				if (input.duplicateFrom) {
+					const source = getWorkspace(input.duplicateFrom.agentId);
+					if (!source) {
+						throw new Error(
+							`Source agent ${input.duplicateFrom.agentId} not found`,
+						);
+					}
+					duplicateFrom = {
+						sourceAgentId: source.id,
+						sourceAgentName: source.name,
+						includeLessons: input.duplicateFrom.includeLessons,
+					};
 				}
 
 				const agentId = uuidv4();
@@ -81,6 +105,7 @@ export const createAgentProcedures = () => {
 					role: input.role,
 					runtime: input.runtime,
 					source: input.repo,
+					duplicateFrom,
 				});
 
 				return {

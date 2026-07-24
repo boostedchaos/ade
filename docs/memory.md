@@ -1,3 +1,8 @@
+---
+type: reference
+tags: [repo/ade-windows-port]
+up: "[[ade-windows-port]]"
+---
 # Agent memory
 
 Every ADE agent has a persistent, self-curated memory. It is what makes an agent an identity rather than a chat window: the agent reads its memory at the start of every session and writes back to it as it learns, so it accumulates knowledge about you and your project over time.
@@ -73,3 +78,9 @@ Claude Code and OpenCode reference the live canonical files, so they need no reb
 ## Where to see it
 
 The **Agent Files** panel in an agent's workspace lists this whole surface — the Memory files, the Skills, and the worktree bridge — and only shows files that exist, so it visibly grows as the agent learns. Click any file to open it in a viewer tab.
+
+## Related
+
+- [[Repos/ade-windows-port/docs/mastracode-fork-workflow|mastracode-fork-workflow]]
+- [[Repos/ade-windows-port/docs/cookbook/README|Cookbook]]
+- [[ade-windows-port]]

@@ -1,71 +1,169 @@
-# ADE Windows Port — Repository Guide
+# ADE Monorepo Guide
 
 Guidelines for agents and developers working in this repository.
 
-This is **`boostedchaos/ade-windows-port`**, a fork of
-[`per-simmons/damon-ade`](https://github.com/per-simmons/damon-ade) (itself derived from
-Superset) that adds Windows 11 x64 support to **ADE**, an Electron desktop app for running
-persistent coding agents (Claude Code, Codex, OpenCode) in terminals. The product of this
-repo is the desktop app; everything else is inherited scaffolding.
+This is `boostedchaos/ade-windows-port`, a fork of
+[`per-simmons/damon-ade`](https://github.com/per-simmons/damon-ade) (itself a
+Superset derivative) that adds Windows 11 x64 support and incorporates the
+client–server restructuring from `CameronCrow/papyrus-ade`. The active product
+is the desktop app (macOS + Windows) plus the client–server build-out
+documented in `planning/` (headless `apps/server` + browser `apps/webui`).
 
 ## Structure
 
-Bun + Turbo monorepo:
+Bun + Turbo monorepo with:
 
-- **`apps/desktop`** — the ADE Electron app. All Windows-port work lives here:
-  - `src/main` — Electron main process (terminal host, agent setup, auto-updater)
-  - `src/lib/trpc` — main-process tRPC routers (workspaces, git, permissions, keys)
-  - `electron-builder.ts` / `electron-builder.win.ts` — packaging (NSIS + zip on Windows)
-  - `scripts/` — Windows native staging (`prepare-win-natives.ts`,
-    `copy-native-modules.ts`, `verify-win-package.ts`)
-- **`apps/web`, `apps/marketing`, `apps/admin`, `apps/api`, `apps/docs`, `apps/mobile`,
-  `apps/streams`** — inherited upstream Superset apps. Not built, shipped, or maintained by
-  this fork; don't modify them except when syncing with upstream.
-- **`packages/`** — shared libraries used by the desktop app (`local-db`, `trpc`, `ui`,
-  `shared`, `agent`, `desktop-mcp`, ...). `packages/ui` is shadcn/ui + TailwindCSS v4.
-- **`tooling/typescript`** — shared TypeScript configs.
+- **Apps (active)**:
+  - `apps/desktop` - Electron desktop application (the current product)
+  - `apps/docs` - Documentation site
+- **Apps (deleted)**: the upstream Superset cloud product (`apps/web`,
+  `apps/api`, `apps/mobile`, `apps/admin`, `apps/marketing`, `apps/streams`)
+  was quarantined in Phase 0 and deleted post-M1 — do not resurrect it
+- **Packages**:
+  - `packages/ui` - Shared UI components (shadcn/ui + TailwindCSS v4).
+    - Add components: `npx shadcn@latest add <component>` (run in `packages/ui/`)
+  - `packages/db` - Drizzle ORM database schema
+  - `packages/auth` - Authentication
+  - `packages/agent` - Agent logic
+  - `packages/trpc` - Shared tRPC definitions
+  - `packages/shared` - Shared utilities
+  - `packages/mcp` - MCP integration
+  - `packages/desktop-mcp` - Desktop MCP server
+  - `packages/local-db` - Local SQLite database
+  - `packages/durable-session` - Durable session management
+  - `packages/email` - Email templates/sending
+  - `packages/scripts` - CLI tooling
+- **Tooling**:
+  - `tooling/typescript` - Shared TypeScript configs
 
-## Tech stack
+## Tech Stack
 
-- **Package manager:** Bun (no npm/yarn/pnpm). **Build:** Turborepo + electron-vite.
-- **Desktop:** Electron, React, tRPC over IPC, SQLite via `packages/local-db`.
-- **Code quality:** Biome, run at the repo root (not per-package).
+- **Package Manager**: Bun (no npm/yarn/pnpm)
+- **Build System**: Turborepo
+- **Database**: SQLite via `packages/local-db` (Drizzle). The Neon PostgreSQL
+  setup in `packages/db` belonged to the deleted cloud apps; the package is
+  kept only because the desktop renderer still imports its types.
+- **UI**: React + TailwindCSS v4 + shadcn/ui
+- **Code Quality**: Biome (formatting + linting at root)
 
-## Common commands
+## Common Commands
 
 ```bash
-bun run lint               # biome check (no changes)
-bun run lint:fix           # fix auto-fixable issues
-bun run typecheck          # type check all packages
-bun test                   # run tests
+# Development
+bun dev                    # Start all dev servers
+bun test                   # Run tests
+bun build                  # Build all packages
 
-# apps/desktop
-bun run compile:app        # production build into dist/
-bunx electron .            # launch the built app
-bun run build:win          # full Windows pipeline: compile + stage natives + NSIS/zip + verify
+# Code Quality
+bun run lint               # Check for lint issues (no changes)
+bun run lint:fix           # Fix auto-fixable lint issues
+bun run format             # Format code only
+bun run format:check       # Check formatting only (CI)
+bun run typecheck          # Type check all packages
+
+# Maintenance
+bun run clean              # Clean root node_modules
+bun run clean:workspaces   # Clean all workspace node_modules
 ```
 
-Windows notes: the build uses prebuilt native binaries only (`npmRebuild` off — no Visual
-Studio toolchain needed). Set `ADE_SKIP_INSTALL_APP_DEPS=1` during `bun install` on machines
-without one. `.github/workflows/windows-ci.yml` is the ground-truth Windows build recipe.
+## Code Quality
 
-## Agent rules
+**Biome runs at root level** (not per-package) for speed:
 
-1. **Type safety** — avoid `any` unless necessary.
-2. **Prefer `gh` CLI** for GitHub operations (PRs, issues) over raw `git` where possible.
-3. **Don't regress the Windows port.** Platform-specific behavior is deliberate and
-   documented in commit history: `.cmd`-only shims (never `.ps1`), ConPTY signal handling,
-   canonical-uppercase env keys on win32, junction-safe file removal, PE-header validation
-   of staged natives. Read the surrounding comments before "simplifying" any
-   `process.platform` branch.
-4. **Elastic License 2.0** — mark modifications to the original Superset/ADE source per the
-   license (see LICENSE.md).
+- `biome check --write --unsafe` = format + lint + organize imports + fix all auto-fixable issues
+- `biome check` = check only (no changes)
+- `biome format` = format only
+- Use `bun run lint:fix` to fix all issues automatically
 
-## Component conventions (renderer code)
+## Agent Rules
 
-- One folder per component: `ComponentName/ComponentName.tsx` + `index.ts` barrel export.
-- Co-locate by usage: used once → nest under the parent's `components/`; used 2+ times →
-  promote to the highest shared parent.
-- Tests, hooks, utils, and constants live next to the code that uses them.
-- Exception: `src/components/ui/` (shadcn/ui) uses kebab-case single files — the shadcn CLI
-  expects that format.
+1. **Type safety** - avoid `any` unless necessary
+2. **Prefer `gh` CLI** - when performing git operations (PRs, issues, checkout, etc.), prefer the GitHub CLI (`gh`) over raw `git` commands where possible
+3. **Shared command source** - keep command definitions in `.agents/commands/` only. `.claude/commands` and `.cursor/commands` should be symlinks to `../.agents/commands`.
+4. **Workspace MCP config** - keep shared MCP servers in `.mcp.json`; `.cursor/mcp.json` should link to `../.mcp.json`. Codex uses `.codex/config.toml` (run with `CODEX_HOME=.codex codex ...`). OpenCode uses `opencode.json` and should mirror the same MCP set using OpenCode's `remote`/`local` schema.
+5. **Mastracode fork workflow** - for Superset's internal `mastracode` fork bundle and release process, follow `docs/mastracode-fork-workflow.md`.
+
+---
+
+## Project Structure
+
+All projects in this repo should be structured like this:
+
+```
+app/
+├── page.tsx
+├── dashboard/
+│   ├── page.tsx
+│   ├── components/
+│   │   └── MetricsChart/
+│   │       ├── MetricsChart.tsx
+│   │       ├── MetricsChart.test.tsx      # Tests co-located
+│   │       ├── index.ts
+│   │       └── constants.ts
+│   ├── hooks/                             # Hooks used only in dashboard
+│   │   └── useMetrics/
+│   │       ├── useMetrics.ts
+│   │       ├── useMetrics.test.ts
+│   │       └── index.ts
+│   ├── utils/                             # Utils used only in dashboard
+│   │   └── formatData/
+│   │       ├── formatData.ts
+│   │       ├── formatData.test.ts
+│   │       └── index.ts
+│   ├── stores/                            # Stores used only in dashboard
+│   │   └── dashboardStore/
+│   │       ├── dashboardStore.ts
+│   │       └── index.ts
+│   └── providers/                         # Providers for dashboard context
+│       └── DashboardProvider/
+│           ├── DashboardProvider.tsx
+│           └── index.ts
+└── components/
+    ├── Sidebar/
+    │   ├── Sidebar.tsx
+    │   ├── Sidebar.test.tsx               # Tests co-located
+    │   ├── index.ts
+    │   ├── components/                    # Used 2+ times IN Sidebar
+    │   │   └── SidebarButton/             # Shared by SidebarNav + SidebarFooter
+    │   │       ├── SidebarButton.tsx
+    │   │       ├── SidebarButton.test.tsx
+    │   │       └── index.ts
+    │   ├── SidebarNav/
+    │   │   ├── SidebarNav.tsx
+    │   │   └── index.ts
+    │   └── SidebarFooter/
+    │       ├── SidebarFooter.tsx
+    │       └── index.ts
+    └── HeroSection/
+        ├── HeroSection.tsx
+        ├── HeroSection.test.tsx           # Tests co-located
+        ├── index.ts
+        └── components/                    # Used ONLY by HeroSection
+            └── HeroCanvas/
+                ├── HeroCanvas.tsx
+                ├── HeroCanvas.test.tsx
+                ├── HeroCanvas.stories.tsx
+                ├── index.ts
+                └── config.ts
+
+components/                                # Used in 2+ pages (last resort)
+└── Header/
+```
+
+1. **One folder per component**: `ComponentName/ComponentName.tsx` + `index.ts` for barrel export
+2. **Co-locate by usage**: If used once, nest under parent's `components/`. If used 2+ times, promote to **highest shared parent's** `components/` (or `components/` as last resort)
+3. **One component per file**: No multi-component files
+4. **Co-locate dependencies**: Utils, hooks, constants, config, tests, stories live next to the file using them
+
+### Exception: shadcn/ui Components
+
+The `src/components/ui/` and `src/components/ai-elements` directories contain shadcn/ui components. These use **kebab-case single files** (e.g., `button.tsx`, `base-node.tsx`) instead of the folder structure above. This is intentional—shadcn CLI expects this format for updates via `bunx shadcn@latest add`.
+
+## Database Rules
+
+- ADE's live database is local SQLite: schema in `packages/local-db/src/`,
+  managed with Drizzle. Generate migrations with `bun run db:generate:desktop`.
+- **NEVER manually edit generated Drizzle migration files** (`.sql`,
+  `meta/_journal.json`, snapshots) — change the schema source and regenerate.
+- The Neon PostgreSQL schema in `packages/db` serves only the quarantined
+  cloud apps; do not migrate or build against it.

@@ -4,6 +4,7 @@ import { useCallback, useRef } from "react";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import { DEBUG_TERMINAL } from "../config";
 import type { TerminalExitReason, TerminalStreamEvent } from "../types";
+import { takeLatencyPending } from "./latency-tracker";
 
 export interface UseTerminalStreamOptions {
 	paneId: string;
@@ -148,7 +149,18 @@ export function useTerminalStream({
 				}
 
 				updateModesRef.current(event.data);
-				xterm.write(event.data);
+				// Latency metric (issue #59): when a keystroke sample is pending,
+				// resolve it on the next paint after this chunk lands (rAF after
+				// the write callback). No pending sample → plain write, zero
+				// added overhead.
+				const resolveLatency = takeLatencyPending(paneId);
+				if (resolveLatency) {
+					xterm.write(event.data, () =>
+						requestAnimationFrame(resolveLatency),
+					);
+				} else {
+					xterm.write(event.data);
+				}
 				updateCwdRef.current(event.data);
 			} else if (event.type === "exit") {
 				handleTerminalExit(event.exitCode, xterm, event.reason);

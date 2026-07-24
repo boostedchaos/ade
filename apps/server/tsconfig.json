@@ -1,0 +1,24 @@
+{
+	"extends": "../../tooling/typescript/base.json",
+	"compilerOptions": {
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"target": "ES2023",
+		"lib": [
+			"ES2023"
+		],
+		"types": [
+			"node"
+		],
+		"noEmit": true,
+		"verbatimModuleSyntax": true,
+		"noUncheckedIndexedAccess": false
+	},
+	"include": [
+		"src",
+		"scripts"
+	],
+	"exclude": [
+		"**/*.test.ts"
+	]
+}

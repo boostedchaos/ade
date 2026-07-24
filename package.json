@@ -16,11 +16,9 @@
 	"packageManager": "bun@1.3.6",
 	"private": true,
 	"scripts": {
-		"dev": "turbo run dev dev:caddy --filter=@superset/api --filter=@superset/web --filter=@ade/desktop --filter=//",
+		"dev": "turbo run dev --filter=@ade/desktop --filter=//",
 		"dev:all": "turbo dev",
-		"dev:caddy": "dotenv -- caddy run --config Caddyfile",
 		"dev:docs": "turbo dev --filter=@superset/docs",
-		"dev:marketing": "turbo dev --filter=@superset/marketing --filter=@superset/docs",
 		"build": "turbo build --filter=@ade/desktop",
 		"test": "turbo test",
 		"lint": "./scripts/lint.sh",
@@ -34,20 +32,18 @@
 		"clean:workspaces": "turbo clean",
 		"release:desktop": "./apps/desktop/create-release.sh",
 		"release:canary": "./scripts/release-canary.sh",
-		"db:push": "bun run --cwd packages/db push",
-		"db:migrate": "bun run --cwd packages/db migrate",
 		"db:generate:desktop": "bun run --cwd packages/local-db generate"
 	},
 	"type": "module",
 	"workspaces": [
 		"packages/*",
-		"apps/*",
+		"apps/desktop",
+		"apps/docs",
+		"apps/server",
+		"apps/webui",
 		"tooling/*"
 	],
 	"resolutions": {
 		"mastracode": "https://github.com/superset-sh/mastra/releases/download/mastracode-v0.4.0-superset.7/mastracode-0.4.0-superset.7.tgz"
-	},
-	"patchedDependencies": {
-		"@durable-streams/state@0.2.1": "patches/@durable-streams%2Fstate@0.2.1.patch"
 	}
 }

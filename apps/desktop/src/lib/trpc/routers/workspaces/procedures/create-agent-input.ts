@@ -24,4 +24,13 @@ export const createAgentInput = z.object({
 			z.object({ type: z.literal("clone"), url: z.string().min(1) }),
 		])
 		.default({ type: "init" }),
+	// Create-from-existing (issue #41): copy the source agent's persona
+	// (AGENT.md re-stamped, USER.md, skills/**) over the fresh scaffold.
+	// `includeLessons` additionally carries MEMORY.md's "## Lessons" section.
+	duplicateFrom: z
+		.object({
+			agentId: z.string().min(1),
+			includeLessons: z.boolean().default(false),
+		})
+		.optional(),
 });

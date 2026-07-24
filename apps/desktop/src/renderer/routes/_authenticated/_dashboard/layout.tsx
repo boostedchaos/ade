@@ -4,6 +4,7 @@ import {
 	useMatchRoute,
 	useNavigate,
 } from "@tanstack/react-router";
+import { useIsMobile } from "renderer/hooks/useIsMobile";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { ResizablePanel } from "renderer/screens/main/components/ResizablePanel";
 import { WorkspaceSidebar } from "renderer/screens/main/components/WorkspaceSidebar";
@@ -14,6 +15,7 @@ import {
 	MAX_WORKSPACE_SIDEBAR_WIDTH,
 	useWorkspaceSidebarStore,
 } from "renderer/stores/workspace-sidebar-state";
+import { MobileSidebarDrawer } from "./components/MobileSidebarDrawer";
 import { TopBar } from "./components/TopBar";
 
 export const Route = createFileRoute("/_authenticated/_dashboard")({
@@ -22,6 +24,7 @@ export const Route = createFileRoute("/_authenticated/_dashboard")({
 
 function DashboardLayout() {
 	const navigate = useNavigate();
+	const isMobile = useIsMobile();
 	const openNewWorkspaceModal = useOpenNewWorkspaceModal();
 	// Get current workspace from route to pre-select project in new workspace modal
 	const matchRoute = useMatchRoute();
@@ -91,23 +94,34 @@ function DashboardLayout() {
 		<div className="flex flex-col h-full w-full">
 			<TopBar />
 			<div className="flex flex-1 overflow-hidden">
-				{isWorkspaceSidebarOpen && (
-					<ResizablePanel
-						width={workspaceSidebarWidth}
-						onWidthChange={setWorkspaceSidebarWidth}
-						isResizing={isWorkspaceSidebarResizing}
-						onResizingChange={setWorkspaceSidebarIsResizing}
-						minWidth={COLLAPSED_WORKSPACE_SIDEBAR_WIDTH}
-						maxWidth={MAX_WORKSPACE_SIDEBAR_WIDTH}
-						handleSide="right"
-						clampWidth={false}
-					>
+				{isMobile ? (
+					// Phone: the rail becomes an overlay drawer (PHASE_3 §3).
+					<MobileSidebarDrawer>
 						<WorkspaceSidebar
-							isCollapsed={isWorkspaceSidebarCollapsed()}
+							isCollapsed={false}
 							activeProjectId={currentWorkspace?.projectId ?? null}
 							activeProjectName={currentWorkspace?.project?.name ?? null}
 						/>
-					</ResizablePanel>
+					</MobileSidebarDrawer>
+				) : (
+					isWorkspaceSidebarOpen && (
+						<ResizablePanel
+							width={workspaceSidebarWidth}
+							onWidthChange={setWorkspaceSidebarWidth}
+							isResizing={isWorkspaceSidebarResizing}
+							onResizingChange={setWorkspaceSidebarIsResizing}
+							minWidth={COLLAPSED_WORKSPACE_SIDEBAR_WIDTH}
+							maxWidth={MAX_WORKSPACE_SIDEBAR_WIDTH}
+							handleSide="right"
+							clampWidth={false}
+						>
+							<WorkspaceSidebar
+								isCollapsed={isWorkspaceSidebarCollapsed()}
+								activeProjectId={currentWorkspace?.projectId ?? null}
+								activeProjectName={currentWorkspace?.project?.name ?? null}
+							/>
+						</ResizablePanel>
+					)
 				)}
 				<Outlet />
 			</div>

@@ -1,0 +1,7 @@
+{
+	"extends": "../desktop/tsconfig.json",
+	"compilerOptions": {
+		"types": ["vite/client"]
+	},
+	"include": ["src", "../desktop/src/renderer", "../desktop/src/shared", "../desktop/src/lib"]
+}

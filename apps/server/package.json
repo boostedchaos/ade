@@ -1,0 +1,34 @@
+{
+	"name": "@ade/server",
+	"version": "0.1.0",
+	"description": "ADE headless server \u00e2\u20ac\u201d agents, terminals, and files over tRPC (HTTP + WebSocket)",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"build": "bun run scripts/build.ts",
+		"build:daemon": "bun run scripts/build.ts",
+		"dev": "bun run build && node dist/server.cjs serve",
+		"start": "node dist/server.cjs serve",
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@ade/server-core": "workspace:*",
+		"@superset/local-db": "workspace:*",
+		"@trpc/server": "^11.7.1",
+		"better-sqlite3": "12.6.2",
+		"node-pty": "1.1.0",
+		"simple-git": "^3.30.0",
+		"superjson": "^2.2.5",
+		"ws": "^8.18.0",
+		"zod": "^4.3.5",
+		"drizzle-orm": "0.45.1"
+	},
+	"devDependencies": {
+		"@trpc/client": "^11.7.1",
+		"esbuild": "^0.25.12",
+		"@types/node": "^24.0.0",
+		"@types/ws": "^8.18.1",
+		"typescript": "^5.9.3"
+	}
+}

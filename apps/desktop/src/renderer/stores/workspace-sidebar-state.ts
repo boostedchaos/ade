@@ -16,8 +16,13 @@ interface WorkspaceSidebarState {
 	// Use string[] instead of Set<string> for JSON serialization with Zustand persist
 	collapsedProjectIds: string[];
 	isResizing: boolean;
+	// Mobile: the rail renders as an overlay drawer (PHASE_3 §3). Ephemeral —
+	// never persisted, so the drawer always starts closed.
+	isMobileDrawerOpen: boolean;
 
 	toggleOpen: () => void;
+	setMobileDrawerOpen: (open: boolean) => void;
+	toggleMobileDrawer: () => void;
 	setOpen: (open: boolean) => void;
 	setWidth: (width: number) => void;
 	setIsResizing: (isResizing: boolean) => void;
@@ -36,6 +41,15 @@ export const useWorkspaceSidebarStore = create<WorkspaceSidebarState>()(
 				lastExpandedWidth: DEFAULT_WORKSPACE_SIDEBAR_WIDTH,
 				collapsedProjectIds: [],
 				isResizing: false,
+				isMobileDrawerOpen: false,
+
+				setMobileDrawerOpen: (open) => {
+					set({ isMobileDrawerOpen: open });
+				},
+
+				toggleMobileDrawer: () => {
+					set((state) => ({ isMobileDrawerOpen: !state.isMobileDrawerOpen }));
+				},
 
 				toggleOpen: () => {
 					const { isOpen, lastExpandedWidth } = get();

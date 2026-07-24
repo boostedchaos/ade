@@ -1,10 +1,14 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { LuPanelLeft, LuPanelLeftClose, LuPanelLeftOpen } from "react-icons/lu";
 import { HotkeyTooltipContent } from "renderer/components/HotkeyTooltipContent";
+import { useIsMobile } from "renderer/hooks/useIsMobile";
 import { useWorkspaceSidebarStore } from "renderer/stores";
 
 export function SidebarToggle() {
-	const { isCollapsed, toggleCollapsed } = useWorkspaceSidebarStore();
+	const { isCollapsed, toggleCollapsed, toggleMobileDrawer } =
+		useWorkspaceSidebarStore();
+	// On phones the rail is an overlay drawer; the same button opens it.
+	const isMobile = useIsMobile();
 	const collapsed = isCollapsed();
 
 	const getToggleIcon = (isHovering: boolean) => {
@@ -27,7 +31,8 @@ export function SidebarToggle() {
 			<TooltipTrigger asChild>
 				<button
 					type="button"
-					onClick={toggleCollapsed}
+					onClick={isMobile ? toggleMobileDrawer : toggleCollapsed}
+					aria-label="Toggle sidebar"
 					className="no-drag group flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
 				>
 					<span className="group-hover:hidden">{getToggleIcon(false)}</span>

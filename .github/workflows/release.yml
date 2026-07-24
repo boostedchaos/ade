@@ -1,0 +1,186 @@
+# Release pipeline — push a `v*` tag, CI builds the headless ADE server
+# bundle + web UI and publishes a GitHub Release with the zip attached.
+# Per-push/PR checks live in ade-ci.yml; this workflow fires only on tags
+# (or a manual dry-run). Mirrors the sibling CameronCrow/DocBuilder shape:
+#   build (assemble + upload artifact)  ->  release (publish, tag-only)
+#
+# Cut a release:
+#     git tag v0.1.0
+#     git push origin v0.1.0
+#
+# Throwaway dry-run without publishing: run this workflow from the Actions tab
+# ("Run workflow" / workflow_dispatch) — it assembles + uploads the zip as a
+# build artifact but skips the release job (that one only fires on a tag).
+#
+# What ships: the headless server (esbuild CJS bundles) + the built static web
+# UI it serves. The native deps (better-sqlite3, node-pty) are externalized from
+# the bundle, so the artifact ships a tiny package.json pinning them + an INSTALL
+# note — the operator runs `npm install --omit=dev` on Node 24+ to fetch their
+# prebuilt binaries at deploy time. bun is the BUILD tool; the server RUNS on Node.
+#
+# The desktop/Electron app has its own release-desktop*.yml workflows — this one
+# is only the headless server.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for a manual dry-run build (no Release is published)"
+        default: "0.0.0-dev"
+
+permissions:
+  contents: read
+
+jobs:
+  # build: assemble the server + web UI into ade-server-<version>.zip. The
+  # build toolchain (esbuild + vite) is platform-neutral, so ubuntu (fast/free);
+  # nothing here executes the native modules, so --ignore-scripts is safe.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      # bun is only the build tool; the shipped server RUNS on Node (>=24). Node
+      # is set up here so the toolchain has a Node available and to pin the ship
+      # target we validate against.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # --ignore-scripts skips the root postinstall (Electron-only shell script).
+      # The release build is esbuild + vite only — it never loads better-sqlite3
+      # or node-pty — so no native binding step is needed here.
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Resolve version (tag -> strip leading v; dispatch -> input)
+        id: ver
+        run: |
+          ref="${{ github.ref_name }}"
+          if [ "${{ github.ref_type }}" = "tag" ] && [ "${ref#v}" != "$ref" ]; then
+            v="${ref#v}"
+          else
+            v="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Building ade-server $v"
+
+      - name: Build web UI
+        run: bun run --cwd apps/webui build
+        env:
+          # The SPA bundles Monaco + xterm + mermaid + the full renderer; the
+          # default heap OOMs on the runners (ade-ci.yml uses the same bump).
+          NODE_OPTIONS: --max-old-space-size=6144
+
+      - name: Build server bundle
+        run: bun run --cwd apps/server build
+
+      - name: Assemble ade-server-${{ steps.ver.outputs.version }}.zip
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          stage="ade-server-$v"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+
+          # Server bundles (server.cjs + terminal-host/pty-subprocess daemons)
+          # and the migrations the server reads from ../resources at runtime.
+          cp -r apps/server/dist "$stage/dist"
+          cp -r apps/server/resources "$stage/resources"
+
+          # The server serves the SPA from dist/webui (static.ts webuiRoot).
+          cp -r apps/webui/dist "$stage/dist/webui"
+
+          # Runtime package.json: pins the two externalized native deps so the
+          # operator's `npm install --omit=dev` pulls their prebuilt binaries.
+          bs3=$(bun --print "require('./apps/server/package.json').dependencies['better-sqlite3']")
+          npty=$(bun --print "require('./apps/server/package.json').dependencies['node-pty']")
+          cat > "$stage/package.json" <<JSON
+          {
+            "name": "ade-server",
+            "version": "$v",
+            "private": true,
+            "type": "commonjs",
+            "scripts": {
+              "start": "node dist/server.cjs serve"
+            },
+            "dependencies": {
+              "better-sqlite3": "$bs3",
+              "node-pty": "$npty"
+            }
+          }
+          JSON
+
+          cat > "$stage/INSTALL.md" <<'MD'
+          # ADE server — install & run
+
+          This bundle is the headless ADE server plus the static web UI it
+          serves. The server RUNS on Node; bun is only the build tool.
+
+          ## Requirements
+          - Node.js >= 24
+          - Network access to fetch two prebuilt native modules on first install
+
+          ## Install
+          The bundle externalizes two native modules (better-sqlite3, node-pty).
+          Install them from the pinned package.json — this pulls their prebuilt
+          binaries, no compiler needed on most platforms:
+
+              npm install --omit=dev
+
+          (If a prebuilt binary is unavailable for your platform/ABI, install
+          build tools and re-run — npm will compile from source.)
+
+          ## Run
+
+              npm start
+              # equivalently: node dist/server.cjs serve
+
+          The web UI is served from the same origin; the API lives under /trpc.
+
+          ## Layout
+          - dist/server.cjs            server entry (run with `serve`)
+          - dist/terminal-host.cjs     terminal-host daemon (Node-only)
+          - dist/pty-subprocess.cjs    pty subprocess
+          - dist/webui/                built static SPA
+          - resources/migrations/      DB migrations the server applies on start
+          MD
+
+          zip -r "$stage.zip" "$stage"
+          echo "Assembled $stage.zip"
+          ls -la "$stage.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ade-server
+          path: ade-server-*.zip
+          if-no-files-found: error
+
+  # publish: attach the zip to the Release for this tag. Tag-only — a
+  # workflow_dispatch dry-run stops after the build job above.
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # the ONLY privileged config — lets GITHUB_TOKEN publish
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ade-server
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true   # auto notes from commits since the last tag
+          files: artifacts/ade-server-*.zip

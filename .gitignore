@@ -78,8 +78,27 @@ apps/streams/data/
 Caddyfile
 superset-dev-data/
 
+# graphify: track the graph itself (graph.json, manifest.json, GRAPH_REPORT.md,
+# graph.html, cost.json) so it persists across machines; ignore regenerable
+# cache + machine-local hook/interpreter state (canonical block - see
+# git-hooks/README.md; the post-commit hook keeps this in sync everywhere)
+graphify-out/cache/
+graphify-out/.graphify_detect.err
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+graphify-out/.commits_since_update
+graphify-out/.needs_update
+graphify-out/.hook_update.log
+graphify-out/20*/
+
 # Codex workspace config (track only shared config/symlinks; ignore runtime state)
 .codex/*
 !.codex/config.toml
 !.codex/commands
 !.codex/prompts
+
+# papyrus-server build output (migrations copied from packages/local-db at build time)
+apps/server/resources/
+
+# webui build output
+apps/webui/dist/

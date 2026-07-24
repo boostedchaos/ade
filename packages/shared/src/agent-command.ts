@@ -88,6 +88,73 @@ export function getAgentPresetCommands(
 export const AGENT_PRESET_COMMANDS: Record<AgentType, string[]> =
 	getAgentPresetCommands();
 
+/**
+ * Session-id (UUID) shape Claude Code uses for its `.jsonl` transcript names.
+ * Guarded here because the id is interpolated into a shell command that gets
+ * typed into a PTY — only ever accept a real UUID, never arbitrary text.
+ */
+const CLAUDE_SESSION_ID_RE =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Runtimes whose preset command launches the `claude` CLI — directly, or via an
+ * OpenRouter base-url shim. Only these support `claude --resume <id>` and store
+ * their transcripts in the worktree's `~/.claude/projects` bucket, so only these
+ * can deterministically resume a prior conversation when an agent is re-opened.
+ */
+export const CLAUDE_FAMILY_RUNTIMES: readonly AgentType[] = [
+	"claude",
+	"kimi",
+	"minimax",
+	"glm",
+];
+
+export function isClaudeFamilyRuntime(runtime: AgentType): boolean {
+	return CLAUDE_FAMILY_RUNTIMES.includes(runtime);
+}
+
+/**
+ * Insert `--resume <id>` immediately after the `claude` executable token so the
+ * launch continues THAT specific conversation. Matches the first bare `claude`
+ * word (start-of-string or after whitespace, followed by whitespace) — the CLI
+ * invocation in every claude-family preset, including the OpenRouter variants
+ * where `claude` is preceded by `ANTHROPIC_*=...` env assignments.
+ */
+function insertResumeFlag(command: string, sessionId: string): string {
+	return command.replace(
+		/(^|\s)claude(?=\s)/,
+		`$1claude --resume ${sessionId}`,
+	);
+}
+
+/**
+ * Build the terminal command(s) that launch an agent's runtime session,
+ * resuming a known Claude conversation when one exists (issue #49).
+ *
+ * When `sessionId` is a valid Claude session UUID and the runtime is a
+ * claude-family runtime, `--resume <id>` is injected so re-opening the agent
+ * deterministically continues that exact conversation. Otherwise the base
+ * preset command is returned unchanged — a fresh session — which is the correct
+ * behaviour for a brand-new agent or a non-claude runtime.
+ */
+export function buildAgentSessionCommands({
+	runtime,
+	sessionId,
+}: {
+	runtime: AgentType;
+	sessionId?: string | null;
+}): string[] {
+	const base = AGENT_PRESET_COMMANDS[runtime];
+	if (
+		!sessionId ||
+		!isClaudeFamilyRuntime(runtime) ||
+		!CLAUDE_SESSION_ID_RE.test(sessionId)
+	) {
+		return base;
+	}
+	return base.map((command) => insertResumeFlag(command, sessionId));
+}
+
 export const AGENT_PRESET_DESCRIPTIONS: Record<AgentType, string> = {
 	claude: "Danger mode: All permissions auto-approved",
 	codex: "Danger mode: All permissions auto-approved",

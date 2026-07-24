@@ -1,3 +1,4 @@
+import { toast } from "@superset/ui/sonner";
 import { useParams } from "@tanstack/react-router";
 import {
 	useCallback,
@@ -152,10 +153,11 @@ export function GroupStrip() {
 
 	// The "+" defaults to spawning the agent's runtime CLI session (falls back to
 	// a plain shell when the workspace has no runtime).
-	const handleAddGroup = () => {
+	const handleAddGroup = async () => {
 		if (!activeWorkspaceId) return;
-		const result = spawnAgentSession({
+		const result = await spawnAgentSession({
 			id: activeWorkspaceId,
+			name: workspace?.name ?? null,
 			runtime: workspace?.runtime ?? null,
 			worktreePath: workspace?.worktreePath ?? null,
 		});
@@ -194,6 +196,7 @@ export function GroupStrip() {
 			});
 		} catch (error) {
 			console.error("[GroupStrip] Failed to create note:", error);
+			toast.error("Failed to create note");
 		}
 	}, [activeWorkspaceId, workspace?.project?.mainRepoPath, createNoteMutation, addFileViewerPane]);
 

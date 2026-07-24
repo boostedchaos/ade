@@ -165,12 +165,15 @@
 
 	/* Ensure the React root fills the viewport and provides a positioning context */
 	/* biome-ignore lint/correctness/noUnknownTypeSelector: app is a custom element in index.html */
+	/* --app-height is set by the web shell's visualViewport shim (apps/webui)
+	   so the layout tracks the iOS software keyboard; unset on desktop, where
+	   the fallback keeps this identical to the original 100vh. */
 	app {
 		display: block;
 		position: relative;
 		width: 100vw;
-		height: 100vh;
-		min-height: 100vh;
+		height: var(--app-height, 100vh);
+		min-height: var(--app-height, 100vh);
 	}
 
 	/* xterm 6.0.0+ requires explicit sizing due to VS Code scrollbar integration */

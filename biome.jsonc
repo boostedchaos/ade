@@ -10,8 +10,7 @@
 			"**",
 			"!**/drizzle",
 			"!**/*.template.js",
-			"!**/*.template.sh",
-			"!apps/mobile/uniwind-types.d.ts"
+			"!**/*.template.sh"
 		]
 	},
 	"formatter": {

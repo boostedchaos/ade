@@ -1,0 +1,205 @@
+import { workspaces, worktrees } from "@superset/local-db";
+import type { AgentRuntime } from "@superset/local-db";
+import { eq } from "drizzle-orm";
+import { localDb } from "./local-db";
+import { workspaceInitManager } from "./workspace-init-manager";
+import { MEMORY_SCAFFOLD_ENABLED } from "./feature-flags";
+import { duplicateAgentPersona } from "./agent-duplicate";
+import { type AgentRepoSource, setupAgentRepo } from "./agent-repo";
+import { regenerateCodexAgentsMd, scaffoldAgentMemory } from "./agent-scaffold";
+import { resolveAgentWorktreePath } from "./agent-worktree";
+import { getUserName } from "./user-profile";
+
+/**
+ * ADE agent creation runs as a background job so a slow clone never blocks the
+ * modal. createAgent inserts the DB rows immediately (worktree.gitStatus=null,
+ * so the content view shows the checklist), then calls beginAgentInit(), which
+ * builds the repo + memory scaffold while streaming progress through the shared
+ * workspaceInitManager (the same channel WorkspaceInitializingView listens to).
+ *
+ * Retry context is held in-memory, consistent with workspaceInitManager's own
+ * in-memory model (a documented cross-restart limitation). On a cross-restart
+ * retry with no context we fall back to a fresh init.
+ */
+
+interface AgentInitContext {
+	categoryId: string;
+	worktreeId: string;
+	agentName: string;
+	/** Optional free-text role captured at creation; seeds the memory scaffold. */
+	role?: string;
+	runtime: AgentRuntime;
+	source: AgentRepoSource;
+	/**
+	 * Create-from-existing (issue #41): after the normal scaffold, copy the
+	 * source agent's persona (AGENT.md re-stamped, USER.md, skills/**) over the
+	 * fresh templates. Held in the same in-memory context as the rest — a
+	 * cross-restart retry falls back to a plain (non-duplicating) init.
+	 */
+	duplicateFrom?: {
+		sourceAgentId: string;
+		sourceAgentName: string;
+		includeLessons: boolean;
+	};
+}
+
+const contexts = new Map<string, AgentInitContext>();
+
+export function isAgentInit(agentId: string): boolean {
+	return contexts.has(agentId);
+}
+
+/** Start the background init job for a freshly-created agent. */
+export function beginAgentInit(
+	agentId: string,
+	ctx: AgentInitContext,
+): void {
+	contexts.set(agentId, ctx);
+	workspaceInitManager.clearJob(agentId);
+	workspaceInitManager.startJob(agentId, ctx.categoryId);
+	// Fire and forget — progress is streamed via workspaceInitManager.
+	void runAgentInit(agentId);
+}
+
+/**
+ * Retry a failed/interrupted agent init. Returns false if this is not an ADE
+ * agent we can retry (caller should fall back to the legacy path).
+ */
+export function retryAgentInit(agentId: string): boolean {
+	let ctx = contexts.get(agentId);
+	if (!ctx) {
+		// Cross-restart: reconstruct minimal context from the DB and re-init.
+		const workspace = localDb
+			.select()
+			.from(workspaces)
+			.where(eq(workspaces.id, agentId))
+			.get();
+		if (!workspace?.worktreeId || !workspace.runtime) return false;
+		ctx = {
+			categoryId: workspace.projectId,
+			worktreeId: workspace.worktreeId,
+			agentName: workspace.name,
+			runtime: workspace.runtime,
+			source: { type: "init" },
+		};
+		contexts.set(agentId, ctx);
+	}
+	workspaceInitManager.clearJob(agentId);
+	workspaceInitManager.startJob(agentId, ctx.categoryId);
+	void runAgentInit(agentId);
+	return true;
+}
+
+async function runAgentInit(agentId: string): Promise<void> {
+	const ctx = contexts.get(agentId);
+	if (!ctx) return;
+
+	try {
+		workspaceInitManager.updateProgress(
+			agentId,
+			"creating_repo",
+			ctx.source.type === "clone"
+				? "Cloning repository..."
+				: "Creating repository...",
+		);
+
+		const { worktreePath, branch } = await setupAgentRepo({
+			agentId,
+			source: ctx.source,
+		});
+		workspaceInitManager.markWorktreeCreated(agentId);
+
+		// Persist the resolved branch + path (a clone may not be on "main").
+		localDb
+			.update(worktrees)
+			.set({ branch, path: worktreePath })
+			.where(eq(worktrees.id, ctx.worktreeId))
+			.run();
+		localDb
+			.update(workspaces)
+			.set({ branch })
+			.where(eq(workspaces.id, agentId))
+			.run();
+
+		workspaceInitManager.updateProgress(
+			agentId,
+			"scaffolding_memory",
+			"Initializing memory files...",
+		);
+		// Memory scaffold (default ON — the revealed final state): write the
+		// canonical memory/*.md files and the per-runtime bridges. Set
+		// ADE_MEMORY_SCAFFOLD=false only as an escape hatch, in which case new
+		// agents keep their repo + an empty memory/ dir (created by setupAgentRepo)
+		// with no template files and no bridges.
+		if (MEMORY_SCAFFOLD_ENABLED) {
+			// Resolve the worktree from the DB (the source of truth we just
+			// persisted) rather than assuming the derived path, so bridges land in
+			// the real repo — including an external worktree for a local-path
+			// agent. For the standard init/clone flows this equals the derived
+			// path, so behavior is unchanged.
+			scaffoldAgentMemory({
+				agentId,
+				agentName: ctx.agentName,
+				role: ctx.role,
+				runtime: ctx.runtime,
+				userName: getUserName(),
+				worktreePath: resolveAgentWorktreePath(agentId, ctx.worktreeId),
+			});
+
+			// Create-from-existing: copy the source persona OVER the fresh
+			// scaffold (writeIfEmpty never overwrites, so ordering matters —
+			// the duplicate flow's plain writes must run after the scaffold).
+			if (ctx.duplicateFrom) {
+				workspaceInitManager.updateProgress(
+					agentId,
+					"scaffolding_memory",
+					`Copying persona from ${ctx.duplicateFrom.sourceAgentName}...`,
+				);
+				duplicateAgentPersona({
+					source: {
+						agentId: ctx.duplicateFrom.sourceAgentId,
+						agentName: ctx.duplicateFrom.sourceAgentName,
+					},
+					target: { agentId, agentName: ctx.agentName },
+					includeLessons: ctx.duplicateFrom.includeLessons,
+				});
+				// The scaffold generated the codex concat bridge BEFORE the
+				// persona landed — rebuild it from the copied canonical files.
+				if (ctx.runtime === "codex") {
+					regenerateCodexAgentsMd(agentId);
+				}
+			}
+		}
+
+		// A non-null gitStatus marks the worktree as set up so the content view
+		// shows the terminal instead of "setup incomplete".
+		localDb
+			.update(worktrees)
+			.set({
+				gitStatus: {
+					branch,
+					needsRebase: false,
+					ahead: 0,
+					behind: 0,
+					lastRefreshed: Date.now(),
+				},
+			})
+			.where(eq(worktrees.id, ctx.worktreeId))
+			.run();
+
+		workspaceInitManager.updateProgress(agentId, "ready", "Ready");
+		workspaceInitManager.finalizeJob(agentId);
+		contexts.delete(agentId);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(`[agent-init] Failed for ${agentId}:`, error);
+		workspaceInitManager.updateProgress(
+			agentId,
+			"failed",
+			"Agent setup failed",
+			message,
+		);
+		workspaceInitManager.finalizeJob(agentId);
+		// Keep the context so Retry can reuse the original repo source.
+	}
+}

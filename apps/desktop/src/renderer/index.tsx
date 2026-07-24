@@ -11,6 +11,7 @@ import {
 import { persistentHistory } from "./lib/persistent-hash-history";
 import { electronQueryClient } from "./providers/ElectronTRPCProvider";
 import { routeTree } from "./routeTree.gen";
+import { RouteError } from "./routes/route-error";
 
 import "./globals.css";
 
@@ -21,6 +22,7 @@ const router = createRouter({
 	routeTree,
 	history: persistentHistory,
 	defaultPreload: "intent",
+	defaultErrorComponent: RouteError,
 	context: {
 		queryClient: electronQueryClient,
 	},

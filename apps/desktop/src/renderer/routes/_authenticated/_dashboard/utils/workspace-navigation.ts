@@ -2,6 +2,7 @@ import type {
 	NavigateOptions,
 	UseNavigateResult,
 } from "@tanstack/react-router";
+import { useWorkspaceSidebarStore } from "renderer/stores/workspace-sidebar-state";
 
 export interface WorkspaceSearchParams {
 	tabId?: string;
@@ -25,6 +26,9 @@ export function navigateToWorkspace(
 ): Promise<void> {
 	const { search, ...rest } = options ?? {};
 	localStorage.setItem("lastViewedWorkspaceId", workspaceId);
+	// Mobile drawer: selecting an agent is the end of the navigation gesture,
+	// even when it's the already-active one (no route change to observe).
+	useWorkspaceSidebarStore.getState().setMobileDrawerOpen(false);
 	return navigate({
 		to: "/workspace/$workspaceId",
 		params: { workspaceId },

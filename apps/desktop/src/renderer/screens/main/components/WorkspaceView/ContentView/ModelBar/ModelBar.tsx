@@ -59,8 +59,19 @@ export function ModelBar() {
 	const ready = !!worktreePath;
 
 	const spawn = (model: ModelDescriptor) => {
-		spawnAgentSession({
+		// Session tabs carry the agent's identity (issue #36). Non-Claude
+		// runtimes keep a model suffix so parallel sessions on other models stay
+		// distinguishable — the live model/context badge only reads Claude
+		// transcripts.
+		const agentName = workspace?.name?.trim();
+		const name = agentName
+			? model.runtime === "claude"
+				? agentName
+				: `${agentName} · ${model.label}`
+			: null;
+		void spawnAgentSession({
 			id: workspaceId,
+			name,
 			runtime: model.runtime,
 			worktreePath,
 		});

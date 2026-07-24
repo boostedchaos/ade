@@ -21,6 +21,16 @@ function formatCpu(percent: number): string {
 	return `${percent.toFixed(1)}%`;
 }
 
+/** "resets in 2h 15m" from an ISO timestamp, or null if past/unparseable. */
+function formatReset(iso: string | null): string | null {
+	if (!iso) return null;
+	const ms = new Date(iso).getTime() - Date.now();
+	if (Number.isNaN(ms) || ms <= 0) return null;
+	const h = Math.floor(ms / 3_600_000);
+	const m = Math.round((ms % 3_600_000) / 60_000);
+	return h > 0 ? `resets in ${h}h ${m}m` : `resets in ${m}m`;
+}
+
 const METRIC_COLS = "flex items-center shrink-0 tabular-nums";
 const CPU_COL = "w-12 text-right";
 const MEM_COL = "w-16 text-right";
@@ -45,6 +55,13 @@ export function ResourceConsumption() {
 	} = electronTrpc.resourceMetrics.getSnapshot.useQuery(undefined, {
 		enabled: enabled === true,
 		refetchInterval: open ? 2000 : false,
+	});
+
+	// Provider usage (issue #35). Server caches 60s; poll slowly even while
+	// closed so the trigger's session % stays current.
+	const { data: usage } = electronTrpc.usage.getSnapshot.useQuery(undefined, {
+		enabled: enabled === true,
+		refetchInterval: open ? 60_000 : 300_000,
 	});
 
 	if (!enabled) return null;
@@ -95,6 +112,11 @@ export function ResourceConsumption() {
 							{formatMemory(snapshot.totalMemory)}
 						</span>
 					)}
+					{usage?.claude?.fiveHour && (
+						<span className="text-xs text-muted-foreground font-medium tabular-nums">
+							· {Math.round(usage.claude.fiveHour.utilization)}%
+						</span>
+					)}
 				</button>
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-80 p-0">
@@ -124,6 +146,36 @@ export function ResourceConsumption() {
 						</div>
 					)}
 				</div>
+
+				{usage && (usage.claude || usage.openrouter) && (
+					<div className="p-3 border-b border-border">
+						<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+							Provider Usage
+						</h4>
+						<div className="mt-2 space-y-1.5">
+							{usage.claude?.fiveHour && (
+								<UsageRow
+									label="Claude · session (5h)"
+									value={`${Math.round(usage.claude.fiveHour.utilization)}%`}
+									hint={formatReset(usage.claude.fiveHour.resetsAt)}
+								/>
+							)}
+							{usage.claude?.sevenDay && (
+								<UsageRow
+									label="Claude · week"
+									value={`${Math.round(usage.claude.sevenDay.utilization)}%`}
+									hint={formatReset(usage.claude.sevenDay.resetsAt)}
+								/>
+							)}
+							{usage.openrouter && (
+								<UsageRow
+									label="OpenRouter credits"
+									value={`$${usage.openrouter.totalUsage.toFixed(2)} / $${usage.openrouter.totalCredits.toFixed(2)}`}
+								/>
+							)}
+						</div>
+					</div>
+				)}
 
 				<div className="max-h-[50vh] overflow-y-auto">
 					{snapshot && (
@@ -256,6 +308,30 @@ export function ResourceConsumption() {
 				</div>
 			</PopoverContent>
 		</Popover>
+	);
+}
+
+function UsageRow({
+	label,
+	value,
+	hint,
+}: {
+	label: string;
+	value: string;
+	hint?: string | null;
+}) {
+	return (
+		<div className="flex items-center justify-between">
+			<span className="text-xs text-muted-foreground min-w-0 truncate">
+				{label}
+			</span>
+			<div className="flex items-center gap-2 shrink-0">
+				{hint && (
+					<span className="text-[10px] text-muted-foreground/70">{hint}</span>
+				)}
+				<span className="text-xs font-medium tabular-nums">{value}</span>
+			</div>
+		</div>
 	);
 }
 

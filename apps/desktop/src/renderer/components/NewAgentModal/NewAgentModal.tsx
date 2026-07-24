@@ -7,6 +7,14 @@ import {
 } from "@superset/shared/agent-binaries";
 import { AGENT_LABELS } from "@superset/shared/agent-command";
 import { Button } from "@superset/ui/button";
+import { Checkbox } from "@superset/ui/checkbox";
+import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@superset/ui/command";
 import {
 	Dialog,
 	DialogContent,
@@ -39,7 +47,7 @@ import {
 	usePreSelectedProjectId,
 } from "renderer/stores/new-workspace-modal";
 
-type RepoMode = "init" | "clone" | "local";
+type RepoMode = "init" | "clone" | "local" | "github";
 
 /**
  * Runtimes offered in the New Agent picker. The full AGENT_RUNTIMES enum (and
@@ -64,6 +72,10 @@ export function NewAgentModal() {
 
 	const [name, setName] = useState("");
 	const [role, setRole] = useState("");
+	// Create-from-existing (issue #41): "" = start fresh; otherwise the source
+	// agent whose persona (AGENT.md re-stamped, USER.md, skills) is copied.
+	const [sourceAgentId, setSourceAgentId] = useState("");
+	const [includeLessons, setIncludeLessons] = useState(false);
 	const [runtime, setRuntime] =
 		useState<(typeof AGENT_RUNTIMES)[number]>("claude");
 	const [repoMode, setRepoMode] = useState<RepoMode>("init");
@@ -77,11 +89,34 @@ export function NewAgentModal() {
 	const createAgent = electronTrpc.workspaces.createAgent.useMutation();
 	const setWorkspaceIcon = electronTrpc.workspaces.setWorkspaceIcon.useMutation();
 
+	// Existing agents (grouped by team) — the source pool for
+	// "create from existing agent". Reuses the sidebar's grouped query.
+	const groupedAgents = electronTrpc.workspaces.getAllGrouped.useQuery(
+		undefined,
+		{ enabled: isOpen },
+	);
+	const sourceAgentOptions = (groupedAgents.data ?? []).flatMap((group) =>
+		group.workspaces
+			.filter((w) => w.runtime != null)
+			.map((w) => ({
+				id: w.id,
+				label: `${group.project.name} · ${w.name}`,
+			})),
+	);
+
+	// "Pick from GitHub" repo mode (issue #48) — lists the user's repos via the
+	// host `gh` CLI so cloneUrl can be filled without leaving the app.
+	const githubRepos = electronTrpc.github.listRepos.useQuery(undefined, {
+		enabled: isOpen && repoMode === "github",
+	});
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset each open
 	useEffect(() => {
 		if (!isOpen) return;
 		setName("");
 		setRole("");
+		setSourceAgentId("");
+		setIncludeLessons(false);
 		setRuntime("claude");
 		setRepoMode("init");
 		setCloneUrl("");
@@ -115,7 +150,8 @@ export function NewAgentModal() {
 		!gitMissing &&
 		(repoMode === "init" ||
 			(repoMode === "clone" && cloneUrl.trim().length > 0) ||
-			(repoMode === "local" && localPath.trim().length > 0)) &&
+			(repoMode === "local" && localPath.trim().length > 0) ||
+			(repoMode === "github" && cloneUrl.trim().length > 0)) &&
 		!createAgent.isPending;
 
 	const handleCreate = async () => {
@@ -124,14 +160,19 @@ export function NewAgentModal() {
 			const result = await createAgent.mutateAsync({
 				projectId: categoryId,
 				name: name.trim(),
-				role: role.trim() || undefined,
+				// The copied persona's AGENT.md supersedes a typed role, so the
+				// Role field is hidden (and dropped) when a source is picked.
+				role: sourceAgentId ? undefined : role.trim() || undefined,
 				runtime,
 				repo:
-					repoMode === "clone"
+					repoMode === "clone" || repoMode === "github"
 						? { type: "clone", url: cloneUrl.trim() }
 						: repoMode === "local"
 							? { type: "clone", url: localPath.trim() }
 							: { type: "init" },
+				duplicateFrom: sourceAgentId
+					? { agentId: sourceAgentId, includeLessons }
+					: undefined,
 			});
 			if (photoDataUrl) {
 				await setWorkspaceIcon.mutateAsync({
@@ -204,17 +245,58 @@ export function NewAgentModal() {
 					/>
 
 					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="agent-role">Role</Label>
-						<Textarea
-							id="agent-role"
-							value={role}
-							onChange={(e) => setRole(e.target.value)}
-							rows={2}
-							maxLength={280}
-							placeholder="What is this agent? (optional — you can also just talk with the agent and shape it together)"
-							className="resize-none"
-						/>
+						<Label>Persona</Label>
+						<Select
+							value={sourceAgentId || "blank"}
+							onValueChange={(v) => {
+								setSourceAgentId(v === "blank" ? "" : v);
+								if (v === "blank") setIncludeLessons(false);
+							}}
+						>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="blank">Start fresh</SelectItem>
+								{sourceAgentOptions.map((a) => (
+									<SelectItem key={a.id} value={a.id}>
+										Copy from {a.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						{sourceAgentId && (
+							<>
+								<p className="text-xs text-muted-foreground">
+									Copies the source agent's persona (AGENT.md, USER.md,
+									skills) re-stamped for the new agent. Project memory stays
+									fresh; the source agent is untouched.
+								</p>
+								<label className="flex items-center gap-2 text-sm font-normal">
+									<Checkbox
+										checked={includeLessons}
+										onCheckedChange={(v) => setIncludeLessons(v === true)}
+									/>
+									Also carry over Lessons (tool quirks that hold anywhere)
+								</label>
+							</>
+						)}
 					</div>
+
+					{!sourceAgentId && (
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="agent-role">Role</Label>
+							<Textarea
+								id="agent-role"
+								value={role}
+								onChange={(e) => setRole(e.target.value)}
+								rows={2}
+								maxLength={280}
+								placeholder="What is this agent? (optional — you can also just talk with the agent and shape it together)"
+								className="resize-none"
+							/>
+						</div>
+					)}
 
 					<div className="flex flex-col gap-1.5">
 						<Label>Runtime</Label>
@@ -287,6 +369,12 @@ export function NewAgentModal() {
 									Clone from local path
 								</Label>
 							</div>
+							<div className="flex items-center gap-2">
+								<RadioGroupItem value="github" id="repo-github" />
+								<Label htmlFor="repo-github" className="font-normal">
+									Pick from GitHub
+								</Label>
+							</div>
 						</RadioGroup>
 						{repoMode === "clone" && (
 							<Input
@@ -301,6 +389,76 @@ export function NewAgentModal() {
 								onChange={(e) => setLocalPath(e.target.value)}
 								placeholder="/Users/you/code/my-repo"
 							/>
+						)}
+						{repoMode === "github" && (
+							<div className="flex flex-col gap-1.5">
+								<Command className="rounded-md border">
+									<CommandInput placeholder="Search your repos…" />
+									<CommandList>
+										{githubRepos.isLoading ? (
+											<CommandEmpty>Loading repos…</CommandEmpty>
+										) : githubRepos.data?.authenticated === false ? (
+											<CommandEmpty>Not signed in to gh</CommandEmpty>
+										) : githubRepos.data && githubRepos.data.repos.length === 0 ? (
+											<CommandEmpty>No repos found</CommandEmpty>
+										) : (
+											githubRepos.data?.repos.map((repo) => (
+												<CommandItem
+													key={repo.url}
+													value={repo.nameWithOwner}
+													onSelect={() => setCloneUrl(repo.url)}
+													className={
+														cloneUrl === repo.url
+															? "bg-accent text-accent-foreground"
+															: undefined
+													}
+												>
+													<div className="flex min-w-0 flex-col">
+														<span className="truncate">
+															{repo.nameWithOwner}
+														</span>
+														{repo.description && (
+															<span className="truncate text-xs text-muted-foreground">
+																{repo.description}
+															</span>
+														)}
+													</div>
+												</CommandItem>
+											))
+										)}
+									</CommandList>
+								</Command>
+								{githubRepos.data?.authenticated === false && (
+									<div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs">
+										<p className="font-medium text-foreground">
+											GitHub CLI sign-in required
+										</p>
+										<p className="text-muted-foreground">
+											Listing your repos needs the <code>gh</code> CLI,
+											authenticated. Run:
+										</p>
+										<code className="select-all rounded bg-background/60 px-2 py-1 font-mono">
+											gh auth login
+										</code>
+										<button
+											type="button"
+											onClick={() => githubRepos.refetch()}
+											disabled={githubRepos.isFetching}
+											className="inline-flex w-fit items-center gap-1 text-foreground underline underline-offset-2 hover:no-underline disabled:opacity-50"
+										>
+											<HiArrowPath
+												className={`h-3 w-3 ${githubRepos.isFetching ? "animate-spin" : ""}`}
+											/>
+											{githubRepos.isFetching ? "Checking…" : "Re-check"}
+										</button>
+									</div>
+								)}
+								{cloneUrl && (
+									<p className="truncate text-xs text-muted-foreground">
+										Selected: {cloneUrl}
+									</p>
+								)}
+							</div>
 						)}
 					</div>
 				</div>

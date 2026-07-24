@@ -4,10 +4,16 @@ import { useRef } from "react";
 import { AgentReviewToast } from "renderer/components/AgentReviewToast/AgentReviewToast";
 import { useCreateOrAttachWithTheme } from "renderer/hooks/useCreateOrAttachWithTheme";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { isWebShell } from "renderer/lib/is-web-shell";
 import { launchCommandInPane } from "renderer/lib/terminal/launch-command";
+import {
+	getWebNotifier,
+	type WebNotificationKind,
+} from "renderer/lib/web-notifications";
 import { navigateToWorkspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
 import { NOTIFICATION_EVENTS } from "shared/constants";
 import { debugLog } from "shared/debug";
+import type { NotificationIds } from "shared/notification-types";
 import { useTabsStore } from "./store";
 import { resolveNotificationTarget } from "./utils/resolve-notification-target";
 
@@ -41,6 +47,22 @@ export function useAgentHookListener() {
 	const utils = electronTrpc.useUtils();
 	const createOrAttach = useCreateOrAttachWithTheme();
 	const writeToTerminal = electronTrpc.terminal.write.useMutation();
+
+	// Web-only: mirror the desktop OS-notification path with the Web
+	// Notification API. Only the browser shell (apps/webui) needs this — the
+	// Electron desktop already surfaces these events natively.
+	const webShell = isWebShell();
+
+	// Respect the shared `notificationSoundsMuted` setting (also drives the
+	// desktop ringtone). Read only on web; the value feeds the notification's
+	// `silent` flag. Kept in a ref so the subscription's onData closure sees
+	// the latest value without re-subscribing.
+	const { data: soundsMuted } =
+		electronTrpc.settings.getNotificationSoundsMuted.useQuery(undefined, {
+			enabled: webShell,
+		});
+	const mutedRef = useRef(false);
+	mutedRef.current = soundsMuted ?? false;
 
 	// Ref avoids stale closure; parsed from URL since hook runs in _authenticated/layout
 	const currentWorkspaceIdRef = useRef<string | null>(null);
@@ -89,8 +111,7 @@ export function useAgentHookListener() {
 				// Reuse an existing tab with this title so e.g. nightly maintenance
 				// always writes to the same tab.
 				const existingTab = state.tabs.find(
-					(t) =>
-						t.workspaceId === wsId && (t.userTitle ?? t.name) === label,
+					(t) => t.workspaceId === wsId && (t.userTitle ?? t.name) === label,
 				);
 				let tabId: string;
 				let paneId: string;
@@ -180,10 +201,60 @@ export function useAgentHookListener() {
 
 				const { eventType } = lifecycleEvent;
 
+				// Web shell: fire an OS-level Web Notification for attention
+				// events (agent finished / needs input), mirroring the desktop
+				// NotificationManager. The notifier suppresses itself when the
+				// page is visible+focused and requests permission lazily on the
+				// first such event.
+				const fireWebNotification = (kind: WebNotificationKind) => {
+					if (!webShell) return;
+					const ids: NotificationIds = {
+						paneId,
+						tabId: target.tabId,
+						workspaceId,
+					};
+					const pane = state.panes[paneId];
+					const titleTab = pane
+						? state.tabs.find((t) => t.id === pane.tabId)
+						: undefined;
+					const itemTitle =
+						titleTab?.userTitle?.trim() ||
+						titleTab?.name ||
+						pane?.name ||
+						"Terminal";
+					const agent = utils.workspaces.getAllGrouped
+						.getData()
+						?.flatMap((g) => g.workspaces)
+						.find((w) => w.id === workspaceId);
+					void getWebNotifier().notify({
+						kind,
+						workspaceName: agent?.name || "Workspace",
+						itemTitle,
+						ids,
+						muted: mutedRef.current,
+						onActivate: (activateIds) => {
+							const activateTabId = activateIds.tabId;
+							if (activateTabId) {
+								state.setActiveTab(workspaceId, activateTabId);
+								if (activateIds.paneId) {
+									state.setFocusedPane(activateTabId, activateIds.paneId);
+								}
+							}
+							navigateToWorkspace(workspaceId, navigate, {
+								search: {
+									tabId: activateTabId,
+									paneId: activateIds.paneId,
+								},
+							});
+						},
+					});
+				};
+
 				if (eventType === "Start") {
 					state.setPaneStatus(paneId, "working");
 				} else if (eventType === "PermissionRequest") {
 					state.setPaneStatus(paneId, "permission");
+					fireWebNotification("permission");
 				} else if (eventType === "Stop") {
 					const activeTabId = state.activeTabIds[workspaceId];
 					const pane = state.panes[paneId];
@@ -200,6 +271,10 @@ export function useAgentHookListener() {
 					});
 
 					state.setPaneStatus(paneId, isInActiveTab ? "idle" : "review");
+
+					// Web shell: OS notification that the agent finished. Suppressed
+					// by the notifier when the page is visible+focused.
+					fireWebNotification("complete");
 
 					// Agent-fleet review toast: an agent finished while you were
 					// looking elsewhere. Scoped to agent workspaces (those with a

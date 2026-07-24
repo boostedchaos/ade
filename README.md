@@ -1,135 +1,157 @@
 # ADE
 
-> **Windows port notice:** This repository is a fork of
-> [`per-simmons/damon-ade`](https://github.com/per-simmons/damon-ade), modified
-> to add Windows 11 x64 support. The port is maintained by `boostedchaos` and is
-> not an official upstream release.
+A self-hosted, OS-agnostic agentic development environment. ADE is a local-first, single-user system where you build a roster of persistent coding agents and work alongside them in the terminal. Every agent is a durable identity — its own name, photo, git repository, runtime CLI, and long-lived memory — not a throwaway chat session. You come back to the same agent tomorrow and it remembers what it learned today.
 
-An agentic development environment for macOS and Windows 11. ADE is a local-first, single-user desktop app where you build a roster of persistent coding agents and work alongside them in the terminal. Every agent is a durable identity — its own name, photo, git repository, runtime CLI, and long-lived memory — not a throwaway chat session. You come back to the same agent tomorrow and it remembers what it learned today.
+> **Fork notice:** This repository (`boostedchaos/ade-windows-port`) is a fork of
+> [`per-simmons/damon-ade`](https://github.com/per-simmons/damon-ade) that adds
+> Windows 11 x64 support, and additionally incorporates the client–server
+> restructuring and quality-of-life improvements from
+> [`CameronCrow/papyrus-ade`](https://github.com/CameronCrow/papyrus-ade)
+> (renamed back to ADE). It is not an official upstream release.
 
-The interface is a two-level left rail. **Teams** group your work (a name and a square photo); inside each team live **Agents** (a name and a circular photo). Selecting an agent opens its workspace: a strip of **session** tabs, each a real terminal running the agent's coding CLI inside that agent's own git worktree. A **model bar** under the tabs lets you spawn a session on a different model without leaving the agent. On the right, the **Agent Files** panel shows the agent's memory growing as it works.
+Beyond the desktop app, the codebase is restructured around one move: **one server, any screen**. A headless `ade-server` daemon runs where your repos and coding CLIs live; every device — Windows laptop, Mac, iPhone — is just a browser pointed at it.
 
-ADE runs whatever CLI coding agents you already have installed. Claude Code, OpenAI's Codex, and OpenCode are first-class runtimes. The model bar can also launch sessions on Kimi K2.7, MiniMax M3, and GLM 5.2 through a single OpenRouter key you enter once, in-app. Nothing here is a hosted service — your code, your keys, and your agents' memory all stay on your machine.
+```
+┌───────────────── your devices ─────────────────┐
+│  Windows laptop      Mac           iPhone      │
+│    Chrome/Edge      Safari       Safari (PWA)  │
+└─────────┬──────────────┬──────────────┬────────┘
+          │   HTTPS + WSS · tRPC · token auth
+          ▼
+  ade-server  (Node daemon on one machine)
+  ├─ agents, teams, sessions, files, settings
+  ├─ agent core: repos/worktrees, persistent memory
+  └─ terminal-host daemon (node-pty)
+       └─ claude / codex / opencode CLIs
+```
 
-## Screenshots
+**Status:** The Electron desktop app (macOS + Windows 11 x64) is the primary, shipping form factor. The client–server components (`ade-server` + web UI) are functional and under active development; their design history lives in [`planning/`](planning/PLAN_MAIN.md).
 
-<!-- TODO: rail with teams + agents -->
-<!-- TODO: agent workspace with session tabs + model bar -->
-<!-- TODO: Agent Files panel showing memory -->
-
-## Install
-
-### Download (recommended)
+## Download (desktop app)
 
 Windows 11 x64 users can download the installer or portable zip from the
 [`boostedchaos/ade-windows-port` releases](https://github.com/boostedchaos/ade-windows-port/releases).
 The Windows build is currently unsigned, so Windows SmartScreen will require
-**More info -> Run anyway**. Git, Node.js LTS, and at least one supported agent
-CLI are required.
+**More info → Run anyway**. macOS users can build from source (below) or use the
+signed DMG from the [upstream release](https://github.com/per-simmons/damon-ade/releases/latest)
+(which lacks this fork's additions).
 
-macOS users should use the signed DMG from the
-[upstream release](https://github.com/per-simmons/damon-ade/releases/latest).
+## The product
 
-### Build from source
+The interface is a two-level left rail. **Teams** group your work; inside each team live **Agents**. Selecting an agent opens its workspace: a strip of **session** tabs, each a real terminal running the agent's coding CLI inside that agent's own git worktree. A **model bar** under the tabs lets you spawn a session on a different model without leaving the agent. On the right, the **Agent Files** panel shows the agent's memory growing as it works.
 
-Requires [Bun](https://bun.sh) 1.0+. The Windows build pipeline lives only in this
-fork — building upstream will not produce a Windows app.
+ADE runs whatever CLI coding agents you already have installed. Claude Code, OpenAI's Codex, and OpenCode are first-class runtimes. The model bar can also launch sessions on Kimi K2.7, MiniMax M3, and GLM 5.2 through a single OpenRouter key you enter once, in-app. Nothing here is a hosted service — your code, your keys, and your agents' memory all stay on your machine.
+
+Terminal sessions live in a detached daemon, not in the app: they survive app restarts, browser disconnects, and (by design) a phone that locks its screen mid-session.
+
+## Prerequisites
+
+ADE orchestrates coding CLIs; it does not bundle them. On the machine that runs the server you need:
+
+- **Git** — required. Each agent gets its own repository or worktree.
+- **At least one agent CLI.** Claude Code is recommended, because it also powers the Kimi, MiniMax, and GLM sessions from the model bar:
+
+  ```bash
+  npm i -g @anthropic-ai/claude-code
+  npm i -g @openai/codex        # optional: OpenAI Codex sessions
+  npm i -g opencode-ai          # optional: OpenCode runtime
+  ```
+
+- **Node.js LTS** — runs `ade-server` (and installs the CLIs above).
+- **An OpenRouter API key** — only for the open-model sessions; entered once, in-app, encrypted at rest.
+
+## Build from source
+
+Requires [Bun](https://bun.sh) 1.0+ (as package manager/tooling).
 
 ```bash
-git clone https://github.com/boostedchaos/ade-windows-port.git
+git clone https://github.com/CameronCrow/ade-windows-port.git
 cd ade-windows-port
 bun install
+
+# Desktop app (current form factor, macOS):
 cd apps/desktop
 bun run compile:app        # builds main + preload + renderer into dist/
 bunx electron .            # launches the built app
 ```
 
-`compile:app` runs the full production build; `bunx electron .` then launches it directly. (Avoid `electron-vite preview` for a full run — it can exhaust memory.)
+The headless server (`apps/server`) and browser UI (`apps/webui`) land in Phases 1–2 of the [plan](planning/PLAN_MAIN.md).
 
-To produce the Windows installer and portable zip:
+## No-admin install (Windows)
 
-```bash
-bun run build:win          # from apps/desktop; outputs NSIS .exe + .zip into release/
-```
+Everything ADE itself needs installs per-user — no elevation. The catch is picking the right installer at each step; the machine-wide variants all want admin.
 
-`build:win` uses prebuilt native binaries (no Visual Studio toolchain needed). If
-`bun install` tries to rebuild natives on a machine without one, set
-`ADE_SKIP_INSTALL_APP_DEPS=1` for the install step — this is what Windows CI does.
+1. **Git** — use the per-user installer (or portable zip), then:
 
-## Prerequisites
+   ```powershell
+   git config --global core.longpaths true
+   ```
 
-ADE orchestrates coding CLIs; it does not bundle them. You need:
+   The longpaths flag is required: agent checkouts live under `~/.ade/agents/<uuid>/worktree/`, and that prefix pushes deep repos past Windows' 260-char path limit. This git setting is enough — the system-wide registry toggle is not needed.
 
-- **Git** — required. Each agent gets its own repository or worktree. On Windows, install [Git for Windows](https://git-scm.com/download/win) (`winget install Git.Git`). On macOS, install Apple's command line tools with `xcode-select --install`.
-- **At least one agent CLI.** Claude Code is recommended, because it also powers the Kimi, MiniMax, and GLM sessions from the model bar (they run Claude Code pointed at OpenRouter):
+2. **Node.js 24 (LTS)** — install via [fnm](https://github.com/Schniz/fnm) or extract the plain Node zip into a user directory. Avoid the Node MSI and nvm-windows: both need admin (nvm-windows symlinks into `C:\Program Files`).
 
-  ```bash
-  npm i -g @anthropic-ai/claude-code
-  ```
+3. **Bun** — the official installer is user-level (`~/.bun`):
 
-  Optionally add the other runtimes:
+   ```powershell
+   irm bun.sh/install.ps1 | iex
+   ```
 
-  ```bash
-  npm i -g @openai/codex        # OpenAI GPT-5.5 sessions
-  npm i -g opencode-ai          # OpenCode runtime
-  ```
+4. **Dependencies** — from the repo root:
 
-- **Node.js** — only as the vehicle for installing the CLIs above via `npm`. ADE itself does not need a separate Node runtime.
-- **An OpenRouter API key** — only if you want the open-model sessions (Kimi K2.7, MiniMax M3, GLM 5.2). You enter it in-app the first time you launch one of those models; see the walkthrough. The Claude and OpenAI runtimes authenticate through their own CLIs (your Anthropic and ChatGPT/OpenAI logins) and need no key here.
+   ```powershell
+   bun install --ignore-scripts
+   ```
 
-## Walkthrough
+   Then install better-sqlite3's prebuilt binding manually (bun's `--ignore-scripts` skips it):
 
-**1. First launch.** ADE opens on a start screen with a single action: **Create a team**. There are no agents until a team exists, so start here.
+   ```powershell
+   cd (ls node_modules\.bun\better-sqlite3@*\node_modules\better-sqlite3).FullName
+   npx prebuild-install
+   ```
 
-**2. Create a team.** Give it a name (for example, `Newsletter`). Optionally click the square photo thumbnail to pick an image — teams are the top level of the rail, so a photo makes them easy to find at a glance. The team appears in the left rail.
+   node-pty ships its prebuilds inside the package — no step needed. Everything lands in the project; nothing touches system paths. (This holds because Windows prebuilds exist for both native modules on Node 24 — if one were ever missing, compiling from source would need VS Build Tools, which does want admin.)
 
-**3. Create an agent.** Hover the team's header in the rail and click the **+** button ("New agent"). In the New Agent dialog:
+5. **Build and run** — the server and daemon must run under Node, not bun:
 
-- **Name** — required (for example, `Scout`).
-- **Role** — optional. A sentence describing what this agent is for. Leave it blank if you'd rather shape the agent by talking to it — ADE seeds the agent's identity file either way, and it refines itself over time.
-- **Runtime** — the coding CLI this agent runs: **Claude**, **Codex**, or **OpenCode**. Claude is the default.
-- **Repository** — start a new empty repo, clone from a URL, or point at an existing local path.
+   ```powershell
+   cd apps\webui;  bun run build          # ~2 min
+   cd ..\server;   bun run scripts\build.ts
+   node dist\server.cjs serve --port 7777
+   ```
 
-   ADE creates the agent, gives it its own git worktree, and scaffolds its memory in the background.
+   Open `http://localhost:7777` and enter the token from `~\.ade\token`. Binding to loopback on an unprivileged port means no firewall prompt and no elevation; ConPTY is built into Windows 10 1809+. The `claude` CLI installs per-user too (`npm i -g` under your user-writable Node).
 
-**4. Add profile photos.** Right-click any agent in the rail and choose **Change Photo** (or **Remove Photo**) to give it a circular avatar. Team photos are set the same way from the team's header menu. Photos are optional but make a busy rail readable.
-
-**5. Sessions start automatically.** Opening an agent that has no sessions yet automatically spawns one — a terminal tab running the agent's runtime CLI in its worktree. That's the agent, live. Open more session tabs whenever you want parallel threads of work.
-
-**6. Switch models from the model bar.** Below the session tabs is a quiet row of model logos: **Claude** (the default), **OpenAI** (Codex on GPT-5.5), **Kimi K2.7**, **MiniMax M3**, and **GLM 5.2**. Click any logo to open a new session in the current agent's worktree running that model — the same code, a different model, no context switch.
-
-**7. Connect OpenRouter (first open model only).** The first time you click Kimi, MiniMax, or GLM, ADE asks for your OpenRouter API key (get one at [openrouter.ai/keys](https://openrouter.ai/keys)). Paste it and choose **Save & Launch**. The key is encrypted with your operating system's credential store (DPAPI on Windows, Keychain on macOS), stored locally, and injected only into the agent's terminal — it never leaves your machine and is never shown back to the app's UI. You enter it once; later open-model sessions launch straight away.
-
-**8. Watch the memory grow.** The **Agent Files** panel on the right lists the agent's memory surface, grouped into **Memory**, **Skills**, and **Worktree**. It starts nearly empty and fills in as the agent learns — its identity, your profile, its notes, and any skills it writes for itself. Click a file to open it in a viewer tab.
+**What still needs admin (both outside ADE):** installing Tailscale for remote access (network driver), and approving the Windows Firewall prompt if you bind the server to a LAN address instead of loopback. Localhost-only ADE runs fully unelevated.
 
 ## How memory works
 
 Every ADE agent keeps a persistent, self-curated memory, adapted from the [Hermes agent](https://github.com/NousResearch/hermes-agent). The design is deliberately simple: plain markdown files the agent reads at the start of every session and writes back to as it learns. The files live outside the git worktree, so they survive branch and worktree churn and are never committed to your code.
 
-Each agent's memory is a small set of files:
-
-- **AGENT.md** — a short identity and operating brief (who the agent is, its role, its standing preferences).
+- **AGENT.md** — a short identity and operating brief.
 - **USER.md** — a profile of you: name, preferences, communication style, hard rules.
-- **MEMORY.md** — the agent's own notes: project conventions, tool quirks, lessons learned, plus an index into any longer topic files.
+- **MEMORY.md** — the agent's own notes: conventions, tool quirks, lessons learned, plus an index into longer topic files.
 - **Skills** — reusable, multi-step procedures the agent writes for itself, each a `SKILL.md` whose body loads only when relevant.
 
-A write-back protocol travels with the memory, telling the agent when to save (a stated preference, a correction, a durable fact), when to skip (trivia, one-off state, anything easily re-discovered), and to consolidate rather than endlessly append. A session-end reflection loop prompts the agent to review the conversation and update its memory and skills before it finishes, so the next session starts smarter. On Claude Code this reflection is enforced by a native stop hook; on the other runtimes it runs by convention at session boundaries.
+A write-back protocol travels with the memory (when to save, when to skip, consolidate over append), and a session-end reflection loop prompts the agent to update its memory before finishing. The same canonical files feed every runtime through thin, auto-generated bridge files, so you can switch an agent's runtime without losing its memory. See [docs/memory.md](docs/memory.md) for the full design.
 
-The same canonical files feed every runtime through thin, auto-generated bridge files — a `CLAUDE.md`, an OpenCode config, or a regenerated Codex `AGENTS.md` — so you can switch an agent's runtime without losing its memory. See [docs/memory.md](docs/memory.md) for the full design.
+## Remote access
 
-## Where your data lives
+The blessed path is [Tailscale](https://tailscale.com): `tailscale serve` in front of the server port gives TLS and tailnet-only access while the server stays bound to localhost. A LAN + Caddy alternative is documented in the plan. Never expose the server to the raw internet.
 
-ADE is local-first; everything stays on your machine in one place: `~/.ade` — on
-Windows, `C:\Users\<you>\.ade`. That directory holds your agents (worktrees,
-memory, skills under `agents/`), the settings database (`local.db`, including the
-encrypted OpenRouter key), and ADE's CLI shims (`bin/`). ADE also points Electron's
-app-data path there. Back up `~/.ade` to keep your agents' memory; deleting it
-resets ADE completely. (Development builds use `~/.ade-<workspace>` instead.)
+### Current deployment (cameronspc)
 
-## Contributing
+The live server runs on `cameronspc` and is reachable tailnet-wide at:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md).
+**<https://cameronspc.tailfcc279.ts.net:8445>**
+
+- Set up with `tailscale serve --bg --https=8445 http://127.0.0.1:7777` (`:443` was already taken by another service; `--bg` persists across reboots). Disable with `tailscale serve --https=8445 off`.
+- Auth token lives at `~\.ade\token` on cameronspc.
+- The server itself is a detached process — after a reboot, restart it from the repo: `cd apps\server; node dist\server.cjs serve --port 7777`.
+- On iPhone: connect Tailscale, open the URL in Safari, paste the token, then Share → Add to Home Screen for the PWA.
 
 ## License
 
-ADE is a modified derivative of [Superset](https://github.com/superset-sh/superset) (Copyright Superset, Inc.), distributed under the **Elastic License 2.0** — see [LICENSE.md](LICENSE.md). Third-party dependency notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The agent memory architecture is adapted from [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) (MIT).
+ADE is a modified derivative of ADE, which is itself a modified derivative of [Superset](https://github.com/superset-sh/superset) (Copyright Superset, Inc.). It is distributed under the **Elastic License 2.0** — see [LICENSE.md](LICENSE.md), with the modification chain documented in [NOTICE](NOTICE). Third-party dependency notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The agent memory architecture is adapted from [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) (MIT).
+
+Under ELv2 you may use, modify, and self-host ADE freely (including distributing it for others to self-host). You may **not** offer ADE to third parties as a hosted or managed service.

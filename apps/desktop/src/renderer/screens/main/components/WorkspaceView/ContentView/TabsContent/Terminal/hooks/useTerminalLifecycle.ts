@@ -20,6 +20,7 @@ import {
 	setupResizeHandlers,
 	type TerminalRendererRef,
 } from "../helpers";
+import { consumeStickyCtrl } from "../key-bar-state";
 import { isPaneDestroyed } from "../pane-guards";
 import { coldRestoreState, pendingDetaches } from "../state";
 import type {
@@ -339,13 +340,15 @@ export function useTerminalLifecycle({
 
 		restartTerminalRef.current = restartTerminalSession;
 
-		const handleTerminalInput = (data: string) => {
+		const handleTerminalInput = (rawData: string) => {
 			if (isRestoredModeRef.current || connectionErrorRef.current) return;
 			if (isExitedRef.current) {
 				if (!isFocusedRef.current || wasKilledByUserRef.current) return;
 				restartTerminalSession();
 				return;
 			}
+			// Mobile key bar sticky Ctrl (tap Ctrl, tap C ⇒ ^C). No-op unless armed.
+			const data = consumeStickyCtrl(rawData);
 			writeRef.current({ paneId, data });
 		};
 

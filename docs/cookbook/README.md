@@ -1,3 +1,8 @@
+---
+type: reference
+tags: [repo/ade-windows-port]
+up: "[[ade-windows-port]]"
+---
 # WIP - Parallel Coding Agent Cookbook
 
 How to run 100 agents in parallel without losing your mind, a practical guide.
@@ -106,3 +111,9 @@ There's a high switching cost between
 
 #### 4. Enforce type-safety, lint, and coding standards
  -->
+
+## Related
+
+- [[Repos/ade-windows-port/docs/mastracode-fork-workflow|mastracode-fork-workflow]]
+- [[Repos/ade-windows-port/docs/memory|memory]]
+- [[ade-windows-port]]
