@@ -1,3 +1,9 @@
+// Electron host hooks for @ade/server-core/local-db MUST register before any
+// import that transitively evaluates the DB module (which opens + migrates at
+// module scope) — e.g. agent-memory-backfill → server-core → ./local-db.
+// A bare side-effect import stays put across Biome import sorting.
+import "./lib/local-db/register-host-hooks";
+
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { settings } from "@superset/local-db";
