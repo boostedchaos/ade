@@ -81,3 +81,12 @@ selects the data dir `~/.ade-<name>` (unset → plain `~/.ade`).
 Also: macOS packaging fails with codesign "resource fork/detritus" errors when
 building under a File-Provider-synced tree (~/Documents). Clone to a
 non-synced path (e.g. /private/tmp) to package.
+
+## Tag namespace map (post-papyrus, 2026-07-24)
+
+- `windows-v*` — desktop Windows releases, cut by hand per this doc.
+- `v*` — RESERVED: fires papyrus's `release.yml`, which builds and publishes
+  the headless `ade-server` bundle. Do not use plain `v*` for desktop.
+- `desktop-v*` — still the upstream trap described above; never use.
+- Future mac desktop releases should use a `mac-v*` family for the same
+  reason (`v*` is taken by the server pipeline).
