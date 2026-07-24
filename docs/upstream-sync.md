@@ -83,3 +83,27 @@ These are deliberate port decisions upstream may "helpfully" revert — keep the
 - Platform-aware agent command builders (`$env:` presets, PS here-strings).
 - The un-`unref()`'d timer in `terminal/reconcile.ts` (fixes the bun-Windows test hang).
 - Auto-update stays gated off until Windows signing lands.
+
+## 2026-07-24 — second upstream: CameronCrow/papyrus-ade
+
+This fork now incorporates `CameronCrow/papyrus-ade` main (97 commits merged
+2026-07-24, both CI workflows green @ `a611894`): server-core extraction,
+headless `ade-server` + browser webui, team dashboard, agent mail, terminal
+perf. Papyrus branding was reverted tree-wide (ADE name, `.ade` dirs,
+`@ade/*` package scope, `ADE_*` env vars) and their personal `.claude`
+workforce hooks + graphify artifacts were dropped — see NOTICE for the
+attribution chain.
+
+Consequences for future syncs:
+
+- **Watch BOTH upstreams.** `per-simmons/damon-ade` is dormant (main unmoved
+  since the 0.1.0 squash); `CameronCrow/papyrus-ade` is active. Future pulls
+  from papyrus will conflict with the un-rebrand — expect mechanical
+  `papyrus→ade` renames on every file taken (`@papyrus/`→`@ade/`,
+  `.papyrus`→`.ade`, `PAPYRUS_*`→`ADE_*`, `Papyrus`→`ADE`) plus their
+  `.claude/` hooks and `graphify-out/` re-appearing (delete on sight and
+  VERIFY the deletion landed — a suppressed-stderr `git rm` failed silently
+  once).
+- Their `planning/` docs were kept as-is (their design history; not swept).
+- Their `webui` typecheck is red by their own bar — `ade-ci.yml` builds webui
+  but does not typecheck it; don't "fix" CI by adding that gate blindly.
