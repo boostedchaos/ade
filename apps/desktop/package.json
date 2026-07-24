@@ -7,7 +7,7 @@
 	"resources": "src/resources",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/boostedchaos/ade-windows-port.git"
+		"url": "https://github.com/boostedchaos/ade.git"
 	},
 	"author": {
 		"name": "Papyrus"

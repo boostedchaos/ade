@@ -2,7 +2,7 @@
 
 Guidelines for agents and developers working in this repository.
 
-This is `boostedchaos/ade-windows-port`, a fork of
+This is `boostedchaos/ade`, a fork of
 [`per-simmons/damon-ade`](https://github.com/per-simmons/damon-ade) (itself a
 Superset derivative) that adds Windows 11 x64 support and incorporates the
 client–server restructuring from `CameronCrow/papyrus-ade`. The active product

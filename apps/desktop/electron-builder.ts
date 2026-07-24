@@ -20,7 +20,7 @@ const productName = pkg.productName;
 // Release repo for artifacts and update manifests. Must stay in sync with
 // RELEASE_REPO_* in src/main/lib/auto-updater.ts.
 const RELEASE_REPO_OWNER = "boostedchaos";
-const RELEASE_REPO_NAME = "ade-windows-port";
+const RELEASE_REPO_NAME = "ade";
 
 // Notarize only when Apple credentials are present in the environment
 // (CI signing job, or a local signed build). electron-builder reads the

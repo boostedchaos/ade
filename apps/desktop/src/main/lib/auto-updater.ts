@@ -17,7 +17,7 @@ const UPDATE_CHECK_INTERVAL_MS = 1000 * 60 * 60 * 4; // 4 hours
 //
 // Keep these values in sync with electron-builder.ts.
 const RELEASE_REPO_OWNER = "boostedchaos";
-const RELEASE_REPO_NAME = "ade-windows-port";
+const RELEASE_REPO_NAME = "ade";
 
 // Auto-update is intentionally DISABLED for the v1 public launch. To turn it
 // on later: set RELEASE_REPO_NAME above and flip this single flag to `true`.

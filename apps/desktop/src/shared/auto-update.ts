@@ -10,4 +10,4 @@ export type AutoUpdateStatus =
 	(typeof AUTO_UPDATE_STATUS)[keyof typeof AUTO_UPDATE_STATUS];
 
 export const RELEASES_URL =
-	"https://github.com/boostedchaos/ade-windows-port/releases";
+	"https://github.com/boostedchaos/ade/releases";

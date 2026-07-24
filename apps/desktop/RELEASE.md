@@ -62,11 +62,11 @@ Auto-update is DISABLED (see `src/main/lib/auto-updater.ts`,
 Windows builds ship unsigned, so the updater stays off there). Once enabled, the
 app checks for updates at launch and every few hours using this repo's Releases:
 
-- **macOS manifest**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/latest-mac.yml`
-- **Linux manifest**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/latest-linux.yml`
-- **Windows manifest**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/latest.yml`
-- **macOS installer**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/ADE-arm64.dmg`
-- **Linux installer**: `https://github.com/boostedchaos/ade-windows-port/releases/latest/download/ADE-x64.AppImage`
+- **macOS manifest**: `https://github.com/boostedchaos/ade/releases/latest/download/latest-mac.yml`
+- **Linux manifest**: `https://github.com/boostedchaos/ade/releases/latest/download/latest-linux.yml`
+- **Windows manifest**: `https://github.com/boostedchaos/ade/releases/latest/download/latest.yml`
+- **macOS installer**: `https://github.com/boostedchaos/ade/releases/latest/download/ADE-arm64.dmg`
+- **Linux installer**: `https://github.com/boostedchaos/ade/releases/latest/download/ADE-x64.AppImage`
 
 The workflow creates stable-named copies (without version) so these URLs always point to the latest build.
 

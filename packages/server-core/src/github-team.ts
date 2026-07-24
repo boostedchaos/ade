@@ -75,7 +75,7 @@ export function __resetGitHubAuthCacheForTests(): void {
 // HTTP transport: in-process fetch with a single 401 token-refresh retry.
 // ---------------------------------------------------------------------------
 
-const GITHUB_USER_AGENT = "ade-windows-port-dashboard";
+const GITHUB_USER_AGENT = "ade-dashboard";
 
 function rawGitHubFetch(url: string, token: string): Promise<Response> {
 	return fetch(url, {

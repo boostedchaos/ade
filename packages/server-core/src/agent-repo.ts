@@ -29,7 +29,7 @@ export interface AgentRepoResult {
  * On stock Windows the default MAX_PATH of 260 chars, plus the deep
  * `~/.ade/agents/<uuid>/worktree/` prefix (~60 chars), overflows for repos
  * with long nested paths and the checkout fails with "Filename too long"
- * (ade-windows-port itself trips this). `git clone --config core.longpaths=true`
+ * (this repo itself trips this). `git clone --config core.longpaths=true`
  * applies the config in the newly-created repo BEFORE the working tree is
  * checked out, and persists it in the repo's LOCAL config so every later
  * operation (checkout, `worktree add`, reset) inherits it — without depending

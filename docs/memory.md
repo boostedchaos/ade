@@ -1,7 +1,7 @@
 ---
 type: reference
-tags: [repo/ade-windows-port]
-up: "[[ade-windows-port]]"
+tags: [repo/ade]
+up: "[[ade]]"
 ---
 # Agent memory
 
@@ -81,6 +81,6 @@ The **Agent Files** panel in an agent's workspace lists this whole surface — t
 
 ## Related
 
-- [[Repos/ade-windows-port/docs/mastracode-fork-workflow|mastracode-fork-workflow]]
-- [[Repos/ade-windows-port/docs/cookbook/README|Cookbook]]
-- [[ade-windows-port]]
+- [[Repos/ade/docs/mastracode-fork-workflow|mastracode-fork-workflow]]
+- [[Repos/ade/docs/cookbook/README|Cookbook]]
+- [[ade]]

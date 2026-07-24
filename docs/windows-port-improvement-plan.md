@@ -88,7 +88,7 @@ distribution. The release plumbing below was fixed anyway:
      (`release/*.yml` minus `builder-debug.yml`) with `if-no-files-found: error`
      (was `latest.yml` + `warn`). Packaged `app-update.yml` validation deferred with
      the updater.
-   - RELEASE.md fixed: URLs → `boostedchaos/ade-windows-port`, Windows manifest added,
+   - RELEASE.md fixed: URLs → `boostedchaos/ade`, Windows manifest added,
      signing/auto-update decision recorded, "run create-release.sh from Git Bash" noted
      (covers Phase E.3).
 

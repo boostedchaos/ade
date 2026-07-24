@@ -1,7 +1,7 @@
 # Upstream Harvest Ledger
 
 Standing triage ledger for selectively harvesting commits from the original
-`superset-sh/superset` project into this fork (`boostedchaos/ade-windows-port`).
+`superset-sh/superset` project into this fork (`boostedchaos/ade`).
 
 ## Purpose
 

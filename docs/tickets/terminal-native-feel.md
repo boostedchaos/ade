@@ -1,7 +1,7 @@
 ---
 type: reference
-tags: [repo/ade-windows-port]
-up: "[[ade-windows-port]]"
+tags: [repo/ade]
+up: "[[ade]]"
 ---
 # Terminal: Native Feel (latency + minimal chrome)
 

@@ -1,7 +1,7 @@
 ---
 type: reference
-tags: [repo/ade-windows-port]
-up: "[[ade-windows-port]]"
+tags: [repo/ade]
+up: "[[ade]]"
 ---
 # WIP - Parallel Coding Agent Cookbook
 
@@ -114,6 +114,6 @@ There's a high switching cost between
 
 ## Related
 
-- [[Repos/ade-windows-port/docs/mastracode-fork-workflow|mastracode-fork-workflow]]
-- [[Repos/ade-windows-port/docs/memory|memory]]
-- [[ade-windows-port]]
+- [[Repos/ade/docs/mastracode-fork-workflow|mastracode-fork-workflow]]
+- [[Repos/ade/docs/memory|memory]]
+- [[ade]]

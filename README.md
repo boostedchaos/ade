@@ -2,7 +2,7 @@
 
 A self-hosted, OS-agnostic agentic development environment. ADE is a local-first, single-user system where you build a roster of persistent coding agents and work alongside them in the terminal. Every agent is a durable identity — its own name, photo, git repository, runtime CLI, and long-lived memory — not a throwaway chat session. You come back to the same agent tomorrow and it remembers what it learned today.
 
-> **Fork notice:** This repository (`boostedchaos/ade-windows-port`) is a fork of
+> **Fork notice:** This repository (`boostedchaos/ade`) is a fork of
 > [`per-simmons/damon-ade`](https://github.com/per-simmons/damon-ade) that adds
 > Windows 11 x64 support, and additionally incorporates the client–server
 > restructuring and quality-of-life improvements from
@@ -30,11 +30,18 @@ Beyond the desktop app, the codebase is restructured around one move: **one serv
 ## Download (desktop app)
 
 Windows 11 x64 users can download the installer or portable zip from the
-[`boostedchaos/ade-windows-port` releases](https://github.com/boostedchaos/ade-windows-port/releases).
+[`boostedchaos/ade` releases](https://github.com/boostedchaos/ade/releases).
 The Windows build is currently unsigned, so Windows SmartScreen will require
-**More info → Run anyway**. macOS users can build from source (below) or use the
-signed DMG from the [upstream release](https://github.com/per-simmons/damon-ade/releases/latest)
-(which lacks this fork's additions).
+**More info → Run anyway**.
+
+macOS (Apple Silicon) users can download the DMG from the `mac-v*` releases on
+the same [releases page](https://github.com/boostedchaos/ade/releases). The mac
+build is ad-hoc signed (not notarized): on first launch, right-click → Open, or
+allow it under System Settings → Privacy & Security. Verify downloads against
+the release's `SHA256SUMS.txt`.
+
+Release channels in this repo: `windows-v*` (Windows desktop), `mac-v*` (macOS
+desktop), `v*` (headless ade-server).
 
 ## The product
 
@@ -65,8 +72,8 @@ ADE orchestrates coding CLIs; it does not bundle them. On the machine that runs 
 Requires [Bun](https://bun.sh) 1.0+ (as package manager/tooling).
 
 ```bash
-git clone https://github.com/CameronCrow/ade-windows-port.git
-cd ade-windows-port
+git clone https://github.com/boostedchaos/ade.git
+cd ade
 bun install
 
 # Desktop app (current form factor, macOS):

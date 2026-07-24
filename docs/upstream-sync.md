@@ -1,12 +1,12 @@
 # Upstream sync strategy
 
-This repo (`boostedchaos/ade-windows-port`) is a Windows port fork. This documents
+This repo (`boostedchaos/ade`) is a Windows port fork. This documents
 how to pull changes down from upstream without wrecking the port.
 
 ## Remotes
 
 ```
-origin     https://github.com/boostedchaos/ade-windows-port.git   (this fork)
+origin     https://github.com/boostedchaos/ade.git   (this fork)
 upstream   https://github.com/per-simmons/damon-ade.git           (fork parent)
 ```
 
