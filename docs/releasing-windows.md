@@ -63,3 +63,21 @@ auto-update is intentionally disabled (see `src/main/lib/auto-updater.ts`).
 - `RELEASE_REPO_OWNER`/`RELEASE_REPO_NAME` are duplicated in `electron-builder.ts`
   and `src/main/lib/auto-updater.ts`. They must stay in sync, and must point at
   this fork — never upstream, or users would update off someone else's feed.
+
+## Build-time workspace bake (applies to ALL platforms)
+
+`electron.vite.config.ts` bakes `SUPERSET_WORKSPACE_NAME` into the bundle at
+BUILD time (`defineEnv` → literal; runtime env is ignored). The baked value
+selects the data dir `~/.ade-<name>` (unset → plain `~/.ade`).
+
+- Public release artifacts: build with the variable UNSET.
+- Kyle's personal install uses `~/.ade-default`, so his replacement builds
+  must be produced with `SUPERSET_WORKSPACE_NAME=default`.
+- NEVER build from a shell inside an ADE agent session without scrubbing the
+  env: agent terminals carry `SUPERSET_WORKSPACE_NAME=<workspace>` and the
+  value silently bakes in (caught 2026-07-23 when a build bound itself to
+  `.ade-ethel`).
+
+Also: macOS packaging fails with codesign "resource fork/detritus" errors when
+building under a File-Provider-synced tree (~/Documents). Clone to a
+non-synced path (e.g. /private/tmp) to package.
