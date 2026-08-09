@@ -2,9 +2,31 @@
 
 Date: 2026-08-09 · Branch: `mission-control` (left pushed to
 `boostedchaos/ade`, NOT merged) · Base: `302d183` · Final code SHA:
-`abe5909` (later commits are docs + this report) · Orchestration: Fable
-architect + parallel Opus 5 executors; ship-gating reviewer at xhigh;
-Codex CLI cross-check.
+`4dac3e2` · Orchestration: Fable architect + parallel Opus 5 executors;
+ship-gating reviewer at xhigh; Codex CLI cross-check.
+
+## Post-report live smoke on Kyle's machine (addendum)
+
+Kyle ran the packaged 0.4.0 live; the smoke found and we fixed two real
+bugs (`4dac3e2`): (1) the CLI reused `SUPERSET_WORKSPACE_NAME` — which the
+app fills with the workspace DISPLAY name in agent terminals — as its
+data-dir suffix, so every agent terminal in a named workspace got "app is
+not running"; fixed with a dedicated validated `ADE_DATA_DIR_NAME`
+(injected into PTYs, defaulted by the generated launcher). (2)
+`buildSafeEnv` was stripping ALL `ADE_*` vars between env build and PTY
+spawn — the Phase-2 env aliases had never reached a real agent shell;
+fixed with explicit allowlist entries. Verified live: browser split beside
+the pane with focus restored (event stream showed the restore),
+`read-screen` returned the live Claude TUI as `live-screen`,
+`pane-created`/`agent-state-changed` events streamed, browser
+info/screenshot worked, tables rendered, and Kyle visually confirmed the
+attention ring + Dock badge from `set-status needsInput`. Artifacts were
+rebuilt at `4dac3e2`: DMG sha256 `c1ae94c0…7b616d`, zip `7448e64e…162054`
+(SHA256SUMS.txt updated). Still open on the manual checklist: one toast
+per real permission ask, a real `claude-teams` teammate spawn, and
+`echo $ADE_DATA_DIR_NAME` printing `.ade-default` in a fresh agent pane
+(never verifiable headlessly). Noted twice, cause unknown: occasional
+>25s SIGTERM quit in the smoke harness.
 
 ## What shipped
 
