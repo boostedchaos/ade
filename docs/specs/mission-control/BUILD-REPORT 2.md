@@ -1,7 +1,7 @@
 # Mission Control — build report
 
 Date: 2026-08-09 · Branch: `mission-control` (left pushed to
-`boostedchaos/ade`; MERGED to main 2026-08-09, fast-forward to `2692376`) · Base: `302d183` · Final code SHA:
+`boostedchaos/ade`, NOT merged) · Base: `302d183` · Final code SHA:
 `4dac3e2` · Orchestration: Fable architect + parallel Opus 5 executors;
 ship-gating reviewer at xhigh; Codex CLI cross-check.
 

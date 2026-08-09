@@ -7,7 +7,7 @@ Orchestrator: Fable (architect only); execution via parallel Opus 5 subagents.
 
 **BUILD COMPLETE 2026-08-09.** All six ship gates resolved — see
 `BUILD-REPORT.md` (gate results, divergences, Kyle's 5-minute manual
-checklist). Branch pushed to boosted/mission-control, NOT merged. Artifacts
+checklist). MERGED to main 2026-08-09 (`2692376`, fast-forward). Artifacts
 
 + SHA256SUMS.txt at the project root. Everything below is the historical
 build trail.
