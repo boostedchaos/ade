@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SUPERSET_DIR_NAME } from "../constants";
 import {
 	ADE_BIN_MARKER,
 	ADE_BIN_MARKER_CMD,
@@ -133,6 +134,24 @@ describe("buildAdeBinScript — the ruled contract", () => {
 		expect(script).not.toContain("ELECTRON_RUN_AS_NODE");
 		expect(script).not.toMatch(/\bnode\b/);
 	});
+
+	it("defaults ADE_DATA_DIR_NAME to the generating app's dir and exports it", () => {
+		const withDir = buildAdeBinScript({ ...ENTRY, dataDirName: ".ade-probe" });
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: asserting sh syntax
+		expect(withDir).toContain(': "${ADE_DATA_DIR_NAME:=.ade-probe}"');
+		expect(withDir).toContain("export ADE_DATA_DIR_NAME");
+	});
+
+	it("uses := so an already-set ADE_DATA_DIR_NAME is never overwritten", () => {
+		// An agent terminal already carries the app's value; the launcher must
+		// only fill the gap for a plain external shell.
+		expect(script).toContain(":=");
+		expect(script).not.toMatch(/^ADE_DATA_DIR_NAME=/m);
+	});
+
+	it("bakes SUPERSET_DIR_NAME when no dir name is supplied", () => {
+		expect(script).toContain(`:=${SUPERSET_DIR_NAME}}"`);
+	});
 });
 
 describe("buildAdeBinCmd", () => {
@@ -165,5 +184,16 @@ describe("buildAdeBinCmd", () => {
 		expect(buildAdeBinCmd({ entryPath: "C:\\a%b\\index.ts" })).toContain(
 			"a%%b",
 		);
+	});
+
+	it("sets ADE_DATA_DIR_NAME only when the caller left it empty", () => {
+		const withDir = buildAdeBinCmd({ ...ENTRY, dataDirName: ".ade-probe" });
+		expect(withDir).toContain(
+			'if "%ADE_DATA_DIR_NAME%"=="" (set "ADE_DATA_DIR_NAME=.ade-probe")',
+		);
+	});
+
+	it("bakes SUPERSET_DIR_NAME when no dir name is supplied", () => {
+		expect(cmd).toContain(`set "ADE_DATA_DIR_NAME=${SUPERSET_DIR_NAME}"`);
 	});
 });

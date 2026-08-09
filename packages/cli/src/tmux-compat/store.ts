@@ -104,10 +104,11 @@ export function emptyStore(): StoreData {
 }
 
 export function defaultStoreDir(env: NodeJS.ProcessEnv = process.env): string {
-	return (
-		env.ADE_TMUX_COMPAT_DIR ??
-		join(homedir(), getAdeDirName(env.SUPERSET_WORKSPACE_NAME))
-	);
+	// The whole env goes to the resolver, not just the workspace name: the
+	// data dir is chosen by $ADE_DATA_DIR_NAME first (see getAdeDirName), and
+	// passing a bare name would skip that and put the store in a different
+	// directory from the control socket.
+	return env.ADE_TMUX_COMPAT_DIR ?? join(homedir(), getAdeDirName(env));
 }
 
 const sleep = (ms: number): Promise<void> =>

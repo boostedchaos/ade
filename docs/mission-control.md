@@ -24,6 +24,14 @@ writable). Safe to re-run. Windows is not supported yet.
 If a command prints `ADE app is not running (no control socket)`, open the ADE
 app and try again. `ade` never launches the app for you.
 
+If it says that while the app is plainly open, `ade` is looking in the wrong
+data directory. It uses `$ADE_DATA_DIR_NAME`, which the app sets for you; set it
+by hand to the directory the app actually uses and the command will connect:
+
+```sh
+ADE_DATA_DIR_NAME=.ade-default ade list-workspaces
+```
+
 ## The five things you will actually do
 
 ### 1. See which agent needs you

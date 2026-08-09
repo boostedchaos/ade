@@ -29,6 +29,33 @@ export const COMPANY = {
 	DISCORD_URL: "https://discord.gg/cZeD9WYcV7",
 } as const;
 
+/**
+ * Name of the env var carrying the app's data-dir name (e.g. ".ade-default")
+ * to child processes.
+ *
+ * It exists because `SUPERSET_WORKSPACE_NAME` cannot serve both jobs: the app
+ * injects it into every agent PTY as the workspace's DISPLAY name, while the
+ * `ade` CLI used to derive the data-dir suffix from it — so inside a workspace
+ * named "Ethel" the CLI looked for `~/.ade-ethel/control.sock` and reported the
+ * app as not running. This variable is the dedicated, unambiguous channel;
+ * the display name keeps its own meaning.
+ *
+ * The value is the literal directory name and becomes a path segment under
+ * the home dir, so consumers MUST validate it against
+ * `ADE_DATA_DIR_NAME_PATTERN` before use.
+ */
+export const ADE_DATA_DIR_NAME_ENV = "ADE_DATA_DIR_NAME";
+
+/**
+ * A dot-prefixed single path segment: no separators, no spaces, no traversal.
+ * Anything else is rejected and the legacy derivation applies instead.
+ *
+ * The second character may not itself be a dot — that is what rejects `..`,
+ * which contains no separator and would otherwise pass a naive
+ * `^\.[A-Za-z0-9._-]+$` while resolving to the home dir's PARENT.
+ */
+export const ADE_DATA_DIR_NAME_PATTERN = /^\.[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
+
 // Theme
 export const THEME_STORAGE_KEY = "ade-theme";
 

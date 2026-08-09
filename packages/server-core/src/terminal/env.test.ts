@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { SUPERSET_DIR_NAME } from "../constants";
 import {
 	buildSafeEnv,
 	buildTerminalEnv,
@@ -764,6 +765,31 @@ describe("env", () => {
 				expect(result.ADE_WORKSPACE_ID).toBe("ws-1");
 				expect(result.ADE_SURFACE_ID).toBe(result.SUPERSET_PANE_ID);
 				expect(result.ADE_WORKSPACE_ID).toBe(result.SUPERSET_WORKSPACE_ID);
+			});
+
+			it("should inject the app's own data-dir name for the ade CLI", () => {
+				// The CLI resolves ~/<this>/control.sock. It must be the dir the
+				// APP owns, not a suffix guessed from the workspace display name.
+				const result = buildTerminalEnv({
+					...baseParams,
+					workspaceName: "Ethel",
+				});
+
+				expect(result.ADE_DATA_DIR_NAME).toBe(SUPERSET_DIR_NAME);
+				expect(result.SUPERSET_WORKSPACE_NAME).toBe("Ethel");
+			});
+
+			it("should keep ADE_* metadata through the terminal-host re-filter", () => {
+				// terminal-host/session.ts runs buildSafeEnv over the prebuilt env
+				// before spawning the PTY; anything not allowlisted is dropped
+				// there and never reaches the agent's shell.
+				const result = buildSafeEnv(buildTerminalEnv(baseParams), {
+					platform: "darwin",
+				});
+
+				expect(result.ADE_SURFACE_ID).toBe("pane-1");
+				expect(result.ADE_WORKSPACE_ID).toBe("ws-1");
+				expect(result.ADE_DATA_DIR_NAME).toBe(SUPERSET_DIR_NAME);
 			});
 
 			it("should handle optional workspace params", () => {

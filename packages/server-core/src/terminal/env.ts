@@ -3,9 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 import type { AgentRuntime } from "@superset/local-db";
+import { ADE_DATA_DIR_NAME_ENV } from "@superset/shared/constants";
 import defaultShell from "default-shell";
 import { getAgentCodexHome } from "../agent-home";
 import { getShellEnv } from "../agent-setup/shell-wrappers";
+import { SUPERSET_DIR_NAME } from "../constants";
 import { env } from "../env.shared";
 
 const MACOS_SYSTEM_CERT_FILE = "/etc/ssl/cert.pem";
@@ -339,6 +341,16 @@ const ALLOWED_ENV_VARS = new Set([
 	// to reach the spawned CLI's environment.
 	"CODEX_HOME",
 
+	// ADE_* metadata that buildTerminalEnv injects for the `ade` CLI and the
+	// Mission Control hooks. Listed by name rather than by an "ADE_" prefix:
+	// the prefix would also pass through ADE_HOME_DIR, which redirects a
+	// child app's whole data dir. Without these three the terminal-host's
+	// buildSafeEnv re-filter silently drops them between buildTerminalEnv and
+	// the PTY, which is where they were going until now.
+	"ADE_SURFACE_ID",
+	"ADE_WORKSPACE_ID",
+	ADE_DATA_DIR_NAME_ENV,
+
 	// Provider API key that buildTerminalEnv injects from the encrypted key store
 	// (see provider-keys.ts). Like CODEX_HOME, it must survive the terminal-host's
 	// buildSafeEnv re-filter to reach the OpenRouter-routed CLI (kimi/minimax/glm).
@@ -538,6 +550,11 @@ export function buildTerminalEnv(params: {
 		// name every existing hook script and wrapper already looks for.
 		ADE_SURFACE_ID: paneId,
 		ADE_WORKSPACE_ID: workspaceId,
+		// The data dir THIS app owns, so the `ade` CLI never has to guess it
+		// from SUPERSET_WORKSPACE_NAME below — that is a display name, and
+		// deriving a suffix from it sent the CLI to ~/.ade-<display>/ and made
+		// it report the running app as not running.
+		[ADE_DATA_DIR_NAME_ENV]: SUPERSET_DIR_NAME,
 		SUPERSET_WORKSPACE_NAME: workspaceName || "",
 		SUPERSET_WORKSPACE_PATH: workspacePath || "",
 		SUPERSET_ROOT_PATH: rootPath || "",

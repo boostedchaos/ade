@@ -8,15 +8,51 @@ import {
 	utimesSync,
 	writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	CompatStore,
+	defaultStoreDir,
 	emptyStore,
 	LockTimeoutError,
 	nextId,
 	STORE_FILENAME,
 } from "./store";
+
+describe("defaultStoreDir", () => {
+	it("honours ADE_DATA_DIR_NAME over the workspace display name", () => {
+		// Must land in the same dir as the control socket, or the shim's
+		// mappings and the app's socket live in different directories.
+		expect(
+			defaultStoreDir({
+				SUPERSET_WORKSPACE_NAME: "Ethel",
+				ADE_DATA_DIR_NAME: ".ade-default",
+			}),
+		).toBe(join(homedir(), ".ade-default"));
+	});
+
+	it("falls back to the workspace derivation, then to .ade", () => {
+		expect(defaultStoreDir({ SUPERSET_WORKSPACE_NAME: "probe" })).toBe(
+			join(homedir(), ".ade-probe"),
+		);
+		expect(defaultStoreDir({})).toBe(join(homedir(), ".ade"));
+	});
+
+	it("rejects an unsafe ADE_DATA_DIR_NAME rather than joining it", () => {
+		expect(defaultStoreDir({ ADE_DATA_DIR_NAME: "../evil" })).toBe(
+			join(homedir(), ".ade"),
+		);
+	});
+
+	it("lets ADE_TMUX_COMPAT_DIR override everything", () => {
+		expect(
+			defaultStoreDir({
+				ADE_TMUX_COMPAT_DIR: "/tmp/explicit",
+				ADE_DATA_DIR_NAME: ".ade-default",
+			}),
+		).toBe("/tmp/explicit");
+	});
+});
 
 let dir: string;
 

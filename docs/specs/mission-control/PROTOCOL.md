@@ -15,6 +15,19 @@ auth shape, same framing — so there is one socket idiom in the codebase.
   its token — a control socket that can drive the whole app gets a fresh
   token per launch, per SPEC Security constraints).
 
+**Which data dir (`~/.ade` vs `~/.ade-<name>`).** `$ADE_DATA_DIR_NAME` wins: it
+carries the literal dir name of the app that spawned the process, the app
+injects it into every agent terminal, and the generated `ade` launcher defaults
+it for external shells. A value that is not a safe single path segment
+(`/^\.[A-Za-z0-9_-][A-Za-z0-9._-]*$/` — no separators, no `..`) is rejected
+rather than sanitised, since the value is joined straight onto the home dir.
+Deriving the dir from `$SUPERSET_WORKSPACE_NAME` is the LEGACY fallback and only
+correct outside an agent terminal: inside one, that variable holds the
+workspace's DISPLAY name, so a workspace called "Ethel" sent the CLI to
+`~/.ade-ethel/control.sock` and made it report the running app as not running.
+The two spellings are not interchangeable and the display name must not be
+reused for path derivation.
+
 ## Handshake
 
 First line from client MUST be:
