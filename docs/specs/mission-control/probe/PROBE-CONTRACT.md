@@ -2,9 +2,9 @@
 
 Captured 2026-08-09 against **Claude Code 2.1.226**.
 
-- Real binary: `/Users/kylewelch/.local/share/claude/versions/2.1.226`
-  (Mach-O arm64, 279,661,952 bytes). `/Users/kylewelch/.local/bin/claude` is a
-  symlink to it; `/Users/kylewelch/.ade-default/bin/claude` is the ADE
+- Real binary: `~/.local/share/claude/versions/2.1.226`
+  (Mach-O arm64, 279,661,952 bytes). `~/.local/bin/claude` is a
+  symlink to it; `~/.ade-default/bin/claude` is the ADE
   `agent-wrapper v2` shim, which resolves the same binary and injects
   `--settings`. The probe invoked the resolved binary directly so the ADE
   settings/hooks could not perturb the result.
@@ -277,7 +277,7 @@ Consequences for `tmux-compat`:
 
 ```
 cd <cwd> && env CLAUDECODE=1 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 SSL_CERT_FILE=/etc/ssl/cert.pem \
-  /Users/kylewelch/.local/share/claude/versions/2.1.226 \
+  ~/.local/share/claude/versions/2.1.226 \
   --agent-id helper@session-e36bd9ce --agent-name helper --team-name session-e36bd9ce \
   --agent-color blue --parent-session-id e36bd9ce-441c-4f75-804a-8fe27958c374 \
   --dangerously-skip-permissions --effort medium --model claude-opus-5

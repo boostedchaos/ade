@@ -13,7 +13,7 @@ env["TERM"] = "xterm-256color"
 env.pop("CLAUDE_CODE_CHILD_SESSION", None)
 env.pop("CLAUDECODE", None)
 
-BIN = "/Users/kylewelch/.local/share/claude/versions/2.1.226"
+BIN = "~/.local/share/claude/versions/2.1.226"
 pid, fd = pty.fork()
 if pid == 0:
     os.chdir(proj)
