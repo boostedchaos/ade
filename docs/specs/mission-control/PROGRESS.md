@@ -5,7 +5,42 @@ Orchestrator: Fable (architect only); execution via parallel Opus 5 subagents.
 
 ## Current phase
 
-**Phase 4 — Teams shim** (dispatching, 2026-08-09).
+**Phase 5b — CLI wiring for parity extras** (dispatched to CLI lane, 2026-08-09).
+
+Phase 4 COMPLETE at `a78777e`: tmux-compat translator (per-verb flag tables,
+tmux exit codes, fail-soft unknown verbs → ~/.ade/tmux-compat.log),
+respawn-pane via `exec /bin/sh -c` into placeholder shell (dead-pane rebuild
+path remaps %N), atomic locked compat store (multi-process proven),
+claude-teams launcher (darwin-gated, store RESET per launch, --teammate-mode
+tmux appended), spawn cap 3→8 w/ ADE_MAX_CONCURRENT_SPAWNS. Golden tests
+replay probe/tmux-calls.log with fixture guards; quoting property-tested
+through real /bin/sh. Phase 6 smoke: real teammate spawn (TTY required!), no
+unknown-verb log entries, teardown/re-respawn/multi-teammate, PACKAGED shim
+must not pin dev bun path (ship compiled CLI entry or ADE_CLI_INVOCATION),
+kill-switch degradation.
+
+Phase 5a COMPLETE at `71005c5`: workspace_todos + agent_sessions.progress
+(one migration 0042, deliberate), todos CRUD (writes RAISE, unlike
+attention), browser scripting via browser-manager registry (webview≠browser
+naming translated; native-setter typing for React inputs; fill stops at
+first failure; screenshots avoid clipboard path; browser-capabilities/info
+added), set-status routes through ingestAgentEvent (single authority;
+--pane REQUIRED server-side), progress strip absolute-positioned 2px
+(null≠0), splitPaneWithType closes the Phase-1 browser-split divergence
+(focus:false pinned by identical-plan test), bundled ade-workspace skill
+installed from ONE source file (repo skills/ → ~/.ade/skills + agent
+scaffold; plain-claude discovery = DOCUMENTED GAP, needs opt-in ~/.claude
+write — decide at ship). Thinnest coverage: todos store has no DB unit test
+(smoke items 8-9 cover). Phase 6 smoke additions: browser split left/right
+from nested pane w/o focus steal; React-form type; screenshot+clipboard
+unchanged; ONE toast for set-status needsInput; progress strip no-PTY-resize
+(stty before/after); migration 0042 on POPULATED db; todos survive restart;
+skill present after boot + in new agent scaffold; skills/ copied into app
+resources at packaging. CROSS-LANE HAZARD: stash-based baseline diffs
+briefly revert other lanes' uncommitted files — serialize the Phase 6
+baseline run (single lane, clean tree).
+
+Earlier:
 
 Phase 3 COMPLETE: notifications table (migration 0041) + attention module in
 main (registry-sourced, kind attention|custom, dedupe, auto-read on leaving
