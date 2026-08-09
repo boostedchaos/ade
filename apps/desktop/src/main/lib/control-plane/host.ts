@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import {
@@ -197,8 +197,10 @@ async function captureBrowserPane(
 		: defaultScreenshotPath(paneId);
 
 	const image = await wc.capturePage();
-	mkdirSync(dirname(target), { recursive: true });
-	writeFileSync(target, image.toPNG());
+	// Async: this runs on the MAIN process, where a synchronous write of a
+	// full-window PNG stalls every window's IPC and paint for its duration.
+	await mkdir(dirname(target), { recursive: true });
+	await writeFile(target, image.toPNG());
 	return { path: target };
 }
 
@@ -435,7 +437,7 @@ export function createControlPlaneHost(params: {
 		browser: {
 			isAttached: (paneId) => browserManager.getWebContents(paneId) !== null,
 			navigate: async (paneId, url) => {
-				browserManager.navigate(paneId, url);
+				await browserManager.navigate(paneId, url);
 			},
 			evaluate: (paneId, code) => browserManager.evaluateJS(paneId, code),
 			screenshot: (paneId, path) => captureBrowserPane(paneId, path),

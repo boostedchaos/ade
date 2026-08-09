@@ -9,7 +9,8 @@
 		"src",
 		"../desktop/src/renderer",
 		"../desktop/src/shared",
-		"../desktop/src/lib"
+		"../desktop/src/lib",
+		"../desktop/src/types"
 	],
 	"exclude": [
 		"../desktop/src/**/*.test.ts",

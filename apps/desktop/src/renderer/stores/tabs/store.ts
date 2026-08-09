@@ -1222,6 +1222,10 @@ export const useTabsStore = create<TabsStore>()(
 							});
 							break;
 						case "devtools":
+							// DevTools resolves its frontend URL from the CDP debug
+							// server for the target pane; against anything but a webview
+							// that lookup never resolves and the pane polls forever.
+							if (sourcePane.type !== "webview") return null;
 							newPane = createDevToolsPane(tabId, sourcePaneId);
 							break;
 					}

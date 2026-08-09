@@ -133,9 +133,29 @@ export function redactSecrets(text: string): string {
 	);
 }
 
-/** Truncate + redact, for logging an unparseable line. */
+/**
+ * Replace every non-printable character with a `\xNN` escape.
+ *
+ * An unparseable line comes from a peer that has not authenticated yet, and
+ * it goes straight to a terminal, so raw C0/C1 bytes in it are ANSI escape
+ * sequences that a reader's terminal will EXECUTE: colours, cursor moves,
+ * `\r` to overwrite the line that names the sender, or a title-set sequence.
+ * Escaping them keeps a hostile line one printable line of text.
+ */
+export function escapeControlChars(text: string): string {
+	// C0 (including ESC, CR, LF and TAB), DEL, and C1.
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point
+	return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
+		const code = ch.charCodeAt(0);
+		return `\\x${code.toString(16).padStart(2, "0")}`;
+	});
+}
+
+/** Truncate + redact + escape, for logging an unparseable line. */
 export function previewLine(line: string, maxLength = 100): string {
 	const clipped =
 		line.length > maxLength ? `${line.slice(0, maxLength)}…` : line;
-	return redactSecrets(clipped);
+	// Escape LAST: redactSecrets matches on the raw text, and escaping first
+	// would turn a delimiter it keys off into a literal backslash sequence.
+	return escapeControlChars(redactSecrets(clipped));
 }

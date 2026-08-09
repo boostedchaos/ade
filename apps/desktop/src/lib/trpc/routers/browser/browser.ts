@@ -23,7 +23,17 @@ export const createBrowserRouter = () => {
 		navigate: publicProcedure
 			.input(z.object({ paneId: z.string(), url: z.string() }))
 			.mutation(({ input }) => {
-				browserManager.navigate(input.paneId, input.url);
+				// The address bar must not block on the page load — the pane renders
+				// its own loading state. `navigate` became async so the control plane
+				// can await a settled page; this caller keeps the old fire-and-forget
+				// behaviour, including failing NOW when the pane has no webContents
+				// rather than reporting success for a navigation that cannot happen.
+				if (!browserManager.getWebContents(input.paneId)) {
+					throw new Error(`No webContents for pane ${input.paneId}`);
+				}
+				void browserManager.navigate(input.paneId, input.url).catch((err) => {
+					console.error(`[browser] navigate failed for ${input.paneId}:`, err);
+				});
 				return { success: true };
 			}),
 

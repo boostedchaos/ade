@@ -226,6 +226,31 @@ function splitCall(
 }
 
 /**
+ * PURE. The source pane's path in the tab's layout, or NOT_FOUND.
+ *
+ * `[]` and "absent" are different answers that `findPaneMosaicPath` returns as
+ * `[]` and `null`, and collapsing them with `?? []` was a real bug: a pane id
+ * that is not in this tab at all became a split at the ROOT of the tab, so the
+ * command reported success while putting the new pane somewhere the caller
+ * never named — and then `swapBranchesAtPath` at `[]` rearranged the whole
+ * tree on top of it. `[]` is only legitimate when the pane IS the root leaf.
+ */
+function requireSourcePath(
+	layout: unknown,
+	sourcePaneId: string,
+	tabId: string,
+): MosaicPath {
+	const path = findPaneMosaicPath(layout, sourcePaneId);
+	if (path === null) {
+		throw new BridgeOpError(
+			"NOT_FOUND",
+			`Pane ${sourcePaneId} is not in tab ${tabId}`,
+		);
+	}
+	return path;
+}
+
+/**
  * Split plan for a NON-terminal pane. Same two-step shape as `splitPlan`
  * below — split at the source pane's own node, then swap that node's branches
  * for left/up — so all four directions behave identically whatever the pane
@@ -239,7 +264,7 @@ function typedSplitPlan(
 	paneType: "webview" | "file-viewer" | "devtools",
 	extra: { url?: string; filePath?: string } = {},
 ): StoreCall[] {
-	const path = findPaneMosaicPath(layout, sourcePaneId) ?? [];
+	const path = requireSourcePath(layout, sourcePaneId, tabId);
 	const calls: StoreCall[] = [
 		{
 			action: "splitPaneWithType",
@@ -271,9 +296,7 @@ function splitPlan(
 	layout: unknown,
 	initialCwd?: string,
 ): StoreCall[] {
-	// A pane missing from the layout falls back to a root split — the store's
-	// own no-path behaviour — rather than failing the command.
-	const path = findPaneMosaicPath(layout, sourcePaneId) ?? [];
+	const path = requireSourcePath(layout, sourcePaneId, tabId);
 	const calls: StoreCall[] = [
 		splitCall(direction, tabId, sourcePaneId, path, initialCwd),
 	];
@@ -291,6 +314,12 @@ function splitPlan(
 export interface BridgePlanContext {
 	/** Mosaic layout of the tab the op targets, when the op targets one. */
 	layout?: unknown;
+	/**
+	 * `type` of the op's source pane, when it has one. Only `devtools` needs
+	 * it — a DevTools pane inspects a webview through the CDP debug server, so
+	 * against any other pane type it has nothing to attach to.
+	 */
+	sourcePaneType?: string;
 }
 
 /**
@@ -362,6 +391,21 @@ export function planBridgeOp(
 				case "devtools": {
 					// DevTools targets the pane it is opened from, so the source pane
 					// is both the split point and the inspected pane.
+					//
+					// It must be a webview. `DevToolsPane` resolves its frontend URL by
+					// asking the CDP debug server for the target pane's page and polls
+					// every second until it gets one — against a terminal that request
+					// can never succeed, so the pane sat on "Connecting to DevTools…"
+					// polling forever while the command reported success.
+					if (
+						context.sourcePaneType !== undefined &&
+						context.sourcePaneType !== "webview"
+					) {
+						throw new BridgeOpError(
+							"BAD_REQUEST",
+							`DevTools can only inspect a browser pane; pane ${op.sourcePaneId} is a ${context.sourcePaneType} pane`,
+						);
+					}
 					return typedSplitPlan(
 						op.direction,
 						op.tabId,
@@ -504,14 +548,21 @@ async function applyPlan(plan: StoreCall[]): Promise<Record<string, unknown>> {
 				const tab = useTabsStore
 					.getState()
 					.tabs.find((t) => t.id === call.tabId);
-				if (tab) {
-					useTabsStore
-						.getState()
-						.updateTabLayout(
-							call.tabId,
-							swapBranchesAtPath(tab.layout, call.path),
-						);
+				// Skipping silently would land a `--direction left|up` pane on the
+				// right/below and still report success, which is the failure mode
+				// the NOT_FOUND check in `requireSourcePath` exists to prevent.
+				if (!tab) {
+					throw new BridgeOpError(
+						"NOT_FOUND",
+						`Tab ${call.tabId} disappeared before the split could be oriented`,
+					);
 				}
+				useTabsStore
+					.getState()
+					.updateTabLayout(
+						call.tabId,
+						swapBranchesAtPath(tab.layout, call.path),
+					);
 				break;
 			}
 			case "splitPaneWithType":
@@ -598,6 +649,86 @@ interface IncomingOp {
 }
 
 /**
+ * PURE. Runtime shape check for an IPC payload.
+ *
+ * The IPC listener signature is `(...args: unknown[])` — the preload cannot
+ * know a channel's payload type — so the narrowing has to happen here, at the
+ * boundary, rather than being asserted by a cast. A cheap shape check is
+ * enough: `planBridgeOp` already rejects any op it does not recognise, so this
+ * only has to establish that there is an opId to reply to and an op to plan.
+ */
+export function asIncomingOp(payload: unknown): IncomingOp | null {
+	if (!payload || typeof payload !== "object") return null;
+	const candidate = payload as { opId?: unknown; op?: unknown };
+	if (typeof candidate.opId !== "string" || candidate.opId === "") return null;
+	if (!candidate.op || typeof candidate.op !== "object") return null;
+	if (typeof (candidate.op as { kind?: unknown }).kind !== "string")
+		return null;
+	return { opId: candidate.opId, op: candidate.op as BridgeOp };
+}
+
+/**
+ * What `--focus false` has to undo, as a descriptor rather than a store call —
+ * the repo's tabs tests test pure functions, and this decision is the whole of
+ * finding 4.
+ */
+export type FocusRestore =
+	| { kind: "pane"; tabId: string; paneId: string }
+	| { kind: "tab"; workspaceId: string; tabId: string; paneId?: string }
+	| null;
+
+export interface FocusRestoreContext {
+	/** Tab the newly created pane landed in; absent when nothing was created. */
+	createdPaneTabId?: string;
+	/** Whether the op's source pane is still in the store. */
+	sourcePaneExists: boolean;
+	priorWorkspaceId?: string;
+	/** Previously active tab, ONLY if it still exists. */
+	priorActiveTabId?: string;
+	/** Pane focused in that tab, ONLY if it still exists. */
+	priorFocusedPaneId?: string;
+}
+
+/**
+ * PURE. `focus: false` → what to put back.
+ *
+ * Splits and new tabs steal focus DIFFERENTLY and this used to handle only the
+ * first: a split moves the focused pane within its tab, but `addTab` ACTIVATES
+ * the tab it creates. So `ade new-tab --focus false` — and tmux's
+ * `new-window -d`, which maps onto it — yanked the user to a brand-new tab
+ * while reporting that it had not taken focus. Restoring the focused pane
+ * alone would not have fixed it; the active TAB is the thing that moved.
+ */
+export function planFocusRestore(
+	op: BridgeOp,
+	context: FocusRestoreContext,
+): FocusRestore {
+	if (!("focus" in op) || op.focus !== false) return null;
+	if (!context.createdPaneTabId) return null;
+
+	if (op.kind === "new-pane" || op.kind === "new-split") {
+		if (!context.sourcePaneExists) return null;
+		return {
+			kind: "pane",
+			tabId: context.createdPaneTabId,
+			paneId: op.sourcePaneId,
+		};
+	}
+
+	if (op.kind === "new-tab") {
+		if (!context.priorWorkspaceId || !context.priorActiveTabId) return null;
+		return {
+			kind: "tab",
+			workspaceId: context.priorWorkspaceId,
+			tabId: context.priorActiveTabId,
+			paneId: context.priorFocusedPaneId,
+		};
+	}
+
+	return null;
+}
+
+/**
  * Run one op and produce the reply payload main is waiting for.
  * Exported for the entry point; not for external callers.
  */
@@ -606,6 +737,18 @@ export async function runBridgeOp(
 ): Promise<Record<string, unknown>> {
 	const before = paneIdsOf(useTabsStore.getState().panes);
 
+	// Captured BEFORE the plan runs: `addTab` activates the tab it creates, so
+	// honouring `--focus false` on `new-tab` (and on tmux's `new-window -d`)
+	// means putting these two back afterwards. Read here because the plan is
+	// what destroys them.
+	const priorWorkspaceId = "workspaceId" in op ? op.workspaceId : undefined;
+	const priorActiveTabId = priorWorkspaceId
+		? useTabsStore.getState().activeTabIds[priorWorkspaceId]
+		: undefined;
+	const priorFocusedPaneId = priorActiveTabId
+		? useTabsStore.getState().focusedPaneIds[priorActiveTabId]
+		: undefined;
+
 	// Split ops need the target tab's mosaic tree to locate the source pane.
 	// Read here rather than inside the planner so the planner stays pure.
 	const targetTabId = "tabId" in op ? op.tabId : undefined;
@@ -613,7 +756,12 @@ export async function runBridgeOp(
 		? useTabsStore.getState().tabs.find((t) => t.id === targetTabId)?.layout
 		: undefined;
 
-	const plan = planBridgeOp(op, { layout });
+	const sourcePaneType =
+		"sourcePaneId" in op
+			? useTabsStore.getState().panes[op.sourcePaneId]?.type
+			: undefined;
+
+	const plan = planBridgeOp(op, { layout, sourcePaneType });
 	const extra = await applyPlan(plan);
 	const state = useTabsStore.getState();
 	const created = newPaneIds(before, paneIdsOf(state.panes));
@@ -629,18 +777,33 @@ export async function runBridgeOp(
 		if (createdPane) result.tabId = createdPane.tabId;
 	}
 
-	// `focus: false` is honoured by restoring the previously focused pane —
-	// every split action focuses its new pane unconditionally, and none of
-	// them takes a "don't focus" option.
-	if ("focus" in op && op.focus === false && created.length > 0) {
-		const createdPane = state.panes[created[created.length - 1]];
-		const sourceId =
-			op.kind === "new-pane" || op.kind === "new-split"
-				? op.sourcePaneId
-				: undefined;
-		if (createdPane && sourceId && state.panes[sourceId]) {
-			useTabsStore.getState().setFocusedPane(createdPane.tabId, sourceId);
-			result.focusRestoredTo = sourceId;
+	const restore = planFocusRestore(op, {
+		createdPaneTabId:
+			created.length > 0
+				? state.panes[created[created.length - 1]]?.tabId
+				: undefined,
+		sourcePaneExists:
+			"sourcePaneId" in op ? Boolean(state.panes[op.sourcePaneId]) : false,
+		priorWorkspaceId,
+		priorActiveTabId:
+			priorActiveTabId && state.tabs.some((t) => t.id === priorActiveTabId)
+				? priorActiveTabId
+				: undefined,
+		priorFocusedPaneId:
+			priorFocusedPaneId && state.panes[priorFocusedPaneId]
+				? priorFocusedPaneId
+				: undefined,
+	});
+
+	if (restore?.kind === "pane") {
+		useTabsStore.getState().setFocusedPane(restore.tabId, restore.paneId);
+		result.focusRestoredTo = restore.paneId;
+	} else if (restore?.kind === "tab") {
+		useTabsStore.getState().setActiveTab(restore.workspaceId, restore.tabId);
+		result.activeTabRestoredTo = restore.tabId;
+		if (restore.paneId) {
+			useTabsStore.getState().setFocusedPane(restore.tabId, restore.paneId);
+			result.focusRestoredTo = restore.paneId;
 		}
 	}
 
@@ -658,18 +821,32 @@ export function registerControlPlaneBridge(): () => void {
 	if (!ipc || registered) return () => {};
 	registered = true;
 
-	const handler = (payload: IncomingOp): void => {
-		if (!payload || typeof payload.opId !== "string") return;
-		runBridgeOp(payload.op)
+	const handler = (...args: unknown[]): void => {
+		const payload = args[0];
+		const incoming = asIncomingOp(payload);
+		if (!incoming) {
+			// Reply if we can still name the op; main parks every send under an
+			// opId and would otherwise wait out its 10 s timeout. With no usable
+			// opId there is nothing to reply to, so drop it.
+			const opId = (payload as { opId?: unknown } | null | undefined)?.opId;
+			if (typeof opId === "string" && opId !== "") {
+				ipc.send(CONTROL_PLANE_RESULT_CHANNEL, {
+					opId,
+					error: { code: "BAD_REQUEST", message: "Malformed bridge op" },
+				});
+			}
+			return;
+		}
+		runBridgeOp(incoming.op)
 			.then((result) => {
-				ipc.send(CONTROL_PLANE_RESULT_CHANNEL, { opId: payload.opId, result });
+				ipc.send(CONTROL_PLANE_RESULT_CHANNEL, { opId: incoming.opId, result });
 			})
 			.catch((error: unknown) => {
 				const code = error instanceof BridgeOpError ? error.code : "INTERNAL";
 				const message =
 					error instanceof Error ? error.message : "Bridge op failed";
 				ipc.send(CONTROL_PLANE_RESULT_CHANNEL, {
-					opId: payload.opId,
+					opId: incoming.opId,
 					error: { code, message },
 				});
 			});

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
+	asIncomingOp,
 	type BridgeOp,
 	BridgeOpError,
 	findPaneMosaicPath,
 	newPaneIds,
 	paneIdsOf,
 	planBridgeOp,
+	planFocusRestore,
 	swapBranchesAtPath,
 } from "./control-plane-bridge";
 
@@ -112,12 +114,63 @@ describe("planBridgeOp — terminal splits", () => {
 		});
 	});
 
-	it("falls back to a root split when the pane is absent from the layout", () => {
+	/**
+	 * REPLACES a test that asserted the opposite ("falls back to a root split
+	 * when the pane is absent from the layout"). That fallback was the bug: a
+	 * `--source-pane` naming a pane in some OTHER tab, or one closed between the
+	 * CLI call and the dispatch, planned a split at the root of the target tab
+	 * and returned success — so the caller was told its pane went beside `ghost`
+	 * while it actually went to the far edge of a tab. Worse for left/up, where
+	 * the follow-up `swapBranchesAtPath` at `[]` then reordered the whole tree.
+	 */
+	it("rejects a source pane that is absent from the layout", () => {
+		expect(() =>
+			planBridgeOp(
+				{ ...baseNewPane, sourcePaneId: "ghost", direction: "right" },
+				{ layout: NESTED_LAYOUT },
+			),
+		).toThrow(BridgeOpError);
+	});
+
+	it("reports NOT_FOUND, not BAD_REQUEST, for an absent source pane", () => {
+		try {
+			planBridgeOp(
+				{ ...baseNewPane, sourcePaneId: "ghost", direction: "left" },
+				{ layout: NESTED_LAYOUT },
+			);
+			throw new Error("expected planBridgeOp to throw");
+		} catch (err) {
+			expect(err).toBeInstanceOf(BridgeOpError);
+			expect((err as BridgeOpError).code).toBe("NOT_FOUND");
+		}
+	});
+
+	/**
+	 * The other half of the same distinction: `[]` is still a legitimate answer
+	 * when the pane IS the root leaf, so the NOT_FOUND check above must not
+	 * simply reject every empty path.
+	 */
+	it("still plans a root-path split when the pane IS the whole layout", () => {
 		const plan = planBridgeOp(
-			{ ...baseNewPane, sourcePaneId: "ghost", direction: "right" },
-			{ layout: NESTED_LAYOUT },
+			{ ...baseNewPane, direction: "right" },
+			{ layout: "p1" },
 		);
 		expect(plan[0]).toMatchObject({ path: [] });
+	});
+
+	it("plans no store calls at all for an absent pane (no partial apply)", () => {
+		// The swap step reads the store; planning must fail BEFORE anything is
+		// queued, so a bad `--source-pane` can never half-apply.
+		let plan: unknown;
+		try {
+			plan = planBridgeOp(
+				{ ...baseNewPane, sourcePaneId: "ghost", direction: "up" },
+				{ layout: NESTED_LAYOUT },
+			);
+		} catch {
+			plan = undefined;
+		}
+		expect(plan).toBeUndefined();
 	});
 
 	it("swaps at the ROOT path for left when the source is the whole layout", () => {
@@ -230,13 +283,18 @@ describe("planBridgeOp — non-terminal pane types", () => {
 	 * test is what keeps it closed.
 	 */
 	it("splits a browser pane in beside the source pane", () => {
-		const plan = planBridgeOp({
-			...baseNewPane,
-			paneType: "browser",
-			direction: "right",
-			url: "https://example.com",
-			focus: false,
-		});
+		const plan = planBridgeOp(
+			{
+				...baseNewPane,
+				paneType: "browser",
+				direction: "right",
+				url: "https://example.com",
+				focus: false,
+			},
+			// `p1` IS the whole layout, so the plan's `path: []` means "the root
+			// leaf" — not the old "pane not found, split at the root anyway".
+			{ layout: "p1", sourcePaneType: "webview" },
+		);
 		expect(plan).toEqual([
 			{
 				action: "splitPaneWithType",
@@ -257,20 +315,27 @@ describe("planBridgeOp — non-terminal pane types", () => {
 	 * confront the fact that there is one implementation of not-stealing-focus.
 	 */
 	it("leaves focus handling out of the plan entirely", () => {
-		const focused = planBridgeOp({
-			...baseNewPane,
-			paneType: "browser",
-			direction: "right",
-			url: "https://example.com",
-			focus: true,
-		});
-		const unfocused = planBridgeOp({
-			...baseNewPane,
-			paneType: "browser",
-			direction: "right",
-			url: "https://example.com",
-			focus: false,
-		});
+		const context = { layout: "p1", sourcePaneType: "webview" };
+		const focused = planBridgeOp(
+			{
+				...baseNewPane,
+				paneType: "browser",
+				direction: "right",
+				url: "https://example.com",
+				focus: true,
+			},
+			context,
+		);
+		const unfocused = planBridgeOp(
+			{
+				...baseNewPane,
+				paneType: "browser",
+				direction: "right",
+				url: "https://example.com",
+				focus: false,
+			},
+			context,
+		);
 		expect(unfocused).toEqual(focused);
 	});
 
@@ -318,12 +383,15 @@ describe("planBridgeOp — non-terminal pane types", () => {
 	});
 
 	it("uses a column split for up/down", () => {
-		const plan = planBridgeOp({
-			...baseNewPane,
-			paneType: "browser",
-			direction: "down",
-			url: "https://example.com",
-		});
+		const plan = planBridgeOp(
+			{
+				...baseNewPane,
+				paneType: "browser",
+				direction: "down",
+				url: "https://example.com",
+			},
+			{ layout: "p1", sourcePaneType: "webview" },
+		);
 		expect(plan[0]).toMatchObject({ orientation: "column" });
 	});
 
@@ -334,12 +402,15 @@ describe("planBridgeOp — non-terminal pane types", () => {
 	});
 
 	it("splits a file-viewer pane in at the source pane", () => {
-		const plan = planBridgeOp({
-			...baseNewPane,
-			paneType: "file-viewer",
-			direction: "right",
-			path: "src/index.ts",
-		});
+		const plan = planBridgeOp(
+			{
+				...baseNewPane,
+				paneType: "file-viewer",
+				direction: "right",
+				path: "src/index.ts",
+			},
+			{ layout: "p1" },
+		);
 		expect(plan).toEqual([
 			{
 				action: "splitPaneWithType",
@@ -364,11 +435,14 @@ describe("planBridgeOp — non-terminal pane types", () => {
 	});
 
 	it("targets the source pane as the devtools inspection target", () => {
-		const plan = planBridgeOp({
-			...baseNewPane,
-			paneType: "devtools",
-			direction: "right",
-		});
+		const plan = planBridgeOp(
+			{
+				...baseNewPane,
+				paneType: "devtools",
+				direction: "right",
+			},
+			{ layout: "p1", sourcePaneType: "webview" },
+		);
 		expect(plan).toEqual([
 			{
 				action: "splitPaneWithType",
@@ -379,6 +453,35 @@ describe("planBridgeOp — non-terminal pane types", () => {
 				orientation: "row",
 			},
 		]);
+	});
+
+	/**
+	 * `DevToolsPane` resolves its frontend URL by asking the CDP debug server
+	 * for the target pane's page, and retries every second until it gets one.
+	 * Against a terminal that never resolves, so before this check the command
+	 * returned success and left a pane reading "Connecting to DevTools…"
+	 * forever — a failure with no error anywhere to find it by.
+	 */
+	it("refuses devtools against a terminal source pane", () => {
+		try {
+			planBridgeOp(
+				{ ...baseNewPane, paneType: "devtools", direction: "right" },
+				{ layout: "p1", sourcePaneType: "terminal" },
+			);
+			throw new Error("expected planBridgeOp to throw");
+		} catch (err) {
+			expect(err).toBeInstanceOf(BridgeOpError);
+			expect((err as BridgeOpError).code).toBe("BAD_REQUEST");
+		}
+	});
+
+	it("refuses devtools against a file-viewer source pane", () => {
+		expect(() =>
+			planBridgeOp(
+				{ ...baseNewPane, paneType: "devtools", direction: "right" },
+				{ layout: "p1", sourcePaneType: "file-viewer" },
+			),
+		).toThrow(BridgeOpError);
 	});
 });
 
@@ -589,5 +692,147 @@ describe("swapBranchesAtPath", () => {
 	it("returns the layout unchanged when the addressed node is a leaf", () => {
 		const layout = { direction: "row", first: "a", second: "b" };
 		expect(swapBranchesAtPath(layout, ["first"])).toBe(layout);
+	});
+});
+
+describe("asIncomingOp", () => {
+	/**
+	 * The IPC listener signature is `(...args: unknown[])` — the preload cannot
+	 * type a channel's payload — so this guard is the only thing standing
+	 * between a main-process message and `planBridgeOp`. It used to be a cast
+	 * plus a `typeof opId === "string"` check, which let a payload with no `op`
+	 * at all through to be destructured.
+	 */
+	it("accepts a well-formed payload", () => {
+		expect(
+			asIncomingOp({ opId: "op-1", op: { kind: "close-pane", paneId: "p2" } }),
+		).toEqual({ opId: "op-1", op: { kind: "close-pane", paneId: "p2" } });
+	});
+
+	it("rejects a payload with no op", () => {
+		expect(asIncomingOp({ opId: "op-1" })).toBeNull();
+	});
+
+	it("rejects an op with no kind", () => {
+		expect(asIncomingOp({ opId: "op-1", op: { paneId: "p2" } })).toBeNull();
+	});
+
+	it("rejects a missing, empty or non-string opId", () => {
+		expect(asIncomingOp({ op: { kind: "close-pane" } })).toBeNull();
+		expect(asIncomingOp({ opId: "", op: { kind: "close-pane" } })).toBeNull();
+		expect(asIncomingOp({ opId: 7, op: { kind: "close-pane" } })).toBeNull();
+	});
+
+	it("rejects non-object payloads", () => {
+		expect(asIncomingOp(undefined)).toBeNull();
+		expect(asIncomingOp(null)).toBeNull();
+		expect(asIncomingOp("op-1")).toBeNull();
+	});
+});
+
+describe("planFocusRestore", () => {
+	const splitContext = {
+		createdPaneTabId: "t1",
+		sourcePaneExists: true,
+		priorWorkspaceId: "ws1",
+		priorActiveTabId: "t1",
+		priorFocusedPaneId: "p1",
+	};
+
+	it("restores the source pane after an unfocused split", () => {
+		expect(
+			planFocusRestore(
+				{ ...baseNewPane, direction: "right", focus: false },
+				splitContext,
+			),
+		).toEqual({ kind: "pane", tabId: "t1", paneId: "p1" });
+	});
+
+	it("does nothing when focus was requested", () => {
+		expect(
+			planFocusRestore(
+				{ ...baseNewPane, direction: "right", focus: true },
+				splitContext,
+			),
+		).toBeNull();
+	});
+
+	it("does nothing when the op created no pane", () => {
+		expect(
+			planFocusRestore(
+				{ ...baseNewPane, direction: "right", focus: false },
+				{ ...splitContext, createdPaneTabId: undefined },
+			),
+		).toBeNull();
+	});
+
+	/**
+	 * CANARY for finding 4. Against the previous implementation this case
+	 * returned nothing at all: the restore path tested `op.kind === "new-pane"
+	 * || op.kind === "new-split"` and `new-tab` fell off the end, so
+	 * `ade new-tab --focus false` (and tmux `new-window -d`, which maps onto
+	 * it) left the caller sitting in the tab it had just created. Asserting a
+	 * "tab" restore is what fails against that code — a focused-pane assertion
+	 * would not, because `addTab` does not move the focused pane of the tab you
+	 * came from.
+	 */
+	it("restores the PRIOR ACTIVE TAB after an unfocused new-tab", () => {
+		expect(
+			planFocusRestore(
+				{ kind: "new-tab", workspaceId: "ws1", focus: false },
+				{
+					createdPaneTabId: "t2",
+					sourcePaneExists: false,
+					priorWorkspaceId: "ws1",
+					priorActiveTabId: "t1",
+					priorFocusedPaneId: "p1",
+				},
+			),
+		).toEqual({ kind: "tab", workspaceId: "ws1", tabId: "t1", paneId: "p1" });
+	});
+
+	it("restores the tab even when its focused pane is gone", () => {
+		expect(
+			planFocusRestore(
+				{ kind: "new-tab", workspaceId: "ws1", focus: false },
+				{
+					createdPaneTabId: "t2",
+					sourcePaneExists: false,
+					priorWorkspaceId: "ws1",
+					priorActiveTabId: "t1",
+					priorFocusedPaneId: undefined,
+				},
+			),
+		).toEqual({
+			kind: "tab",
+			workspaceId: "ws1",
+			tabId: "t1",
+			paneId: undefined,
+		});
+	});
+
+	it("does nothing for an unfocused new-tab with no prior active tab", () => {
+		// First tab in an empty workspace: there is nothing to go back to, and
+		// activating the new one is the only sensible outcome.
+		expect(
+			planFocusRestore(
+				{ kind: "new-tab", workspaceId: "ws1", focus: false },
+				{
+					createdPaneTabId: "t2",
+					sourcePaneExists: false,
+					priorWorkspaceId: "ws1",
+					priorActiveTabId: undefined,
+				},
+			),
+		).toBeNull();
+	});
+
+	it("does nothing when the source pane of a split has gone", () => {
+		expect(
+			planFocusRestore(
+				{ ...baseNewPane, direction: "right", focus: false },
+				{ ...splitContext, sourcePaneExists: false },
+			),
+		).toBeNull();
 	});
 });

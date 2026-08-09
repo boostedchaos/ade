@@ -72,9 +72,24 @@ export const STORE_FILENAME = "tmux-compat-store.json";
 export const LOCK_FILENAME = "tmux-compat-store.lock";
 export const LOG_FILENAME = "tmux-compat.log";
 
-/** A lock older than this is assumed to belong to a process that died. */
+/**
+ * A lock older than this MAY belong to a process that died — but age alone is
+ * not evidence, so `acquire` also verifies the owning pid is gone before
+ * reclaiming it. See `ownerIsDead`.
+ */
 const STALE_LOCK_MS = 30_000;
 const LOCK_TIMEOUT_MS = 15_000;
+
+/** Raised when the lock could not be acquired. The shim maps this to exit 1. */
+export class LockTimeoutError extends Error {
+	constructor(lockPath: string, waitedMs: number) {
+		super(
+			`tmux-compat: could not acquire ${lockPath} after ${waitedMs}ms — ` +
+				"another ade tmux-compat process is holding it.",
+		);
+		this.name = "LockTimeoutError";
+	}
+}
 
 export function emptyStore(): StoreData {
 	return {
@@ -89,24 +104,38 @@ export function emptyStore(): StoreData {
 }
 
 export function defaultStoreDir(env: NodeJS.ProcessEnv = process.env): string {
-	return env.ADE_TMUX_COMPAT_DIR ?? join(homedir(), getAdeDirName(env.SUPERSET_WORKSPACE_NAME));
+	return (
+		env.ADE_TMUX_COMPAT_DIR ??
+		join(homedir(), getAdeDirName(env.SUPERSET_WORKSPACE_NAME))
+	);
 }
 
 const sleep = (ms: number): Promise<void> =>
 	new Promise((resolve) => setTimeout(resolve, ms));
+
+export interface CompatStoreOptions {
+	/** How long `acquire` waits before giving up. Overridden in tests. */
+	lockTimeoutMs?: number;
+	/** How old a lock must be before its owner is even checked. */
+	staleLockMs?: number;
+}
 
 export class CompatStore {
 	readonly dir: string;
 	readonly path: string;
 	readonly lockPath: string;
 	readonly logPath: string;
+	private readonly lockTimeoutMs: number;
+	private readonly staleLockMs: number;
 	private held = false;
 
-	constructor(dir: string) {
+	constructor(dir: string, options: CompatStoreOptions = {}) {
 		this.dir = dir;
 		this.path = join(dir, STORE_FILENAME);
 		this.lockPath = join(dir, LOCK_FILENAME);
 		this.logPath = join(dir, LOG_FILENAME);
+		this.lockTimeoutMs = options.lockTimeoutMs ?? LOCK_TIMEOUT_MS;
+		this.staleLockMs = options.staleLockMs ?? STALE_LOCK_MS;
 	}
 
 	/** Reads the store, healing an absent or corrupt file into an empty one. */
@@ -150,9 +179,45 @@ export class CompatStore {
 		}
 	}
 
+	/**
+	 * True when the lockfile names a pid that is no longer running.
+	 *
+	 * A lock with no readable pid is treated as dead: it was written by a
+	 * process that crashed between `open` and `write`, so nobody is coming back
+	 * for it. A pid we can see but may not signal (EPERM) is ALIVE — that is a
+	 * live process owned by another user, not a corpse.
+	 */
+	private ownerIsDead(): boolean {
+		let pid: number;
+		try {
+			pid = Number.parseInt(readFileSync(this.lockPath, "utf8").trim(), 10);
+		} catch {
+			return true;
+		}
+		if (!Number.isInteger(pid) || pid <= 0) return true;
+		try {
+			process.kill(pid, 0);
+			return false;
+		} catch (err) {
+			return (err as NodeJS.ErrnoException).code !== "EPERM";
+		}
+	}
+
+	/**
+	 * Acquire the advisory lock, or throw.
+	 *
+	 * Two rules, both learned from the bug this replaced: a lock is only ever
+	 * broken when it is BOTH older than the stale threshold AND owned by a dead
+	 * pid, and running out of time is a FAILURE rather than a licence to steal.
+	 * The old code broke any lock once the 15 s acquire deadline passed, which —
+	 * the deadline being shorter than the 30 s stale threshold — meant a slow
+	 * but perfectly live holder got its lock deleted and two writers then ran a
+	 * read-modify-write over the same store.
+	 */
 	private async acquire(): Promise<void> {
 		mkdirSync(this.dir, { recursive: true });
-		const deadline = Date.now() + LOCK_TIMEOUT_MS;
+		const started = Date.now();
+		const deadline = started + this.lockTimeoutMs;
 		for (;;) {
 			try {
 				const fd = openSync(this.lockPath, "wx");
@@ -171,9 +236,12 @@ export class CompatStore {
 				// Vanished between open and stat — the holder released it; retry now.
 				continue;
 			}
-			if (age > STALE_LOCK_MS || Date.now() > deadline) {
+			if (age > this.staleLockMs && this.ownerIsDead()) {
 				rmSync(this.lockPath, { force: true });
 				continue;
+			}
+			if (Date.now() > deadline) {
+				throw new LockTimeoutError(this.lockPath, Date.now() - started);
 			}
 			// Jitter so two waiters do not retry in lockstep forever.
 			await sleep(5 + Math.floor(Math.random() * 15));

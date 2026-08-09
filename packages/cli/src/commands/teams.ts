@@ -83,10 +83,37 @@ export interface LaunchPlan {
 	env: NodeJS.ProcessEnv;
 }
 
+export const LAUNCHES_DIRNAME = "claude-teams";
+
+/**
+ * The mapping store this launch owns.
+ *
+ * Deliberately NOT the default store dir. `seedStore` resets the store and
+ * rebinds `%0` to the launching pane, so two `ade claude-teams` running at
+ * once over one shared file meant the second launch wiped the first's
+ * mappings and repointed its leader pane — every subsequent teammate spawn
+ * from the first session then landed in the wrong ADE pane. A per-launch
+ * directory gives each session its own file.
+ *
+ * An inherited `ADE_TMUX_COMPAT_DIR` wins: that is an explicit choice by
+ * whoever set it, and the tests use it.
+ */
+export function launchStoreDir(
+	adeDir: string,
+	env: NodeJS.ProcessEnv,
+	pid: number,
+	now: number,
+): string {
+	return (
+		env.ADE_TMUX_COMPAT_DIR ?? join(adeDir, LAUNCHES_DIRNAME, `${pid}-${now}`)
+	);
+}
+
 export function buildLaunch(
 	userArgs: string[],
 	env: NodeJS.ProcessEnv,
 	shimDir: string,
+	compatDir: string,
 ): LaunchPlan {
 	const args = [...userArgs];
 	// Passing it twice would make Claude's own arg parser pick one at random;
@@ -102,6 +129,10 @@ export function buildLaunch(
 			TMUX: FAKE_TMUX_ENV,
 			TMUX_PANE: LEADER_PANE_ID,
 			CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1",
+			// The shim is `exec ade tmux-compat "$@"`, so every shim invocation
+			// inherits this and `defaultStoreDir` reads it back. A bare
+			// `ade tmux-compat` outside a launch still gets the default dir.
+			ADE_TMUX_COMPAT_DIR: compatDir,
 		},
 	};
 }
@@ -149,6 +180,8 @@ export interface TeamsOverrides {
 	execPath?: string;
 	scriptPath?: string;
 	isTty?: boolean;
+	/** Overrides the per-launch store dir; the tests pin it to a tmpdir. */
+	compatDir?: string;
 	store?: CompatStore;
 	spawn?: (plan: LaunchPlan) => SpawnSyncReturns<Buffer>;
 }
@@ -174,7 +207,9 @@ export async function runClaudeTeams(
 	);
 	const shimDir = materializeShim(adeDir, invocation);
 
-	await seedStore(overrides.store ?? new CompatStore(adeDir), env);
+	const compatDir =
+		overrides.compatDir ?? launchStoreDir(adeDir, env, process.pid, Date.now());
+	await seedStore(overrides.store ?? new CompatStore(compatDir), env);
 
 	const isTty = overrides.isTty ?? Boolean(process.stdout.isTTY);
 	if (!isTty) {
@@ -184,7 +219,7 @@ export async function runClaudeTeams(
 		);
 	}
 
-	const plan = buildLaunch(argv, env, shimDir);
+	const plan = buildLaunch(argv, env, shimDir, compatDir);
 	const spawn =
 		overrides.spawn ??
 		((p: LaunchPlan) =>

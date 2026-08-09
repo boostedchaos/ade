@@ -32,7 +32,11 @@ const router = createRouter({
 	},
 });
 
-const handleDeepLink = (path: string) => {
+// IPC listeners receive `unknown[]` — the preload cannot know a channel's
+// payload type — so the path is narrowed here rather than asserted.
+const handleDeepLink = (...args: unknown[]) => {
+	const path = args[0];
+	if (typeof path !== "string") return;
 	console.log("[deep-link] Navigating to:", path);
 	router.navigate({ to: path });
 };

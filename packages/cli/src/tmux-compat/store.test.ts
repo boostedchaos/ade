@@ -5,11 +5,18 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CompatStore, emptyStore, nextId, STORE_FILENAME } from "./store";
+import {
+	CompatStore,
+	emptyStore,
+	LockTimeoutError,
+	nextId,
+	STORE_FILENAME,
+} from "./store";
 
 let dir: string;
 
@@ -164,5 +171,95 @@ describe("CompatStore", () => {
 		const ids = procs.map((p) => p.out.trim());
 		expect(new Set(ids).size).toBe(8);
 		expect(Object.keys(new CompatStore(dir).read().panes).length).toBe(8);
+	});
+});
+
+/**
+ * Lock ownership. The bug these replace: `acquire` deleted ANY lock once its
+ * own 15 s deadline passed, and the deadline was shorter than the 30 s stale
+ * threshold — so a live holder in the middle of a slow control-plane round
+ * trip had its lock removed and a second writer proceeded. Both then ran
+ * read-modify-write over one store and the last `write` won, silently
+ * discarding the other's pane mappings.
+ */
+describe("CompatStore lock ownership", () => {
+	const opts = { lockTimeoutMs: 120, staleLockMs: 30_000 };
+	const lockPath = () => join(dir, "tmux-compat-store.lock");
+
+	/** A pid that is certainly not running. */
+	function deadPid(): number {
+		const child = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
+		// `spawnSync` has already reaped it, so this pid is free.
+		return child.pid ?? 999_999;
+	}
+
+	function backdate(ms: number): void {
+		const when = new Date(Date.now() - ms);
+		utimesSync(lockPath(), when, when);
+	}
+
+	it("throws instead of stealing a live lock at the deadline", async () => {
+		// Our own pid: unambiguously alive, and the lock is fresh.
+		writeFileSync(lockPath(), String(process.pid));
+
+		const store = new CompatStore(dir, opts);
+		await expect(store.transact(() => undefined)).rejects.toThrow(
+			LockTimeoutError,
+		);
+
+		// And it did NOT take the lock: the holder's pid is still in the file.
+		expect(readFileSync(lockPath(), "utf8")).toBe(String(process.pid));
+	});
+
+	it("does not break an OLD lock whose owner is still alive", async () => {
+		writeFileSync(lockPath(), String(process.pid));
+		backdate(60_000); // well past the stale threshold
+
+		const store = new CompatStore(dir, opts);
+		await expect(store.transact(() => undefined)).rejects.toThrow(
+			LockTimeoutError,
+		);
+		expect(readFileSync(lockPath(), "utf8")).toBe(String(process.pid));
+	});
+
+	it("reclaims a stale lock whose owner is dead", async () => {
+		writeFileSync(lockPath(), String(deadPid()));
+		backdate(60_000);
+
+		const store = new CompatStore(dir, opts);
+		await store.transact((data) => {
+			data.globalOptions.reclaimed = "yes";
+		});
+		expect(store.read().globalOptions.reclaimed).toBe("yes");
+	});
+
+	it("reclaims a stale lock with an unreadable pid", async () => {
+		// A process that died between creating the lockfile and writing its pid.
+		writeFileSync(lockPath(), "");
+		backdate(60_000);
+
+		const store = new CompatStore(dir, opts);
+		await store.transact((data) => {
+			data.globalOptions.reclaimed = "yes";
+		});
+		expect(store.read().globalOptions.reclaimed).toBe("yes");
+	});
+
+	it("does not reclaim a DEAD owner's lock while it is still fresh", async () => {
+		// Age is the first gate; the pid check only runs once it has passed.
+		writeFileSync(lockPath(), String(deadPid()));
+
+		const store = new CompatStore(dir, opts);
+		await expect(store.transact(() => undefined)).rejects.toThrow(
+			LockTimeoutError,
+		);
+	});
+
+	it("acquires normally when there is no lock", async () => {
+		const store = new CompatStore(dir, opts);
+		await store.transact((data) => {
+			data.globalOptions.ok = "yes";
+		});
+		expect(existsSync(lockPath())).toBe(false);
 	});
 });

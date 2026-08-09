@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { app, clipboard, webContents } from "electron";
+import { awaitNavigation, NAVIGATE_TIMEOUT_MS } from "./await-navigation";
 
 interface ConsoleEntry {
 	level: "log" | "warn" | "error" | "info" | "debug";
@@ -75,10 +76,23 @@ class BrowserManager extends EventEmitter {
 		return wc;
 	}
 
-	navigate(paneId: string, url: string): void {
+	/**
+	 * Start a navigation and return once the page has settled.
+	 *
+	 * The caller used to get a success result before the first byte arrived —
+	 * `loadURL` was fired and ignored — so an `ade browser navigate` followed by
+	 * an `evaluate` ran the script against the PREVIOUS page. See
+	 * `awaitNavigation` for why the wait is bounded.
+	 */
+	async navigate(
+		paneId: string,
+		url: string,
+		timeoutMs: number = NAVIGATE_TIMEOUT_MS,
+	): Promise<void> {
 		const wc = this.getWebContents(paneId);
 		if (!wc) throw new Error(`No webContents for pane ${paneId}`);
-		wc.loadURL(sanitizeUrl(url));
+		const target = sanitizeUrl(url);
+		await awaitNavigation(wc.loadURL(target), target, timeoutMs);
 	}
 
 	async screenshot(paneId: string): Promise<string> {

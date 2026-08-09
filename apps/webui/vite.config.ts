@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
@@ -21,8 +22,17 @@ const desktopSrc = resolve(__dirname, "../desktop/src");
 const defineEnv = (value: string | undefined, fallback = "") =>
 	JSON.stringify(value ?? fallback);
 
+// The web shell reports the same version as the desktop build it is compiled
+// from — the renderer's version check reads it and there is only one renderer.
+const appVersion = (
+	JSON.parse(
+		readFileSync(resolve(__dirname, "../desktop/package.json"), "utf8"),
+	) as { version: string }
+).version;
+
 export default defineConfig({
 	define: {
+		__APP_VERSION__: JSON.stringify(appVersion),
 		"process.env.NODE_ENV": defineEnv(process.env.NODE_ENV, "production"),
 		"process.env.SKIP_ENV_VALIDATION": defineEnv("1"),
 		// The web UI runs in a browser — platform-specific UI (shortcut glyphs
@@ -51,7 +61,10 @@ export default defineConfig({
 			{ find: /^renderer\//, replacement: `${rendererRoot}/` },
 			{ find: /^shared\//, replacement: `${desktopSrc}/shared/` },
 			{ find: /^lib\//, replacement: `${desktopSrc}/lib/` },
-			{ find: /^~\/package.json$/, replacement: resolve(__dirname, "../desktop/package.json") },
+			{
+				find: /^~\/package.json$/,
+				replacement: resolve(__dirname, "../desktop/package.json"),
+			},
 			// xterm packaging bug workaround (same as electron.vite.config.ts)
 			{
 				find: "@xterm/headless",
@@ -68,7 +81,8 @@ export default defineConfig({
 			indexToken: "page",
 			routeToken: "layout",
 			autoCodeSplitting: true,
-			routeFileIgnorePattern: "^(?!(__root|page|layout)\\.tsx$).*\\.(tsx?|jsx?)$",
+			routeFileIgnorePattern:
+				"^(?!(__root|page|layout)\\.tsx$).*\\.(tsx?|jsx?)$",
 		}),
 		tailwindcss(),
 		reactPlugin(),

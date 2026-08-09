@@ -21,10 +21,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EXIT } from "../errors";
-import { CompatStore } from "../tmux-compat/store";
+import { CompatStore, defaultStoreDir } from "../tmux-compat/store";
 import {
 	buildLaunch,
+	LAUNCHES_DIRNAME,
 	LEADER_PANE_ID,
+	launchStoreDir,
 	materializeShim,
 	resolveInvocation,
 	runClaudeTeams,
@@ -61,6 +63,7 @@ function installStubClaude(binDir: string, exitCode = 0): string {
 			`  echo "TEAMS=$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"`,
 			`  echo "SURFACE=$ADE_SURFACE_ID"`,
 			`  echo "TMUX_RESOLVED=$(command -v tmux)"`,
+			`  echo "COMPAT_DIR=$ADE_TMUX_COMPAT_DIR"`,
 			`} > "$ADE_TEST_DUMP"`,
 			`exit ${exitCode}`,
 			"",
@@ -169,7 +172,7 @@ describe("shim materialization", () => {
 
 describe("launch plan", () => {
 	it("prepends the shim dir and sets the teams env", () => {
-		const plan = buildLaunch([], { PATH: "/usr/bin" }, "/shim");
+		const plan = buildLaunch([], { PATH: "/usr/bin" }, "/shim", "/compat");
 		expect(plan.env.PATH).toBe("/shim:/usr/bin");
 		expect(plan.env.TMUX).toBe("/fake-socket,0,0");
 		expect(plan.env.TMUX_PANE).toBe(LEADER_PANE_ID);
@@ -177,7 +180,7 @@ describe("launch plan", () => {
 	});
 
 	it("appends --teammate-mode tmux (the env var alone gives in-process)", () => {
-		expect(buildLaunch(["--continue"], {}, "/shim").args).toEqual([
+		expect(buildLaunch(["--continue"], {}, "/shim", "/compat").args).toEqual([
 			"--continue",
 			"--teammate-mode",
 			"tmux",
@@ -186,13 +189,18 @@ describe("launch plan", () => {
 
 	it("does not override an explicit --teammate-mode", () => {
 		expect(
-			buildLaunch(["--teammate-mode", "iterm2"], {}, "/shim").args,
+			buildLaunch(["--teammate-mode", "iterm2"], {}, "/shim", "/compat").args,
 		).toEqual(["--teammate-mode", "iterm2"]);
 	});
 
 	it("passes model and other claude args through verbatim", () => {
 		expect(
-			buildLaunch(["--model", "claude-opus-5", "-p", "hi"], {}, "/shim").args,
+			buildLaunch(
+				["--model", "claude-opus-5", "-p", "hi"],
+				{},
+				"/shim",
+				"/compat",
+			).args,
 		).toEqual([
 			"--model",
 			"claude-opus-5",
@@ -314,5 +322,104 @@ describe("runClaudeTeams", () => {
 			windowId: "@0",
 		});
 		expect(data.counters).toEqual({ pane: 1, window: 1, session: 1 });
+	});
+});
+
+/**
+ * Concurrent launches. `seedStore` RESETS the store and rebinds `%0` to the
+ * launching pane, so while every launch shared `~/.ade/`, starting a second
+ * `ade claude-teams` wiped the first session's `%N → ADE pane` mappings and
+ * repointed its leader. The first session's next teammate spawn then landed in
+ * the second session's pane, or nowhere.
+ */
+describe("per-launch compat dir", () => {
+	it("gives two launches different store dirs", () => {
+		const a = launchStoreDir("/ade", {}, 111, 1_000);
+		const b = launchStoreDir("/ade", {}, 222, 1_000);
+		expect(a).not.toBe(b);
+		expect(a.startsWith(join("/ade", LAUNCHES_DIRNAME))).toBe(true);
+	});
+
+	it("separates two launches from the same pid at different times", () => {
+		expect(launchStoreDir("/ade", {}, 111, 1_000)).not.toBe(
+			launchStoreDir("/ade", {}, 111, 2_000),
+		);
+	});
+
+	it("honours an explicit ADE_TMUX_COMPAT_DIR", () => {
+		expect(
+			launchStoreDir("/ade", { ADE_TMUX_COMPAT_DIR: "/pinned" }, 1, 2),
+		).toBe("/pinned");
+	});
+
+	it("puts the compat dir in the launch env for the shim to read", () => {
+		const plan = buildLaunch([], {}, "/shim", "/compat/abc");
+		expect(plan.env.ADE_TMUX_COMPAT_DIR).toBe("/compat/abc");
+	});
+
+	it("does NOT change the default dir for a bare tmux-compat call", () => {
+		// The shim is only on PATH inside a launch; typed directly, `ade
+		// tmux-compat` must still find the ordinary store.
+		expect(defaultStoreDir({ HOME: "/home/x" })).not.toContain(
+			LAUNCHES_DIRNAME,
+		);
+	});
+
+	it("the spawned claude actually receives the per-launch dir", async () => {
+		const binDir = join(dir, "bin");
+		mkdirSync(binDir, { recursive: true });
+		installStubClaude(binDir);
+		const compatDir = join(dir, "launch-a");
+
+		await runClaudeTeams([], captureIo(), {
+			platform: "darwin",
+			adeDir: dir,
+			isTty: true,
+			compatDir,
+			env: {
+				PATH: binDir,
+				ADE_TEST_DUMP: dumpPath,
+				ADE_CLI_INVOCATION: "ade",
+			},
+		});
+
+		// Read from the child's own environment, not from the plan we built.
+		expect(dump().COMPAT_DIR).toBe(compatDir);
+		// And the seeded store landed there, not in the shared dir.
+		expect(existsSync(join(compatDir, "tmux-compat-store.json"))).toBe(true);
+		expect(existsSync(join(dir, "tmux-compat-store.json"))).toBe(false);
+	});
+
+	it("two launches seed independent stores", async () => {
+		const binDir = join(dir, "bin");
+		mkdirSync(binDir, { recursive: true });
+		installStubClaude(binDir);
+
+		for (const [name, surface] of [
+			["launch-1", "ade-pane-1"],
+			["launch-2", "ade-pane-2"],
+		] as const) {
+			await runClaudeTeams([], captureIo(), {
+				platform: "darwin",
+				adeDir: dir,
+				isTty: true,
+				compatDir: join(dir, name),
+				env: {
+					PATH: binDir,
+					ADE_SURFACE_ID: surface,
+					ADE_TEST_DUMP: dumpPath,
+					ADE_CLI_INVOCATION: "ade",
+				},
+			});
+		}
+
+		// The decisive assertion: launch 1's leader still points at ITS pane.
+		// Sharing one dir, the second seedStore overwrote this with ade-pane-2.
+		expect(
+			new CompatStore(join(dir, "launch-1")).read().panes["%0"]?.adePaneId,
+		).toBe("ade-pane-1");
+		expect(
+			new CompatStore(join(dir, "launch-2")).read().panes["%0"]?.adePaneId,
+		).toBe("ade-pane-2");
 	});
 });
