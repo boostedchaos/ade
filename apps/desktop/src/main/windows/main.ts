@@ -21,6 +21,7 @@ import {
 } from "../lib/agent-sessions";
 import { appState } from "../lib/app-state";
 import { setAttentionDeps, startAttentionTracking } from "../lib/attention";
+import { overlayBadgeImage } from "../lib/attention/overlay-badge";
 import { browserManager } from "../lib/browser/browser-manager";
 import { createApplicationMenu, registerMenuHotkeyUpdates } from "../lib/menu";
 import { playNotificationSound } from "../lib/notification-sound";
@@ -288,6 +289,20 @@ export async function MainWindow() {
 			// Dock badges are macOS-only; `app.dock` is undefined elsewhere.
 			if (!PLATFORM.IS_MAC) return;
 			app.dock?.setBadge(text);
+		},
+		setOverlayBadge: (count) => {
+			// Taskbar overlay icons are a Windows affordance; mac uses the Dock
+			// badge above, Linux has neither.
+			if (!PLATFORM.IS_WINDOWS || window.isDestroyed()) return;
+			const badge = overlayBadgeImage(count);
+			if (badge) window.setOverlayIcon(badge.image, badge.description);
+			else window.setOverlayIcon(null, "");
+		},
+		flashAttention: () => {
+			// mac already bounces the Dock and shows a toast; only flash where it
+			// doesn't. Electron auto-clears the flash when the window regains focus.
+			if (PLATFORM.IS_MAC || window.isDestroyed()) return;
+			if (!window.isFocused()) window.flashFrame(true);
 		},
 		showNativeNotification: ({ title, body, paneId, workspaceId }) => {
 			if (!Notification.isSupported()) return;

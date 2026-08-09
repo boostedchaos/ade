@@ -28,7 +28,7 @@ import {
 	getAgentSessionRegistry,
 } from "../agent-sessions";
 import { getControlPlaneEvents } from "../control-plane";
-import { dockBadgeText, unreadCount } from "./selectors";
+import { paintBadges, unreadCount } from "./selectors";
 import {
 	type CreateNotificationInput,
 	hasUnreadAttentionForPane,
@@ -56,6 +56,17 @@ export interface AttentionDeps {
 	/** Paints the macOS Dock badge. No-op on other platforms. */
 	setDockBadge: (text: string) => void;
 	/**
+	 * Paints the Windows taskbar overlay badge for `count` unread (0 clears it).
+	 * No-op on other platforms. Optional so a mock sink can omit it.
+	 */
+	setOverlayBadge?: (count: number) => void;
+	/**
+	 * A NEW attention block just arrived — flash the taskbar button if the
+	 * window is unfocused. No-op on macOS (it bounces the Dock and toasts
+	 * already). Optional; the impl decides on focus and platform.
+	 */
+	flashAttention?: () => void;
+	/**
 	 * Shows an OS notification whose click focuses `paneId`. Only used for
 	 * EXPLICIT `ade notify` — see the file header.
 	 */
@@ -74,7 +85,7 @@ let deps: AttentionDeps | null = null;
 export function setAttentionDeps(next: AttentionDeps | null): void {
 	deps = next;
 	// A late wiring must not leave a stale badge from before the app had a dock.
-	if (next) refreshDockBadge();
+	if (next) refreshBadges();
 }
 
 /** Renderer sync: fires after any change to the notification set. */
@@ -86,7 +97,7 @@ export function onAttentionChanged(fn: ChangeListener): () => void {
 }
 
 function emitChanged(): void {
-	refreshDockBadge();
+	refreshBadges();
 	for (const fn of changeListeners) {
 		try {
 			fn();
@@ -96,16 +107,15 @@ function emitChanged(): void {
 	}
 }
 
-function refreshDockBadge(): void {
+function refreshBadges(): void {
 	if (!deps) return;
 	try {
 		// unreadOnly, or the badge silently stops counting anything older than
 		// the newest 200 rows — and rows are never deleted.
-		deps.setDockBadge(
-			dockBadgeText(unreadCount(listNotifications({ unreadOnly: true }))),
-		);
+		const count = unreadCount(listNotifications({ unreadOnly: true }));
+		paintBadges(deps, count);
 	} catch (error) {
-		console.error("[attention] Failed to update dock badge:", error);
+		console.error("[attention] Failed to update badges:", error);
 	}
 }
 
@@ -135,6 +145,9 @@ export function createNotification(
 	});
 
 	if (record.kind === "custom") notifyNatively(record);
+	// A new attention block (already deduped in handleAgentTransition) flashes the
+	// taskbar button on Windows/Linux; the impl no-ops when focused or on macOS.
+	else deps?.flashAttention?.();
 	emitChanged();
 	return record;
 }
@@ -222,7 +235,7 @@ export function startAttentionTracking(): void {
 	unsubscribeRegistry = getAgentSessionRegistry().onTransition(
 		handleAgentTransition,
 	);
-	refreshDockBadge();
+	refreshBadges();
 }
 
 export function stopAttentionTracking(): void {

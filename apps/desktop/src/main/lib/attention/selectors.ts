@@ -72,3 +72,34 @@ export function dockBadgeText(count: number): string {
 	if (count <= 0) return "";
 	return count > 99 ? "99+" : String(count);
 }
+
+/**
+ * The Windows taskbar overlay-icon key for an unread count, or null to clear.
+ *
+ * Doubles as the badge PNG's identity (see lib/attention/overlay-badge.ts).
+ * Capped at "9+" rather than the Dock's "99+": an overlay icon renders at
+ * ~16x16, where a two-glyph "99+" is an unreadable smear — a single digit plus
+ * a "more" marker is the most a badge that size can legibly carry.
+ */
+export function overlayBadgeKey(count: number): string | null {
+	if (count <= 0) return null;
+	return count > 9 ? "9+" : String(count);
+}
+
+/**
+ * Paint both platform badges for an unread count. The one seam the badge tests
+ * exercise with a mock sink — no Electron, no BrowserWindow, no DB. The Dock
+ * gets its text; Windows gets the raw count and maps it to an overlay image in
+ * the sink implementation (windows/main.ts), so a count of 0 forwards through
+ * to a clear.
+ */
+export function paintBadges(
+	sink: {
+		setDockBadge: (text: string) => void;
+		setOverlayBadge?: (count: number) => void;
+	},
+	count: number,
+): void {
+	sink.setDockBadge(dockBadgeText(count));
+	sink.setOverlayBadge?.(count);
+}
