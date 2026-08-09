@@ -114,6 +114,9 @@ export class ControlPlaneServer {
 			};
 			server.once("error", onError);
 			server.once("listening", onListening);
+			// Pipe intentionally left at the default DACL (Everyone = read-only,
+			// cannot write commands). NEVER pass readableAll/writableAll — they
+			// widen to Everyone-write and libuv has no API to narrow it back.
 			server.listen(socketPath);
 		});
 
