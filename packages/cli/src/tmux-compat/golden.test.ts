@@ -28,6 +28,19 @@ const LOG_PATH = join(
 // erroring — a fresh clone or a Windows box has nothing to replay.
 const HAS_LOG = existsSync(LOG_PATH);
 
+// A silent skip on the platform that CAN run these (macOS/Linux) would let a
+// golden regression report green, because the probe log is not committed. Warn
+// loudly there so a dev/CI sees the suite was skipped and how to restore it.
+// Windows genuinely cannot replay it (no /bin/sh ran the probe), so it stays
+// silent there — an expected, not a surprising, skip.
+if (!HAS_LOG && process.platform !== "win32") {
+	console.warn(
+		`[golden] SKIPPING tmux golden suite: probe fixture missing at ${LOG_PATH}. ` +
+			"It is a Phase-0 capture that is not committed; regenerate it by running the " +
+			"tmux probe (docs/specs/mission-control/probe/) to exercise these tests.",
+	);
+}
+
 const LEADER_ADE_PANE = "ade-leader";
 
 let dir: string;
