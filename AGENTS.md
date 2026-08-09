@@ -33,6 +33,8 @@ Bun + Turbo monorepo with:
   - `packages/durable-session` - Durable session management
   - `packages/email` - Email templates/sending
   - `packages/scripts` - CLI tooling
+  - `packages/control-plane` - Mission Control socket server (runs in Electron main)
+  - `packages/cli` - The `ade` command line that drives it (see `docs/mission-control.md`)
 - **Tooling**:
   - `tooling/typescript` - Shared TypeScript configs
 
