@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { basename, dirname } from "node:path";
 
@@ -18,6 +18,14 @@ import { basename, dirname } from "node:path";
 export function writeControlToken(tokenPath: string): string {
 	mkdirSync(dirname(tokenPath), { recursive: true, mode: 0o700 });
 	const token = randomBytes(32).toString("hex");
+	// Fresh file per launch: delete any prior token first so its DACL dies with
+	// it. `/inheritance:r` (below) strips only INHERITED ACEs, so an arbitrary
+	// explicit ACE some environment stamped onto a pre-existing token file would
+	// otherwise survive a rotation. Writing a brand-new file means it starts from
+	// just the directory's inherited ACL, which the hardening then locks down.
+	// force:true ignores "already absent"; nothing holds this open (it is written
+	// once at startup before any client connects), so the unlink is safe.
+	rmSync(tokenPath, { force: true });
 	// mode 0o600 is a no-op on Windows; the ACL below does the real work there.
 	writeFileSync(tokenPath, token, { mode: 0o600 });
 	if (process.platform === "win32") hardenTokenFileAcl(tokenPath);

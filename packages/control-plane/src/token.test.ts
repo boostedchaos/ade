@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -67,6 +67,55 @@ describe.skipIf(!IS_WIN)("writeControlToken — Windows ACL hardening", () => {
 			expect(user).not.toBeNull();
 			// icacls prints "DOMAIN\user"; assert the bare account name appears.
 			expect(aceLines[0]).toContain(user as string);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("drops an arbitrary pre-existing explicit ACE by writing a fresh file", () => {
+		const dir = mkdtempSync(join(tmpdir(), "ade-token-freshacl-"));
+		const tokenPath = join(dir, "control.token");
+		try {
+			// Pre-create a token file and stamp an EXPLICIT ACE for a well-known SID
+			// other than the current user — Guests (*S-1-5-32-546). /inheritance:r
+			// alone would NOT remove this (it is explicit, not inherited), so this is
+			// exactly the ACE that survives without the fresh-file rewrite.
+			writeFileSync(tokenPath, "stale-token", { mode: 0o600 });
+			const grant = spawnSync(
+				"icacls",
+				[tokenPath, "/grant", "*S-1-5-32-546:R"],
+				{ shell: false, encoding: "utf-8", windowsHide: true },
+			);
+			expect(grant.status).toBe(0);
+			// Guests is present before the rewrite.
+			const before = spawnSync("icacls", [tokenPath], {
+				shell: false,
+				encoding: "utf-8",
+				windowsHide: true,
+			});
+			expect(before.stdout).toContain("Guests");
+
+			// writeControlToken unlinks + rewrites, then hardens (win32).
+			writeControlToken(tokenPath);
+			const harden = hardenTokenFileAcl(tokenPath);
+			if (!harden.applied) {
+				throw new Error(
+					`ACL hardening did not apply: ${harden.reason ?? "unknown"}`,
+				);
+			}
+
+			const after = spawnSync("icacls", [tokenPath], {
+				shell: false,
+				encoding: "utf-8",
+				windowsHide: true,
+			});
+			expect(after.status).toBe(0);
+			// The arbitrary Guests ACE is gone, and only the one user ACE remains.
+			expect(after.stdout).not.toContain("Guests");
+			const aceLines = after.stdout
+				.split(/\r?\n/)
+				.filter((l) => l.includes(":("));
+			expect(aceLines.length).toBe(1);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
