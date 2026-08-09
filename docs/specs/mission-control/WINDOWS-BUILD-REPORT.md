@@ -189,12 +189,28 @@ observed the temp bin dir appended, `KIND_PRESERVED=true`, then restored —
   | F6 | minor | windows-ci natives smoke writes its success marker before the Electron process exits | PRE-EXISTING / OUT-OF-SCOPE — `git diff main...windows-0.4` shows the natives-smoke marker is from `main` (commit `b869c9f`), not this branch; tracked separately. The branch's NEW pipe smoke does NOT share the flaw: it writes `cli-smoke-result.txt` only AFTER `bun <cli> list-workspaces` returns with its exit code + output captured and judged. No fix | (n/a) |
   | F7 | minor | golden.test fixture gate silently skips the whole suite on ALL platforms (probe log uncommitted) → regressions report green everywhere | FIXED — on a NON-Windows platform with the fixture missing, emit a loud `console.warn` naming the fixture + how to regenerate it; Windows skip stays silent (expected, no /bin/sh). Skip behavior unchanged | `33806d8` |
 
-- **Adversarial verifier verdict:** *(fresh reviewer at xhigh over the full diff)*
-- **Final CI run IDs/URLs:** windows-ci "ground truth" + "ADE CI" were fully green
-  at base head `0dcadb1` (windows-ci run **31337152855** incl. the new
-  control-plane/cli unit-test steps, packaged-resource guard, and named-pipe CLI
-  smoke; ADE CI run **31337152861**). Final green runs on the post-Codex-fix head
-  are appended after the CI watch below. *(release-SHA runs: TODO after tag)*
+- **Adversarial verifier verdict:** **SHIP** (fresh Opus reviewer at xhigh over the
+  full diff at head `8d35722`, 2026-08-09). Zero blocking findings. The verifier
+  re-ran the touched suites itself on real Windows (control-plane 194/0, cli
+  197/0, server-core 475/0, desktop selectors 16/0), traced the badge wiring
+  end-to-end to `setOverlayIcon` incl. clear-at-zero and packaged asset
+  resolution, confirmed cli-install fails safe (no PATH write on any error
+  path), confirmed token hardening is live-proven and best-effort (no startup
+  crash path), and confirmed mac/Linux behavior untouched + licensing/scope
+  discipline intact. Non-blocking observations recorded: (1) the un-try/caught
+  `rmSync` in `writeControlToken` marginally widens the pre-existing throw
+  surface under AV file locks; (2) the CI packaged-resource guard does not
+  cover the overlay-badge PNGs (a future deletion degrades to warn + no badge);
+  (3) token.ts's timing-side-channel comment rationale is loose but the
+  constant-time compare is harmless defense-in-depth. Its one hard condition —
+  green windows-ci on the actual release SHA — is enforced by the Phase 6
+  procedure below.
+- **Final CI run IDs/URLs:** fully green at final branch head `8d35722`:
+  windows-ci "ground truth" run **31338353208** (all steps incl. the new
+  control-plane/cli unit-test steps, packaged-resource guard, named-pipe CLI
+  smoke, artifact upload) and ADE CI run **31338353203** (macOS + Windows).
+  Earlier fully-green runs at `0dcadb1`: windows-ci **31337152855**, ADE CI
+  **31337152861**. *(release-SHA runs on main: TODO after merge)*
 - **Release URL:** *(published `windows-v0.4.0` release + SHA256SUMS.txt)*
 
 ## Open follow-ups
