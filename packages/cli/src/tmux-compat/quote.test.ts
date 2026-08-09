@@ -2,6 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { execLine, shWrap, singleQuote } from "./quote";
 
+// These tests execute a real POSIX /bin/sh, which does not exist on Windows.
+// The escaping is POSIX-shell semantics only, so skipping on win32 loses no
+// meaningful coverage there. The pure string-shape assertions still run.
+const skipWin = process.platform === "win32";
+
 /**
  * These assert the PROPERTY (a real /bin/sh reproduces the payload byte for
  * byte), not a snapshot of the escaped string — a snapshot would keep passing
@@ -25,7 +30,7 @@ const PAYLOADS = [
 ];
 
 describe("singleQuote", () => {
-	it("round-trips every payload through a real /bin/sh", () => {
+	it.skipIf(skipWin)("round-trips every payload through a real /bin/sh", () => {
 		for (const payload of PAYLOADS) {
 			const result = spawnSync("/bin/sh", [
 				"-c",
@@ -38,7 +43,7 @@ describe("singleQuote", () => {
 });
 
 describe("shWrap", () => {
-	it("survives a second escaping pass (the nesting respawn actually does)", () => {
+	it.skipIf(skipWin)("survives a second escaping pass (the nesting respawn actually does)", () => {
 		// The real path double-nests: the teammate command is itself built with
 		// quoting, then wrapped again. Anything that escapes only one level
 		// passes the simple case and fails here.
@@ -56,7 +61,7 @@ describe("shWrap", () => {
 		expect(shWrap("cd /a && b")).toBe("/bin/sh -c 'cd /a && b'");
 	});
 
-	it("reproduces the probe's verbatim teammate command", () => {
+	it.skipIf(skipWin)("reproduces the probe's verbatim teammate command", () => {
 		const teammate =
 			"cd /tmp/proj && env CLAUDECODE=1 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 " +
 			"/Users/x/.local/share/claude/versions/2.1.226 --agent-id helper@session-e36bd9ce " +
@@ -74,7 +79,7 @@ describe("execLine", () => {
 		expect(execLine("claude --x")).toBe("exec /bin/sh -c 'claude --x'");
 	});
 
-	it("replaces the placeholder shell instead of nesting under it", () => {
+	it.skipIf(skipWin)("replaces the placeholder shell instead of nesting under it", () => {
 		// This is the property the pane depends on: after the exec there is ONE
 		// process, so closing the pane kills the teammate and the teammate
 		// exiting ends the pane. Printing $$ either side proves the pid is reused.

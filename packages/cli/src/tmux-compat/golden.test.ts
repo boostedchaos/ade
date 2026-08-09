@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeAde } from "./fake-ade";
@@ -21,6 +21,12 @@ const LOG_PATH = join(
 	import.meta.dir,
 	"../../../../docs/specs/mission-control/probe/tmux-calls.log",
 );
+
+// The probe log is a Phase-0 capture that lives on the machine that ran the
+// probe; it is not committed (and is absent on Windows CI, which has no /bin/sh
+// to have run it). Skip the whole golden suite when it is missing rather than
+// erroring — a fresh clone or a Windows box has nothing to replay.
+const HAS_LOG = existsSync(LOG_PATH);
 
 const LEADER_ADE_PANE = "ade-leader";
 
@@ -81,7 +87,7 @@ function stdoutFor(
 	return replayed.stdout[index] as string[];
 }
 
-describe("probe log fixture", () => {
+describe.skipIf(!HAS_LOG)("probe log fixture", () => {
 	it("parses python reprs including escapes", () => {
 		expect(parsePythonList("['a', 'b']")).toEqual(["a", "b"]);
 		expect(parsePythonList("[\"it's\", 'x']")).toEqual(["it's", "x"]);
@@ -119,10 +125,10 @@ describe("probe log fixture", () => {
 	});
 });
 
-describe("RUN A — leader inside tmux", () => {
-	const calls = parseProbeLog(LOG_PATH).filter((c) =>
-		c.run.startsWith("RUN A"),
-	);
+describe.skipIf(!HAS_LOG)("RUN A — leader inside tmux", () => {
+	const calls = HAS_LOG
+		? parseProbeLog(LOG_PATH).filter((c) => c.run.startsWith("RUN A"))
+		: [];
 
 	it("replays end to end with every call exiting 0", async () => {
 		const result = await replay(calls, dir);
@@ -211,10 +217,10 @@ describe("RUN A — leader inside tmux", () => {
 	});
 });
 
-describe("RUN B — leader outside tmux (external swarm session)", () => {
-	const calls = parseProbeLog(LOG_PATH).filter((c) =>
-		c.run.startsWith("RUN B"),
-	);
+describe.skipIf(!HAS_LOG)("RUN B — leader outside tmux (external swarm session)", () => {
+	const calls = HAS_LOG
+		? parseProbeLog(LOG_PATH).filter((c) => c.run.startsWith("RUN B"))
+		: [];
 
 	it("reports tmux available and the session absent, then creates it", async () => {
 		const result = await replay(calls, dir);
