@@ -302,27 +302,21 @@ describe("runWinInstall (mocked PowerShell)", () => {
 		}
 	}
 
-	/** Records every exec and answers the read with the given raw PATH + kind. */
+	/** Records every exec; answers with the given action (or a raw stdout/status). */
 	function mockExec(opts: {
-		raw: string;
-		kind: string;
-		readStatus?: number;
-		writeStatus?: number;
+		action?: "present" | "added";
+		status?: number;
+		stdout?: string;
 	}): { exec: WinPathExec; calls: { script: string; env: NodeJS.ProcessEnv }[] } {
 		const calls: { script: string; env: NodeJS.ProcessEnv }[] = [];
 		const exec: WinPathExec = (script, env) => {
 			calls.push({ script, env });
-			if (script.includes("SetValue")) {
-				const status = opts.writeStatus ?? 0;
-				return { status, stdout: "", stderr: status ? "write boom" : "" };
+			if (opts.status && opts.status !== 0) {
+				return { status: opts.status, stdout: "", stderr: "powershell boom" };
 			}
-			const status = opts.readStatus ?? 0;
-			if (status !== 0) return { status, stdout: "", stderr: "read boom" };
-			return {
-				status: 0,
-				stdout: JSON.stringify({ raw: opts.raw, kind: opts.kind }),
-				stderr: "",
-			};
+			const stdout =
+				opts.stdout ?? JSON.stringify({ action: opts.action ?? "added" });
+			return { status: 0, stdout, stderr: "" };
 		};
 		return { exec, calls };
 	}
@@ -330,7 +324,7 @@ describe("runWinInstall (mocked PowerShell)", () => {
 	it("refuses when the app has never written the launcher", async () => {
 		await withHome(false, async (home) => {
 			const cap = capture();
-			const { exec, calls } = mockExec({ raw: "", kind: "ExpandString" });
+			const { exec, calls } = mockExec({});
 			expect(await runWinInstall(cap.io, home, exec)).toBe(EXIT.USAGE);
 			expect(cap.errText()).toContain("no launcher at");
 			expect(cap.errText()).toContain("Start the ADE app once");
@@ -338,71 +332,58 @@ describe("runWinInstall (mocked PowerShell)", () => {
 		});
 	});
 
-	it("appends the bin dir, preserving kind and unexpanded %VARs%", async () => {
+	it("adds the bin dir via ONE PowerShell invocation that reads and writes", async () => {
 		await withHome(true, async (home) => {
 			const bin = winBinDir(home);
 			const cap = capture();
-			const { exec, calls } = mockExec({
-				raw: "C:\\Windows;%USERPROFILE%\\tools",
-				kind: "ExpandString",
-			});
+			const { exec, calls } = mockExec({ action: "added" });
 			expect(await runWinInstall(cap.io, home, exec)).toBe(EXIT.OK);
 			expect(cap.outText()).toContain("Installed:");
 			expect(cap.outText()).toContain("Restart your shell");
-			const write = calls.find((c) => c.script.includes("SetValue"));
-			expect(write).toBeDefined();
-			// %USERPROFILE% survives verbatim; the bin dir is appended once.
-			expect(write?.env.ADE_NEW_PATH).toBe(
-				`C:\\Windows;%USERPROFILE%\\tools;${bin}`,
+			// F2: read-modify-write is a SINGLE process — no read-then-write race.
+			expect(calls.length).toBe(1);
+			const { script, env } = calls[0] as (typeof calls)[number];
+			expect(env.ADE_BIN_DIR).toBe(bin);
+			// F1: the script forces UTF-8 output so a non-ASCII PATH entry is not
+			// mangled by the console's OEM code page on the way back to us.
+			expect(script).toContain(
+				"[Console]::OutputEncoding=[System.Text.Encoding]::UTF8",
 			);
-			expect(write?.env.ADE_PATH_KIND).toBe("ExpandString");
+			// Still reads unexpanded (%VAR% preserved) and writes in the same script.
+			expect(script).toContain("DoNotExpandEnvironmentNames");
+			expect(script).toContain("SetValue");
+			// And the kind is carried through (REG_SZ vs REG_EXPAND_SZ preserved).
+			expect(script).toContain("GetValueKind");
 		});
 	});
 
-	it("preserves a REG_SZ value's kind (String)", async () => {
-		await withHome(true, async (home) => {
-			const cap = capture();
-			const { exec, calls } = mockExec({ raw: "C:\\Windows", kind: "String" });
-			await runWinInstall(cap.io, home, exec);
-			const write = calls.find((c) => c.script.includes("SetValue"));
-			expect(write?.env.ADE_PATH_KIND).toBe("String");
-		});
-	});
-
-	it("is idempotent — already present means no write", async () => {
+	it("reports idempotency when the script says the dir is already present", async () => {
 		await withHome(true, async (home) => {
 			const bin = winBinDir(home);
 			const cap = capture();
-			// Same dir, uppercased and with a trailing backslash: still a match.
-			const { exec, calls } = mockExec({
-				raw: `C:\\Windows;${bin.toUpperCase()}\\`,
-				kind: "ExpandString",
-			});
+			const { exec, calls } = mockExec({ action: "present" });
 			expect(await runWinInstall(cap.io, home, exec)).toBe(EXIT.OK);
 			expect(cap.outText()).toContain("Already on PATH");
-			expect(calls.some((c) => c.script.includes("SetValue"))).toBe(false);
+			expect(cap.outText()).toContain(bin);
+			expect(calls.length).toBe(1);
 		});
 	});
 
-	it("fails cleanly when the PATH read fails", async () => {
+	it("fails cleanly when PowerShell exits nonzero", async () => {
 		await withHome(true, async (home) => {
 			const cap = capture();
-			const { exec } = mockExec({ raw: "", kind: "ExpandString", readStatus: 1 });
-			expect(await runWinInstall(cap.io, home, exec)).toBe(EXIT.USAGE);
-			expect(cap.errText()).toContain("could not read your user PATH");
-		});
-	});
-
-	it("fails cleanly when the PATH write fails", async () => {
-		await withHome(true, async (home) => {
-			const cap = capture();
-			const { exec } = mockExec({
-				raw: "C:\\Windows",
-				kind: "ExpandString",
-				writeStatus: 1,
-			});
+			const { exec } = mockExec({ status: 1 });
 			expect(await runWinInstall(cap.io, home, exec)).toBe(EXIT.USAGE);
 			expect(cap.errText()).toContain("could not update your user PATH");
+		});
+	});
+
+	it("fails cleanly when the script's result cannot be parsed", async () => {
+		await withHome(true, async (home) => {
+			const cap = capture();
+			const { exec } = mockExec({ stdout: "not json" });
+			expect(await runWinInstall(cap.io, home, exec)).toBe(EXIT.USAGE);
+			expect(cap.errText()).toContain("could not parse the result");
 		});
 	});
 });

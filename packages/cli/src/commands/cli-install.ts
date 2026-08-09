@@ -272,6 +272,10 @@ export function winBinDir(home = homedir()): string {
  * Is `dir` already a PATH entry? Case-insensitive (Windows paths are) and
  * tolerant of a trailing slash/backslash and empty entries.
  *
+ * Reference spec, unit-tested here: WIN_INSTALL_PATH_PS reimplements this exact
+ * rule in PowerShell (it must decide membership inside the single read-write
+ * process). Keep the two in sync.
+ *
  * ponytail: compares literal strings, so a manually-added `%USERPROFILE%\...`
  * entry pointing at the same place would not be detected and we would add a
  * second (expanded) copy. Acceptable — our own appended entry is always
@@ -292,54 +296,69 @@ export function appendPathEntry(rawPath: string, dir: string): string {
 	return rawPath.endsWith(";") ? `${rawPath}${dir}` : `${rawPath};${dir}`;
 }
 
-/** Parse the read-script's JSON. Kind is normalised to what we can write. */
-export function parsePathRead(
-	stdout: string,
-): { raw: string; kind: "String" | "ExpandString" } | null {
+/** What the single install script reports it did. */
+export function parseInstallResult(stdout: string): "present" | "added" | null {
 	try {
-		const obj = JSON.parse(stdout.trim() || "{}") as {
-			raw?: unknown;
-			kind?: unknown;
-		};
-		const raw = typeof obj.raw === "string" ? obj.raw : "";
-		// Anything that is not a plain REG_SZ is written back as REG_EXPAND_SZ,
-		// the Windows default for PATH and the only kind that keeps %VAR% live.
-		const kind = obj.kind === "String" ? "String" : "ExpandString";
-		return { raw, kind };
+		const obj = JSON.parse(stdout.trim() || "{}") as { action?: unknown };
+		return obj.action === "present" || obj.action === "added"
+			? obj.action
+			: null;
 	} catch {
 		return null;
 	}
 }
 
-/** Reads HKCU\Environment\Path WITHOUT expanding %VAR%; emits {raw,kind} JSON. */
-const WIN_READ_PATH_PS = [
-	"$ErrorActionPreference='Stop'",
-	"$key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')",
-	"$raw=''",
-	"$kind='ExpandString'",
-	"if($key){",
-	"  if(($key.GetValueNames()) -contains 'Path'){",
-	"    $raw=[string]$key.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)",
-	"    $kind=$key.GetValueKind('Path').ToString()",
-	"  }",
-	"  $key.Close()",
-	"}",
-	"[Console]::Out.Write((New-Object psobject -Property @{ raw=$raw; kind=$kind } | ConvertTo-Json -Compress))",
-].join("\n");
-
 /**
- * Writes $env:ADE_NEW_PATH to HKCU\Environment\Path with the kind named in
- * $env:ADE_PATH_KIND, then broadcasts WM_SETTINGCHANGE so new shells pick it up.
+ * Read HKCU\Environment\Path and, if $env:ADE_BIN_DIR is not already an entry,
+ * append it and write it back — ALL IN ONE PowerShell process.
+ *
+ * WHY ONE PROCESS (F2). A two-invocation read-then-write races a concurrent PATH
+ * editor: anything it wrote between our read and our write gets clobbered when we
+ * write back our stale-plus-appended value. Doing read→check→append→write in a
+ * single process shrinks that window to microseconds. The residual race against
+ * another editor writing DURING our own read-modify-write is inherent to Windows
+ * user-PATH editing — setx and the Settings dialog have the exact same window; we
+ * just must not enlarge it.
+ *
+ * WHY THE ENCODING LINE (F1). spawnSync decodes this script's stdout as utf8, but
+ * a console's default OutputEncoding is the OEM code page (e.g. CP437), which
+ * would mangle a non-ASCII PATH entry (C:\工具) on the way out and we would write
+ * the corruption back. Force UTF-8 output before we emit anything.
+ *
+ * %VAR% entries are preserved: read with DoNotExpandEnvironmentNames, written
+ * back with the original kind (anything not REG_SZ → REG_EXPAND_SZ, PATH's
+ * default and the only kind that keeps %VAR% live). The membership + append rules
+ * mirror userPathHasDir / appendPathEntry (kept below as the unit-tested spec —
+ * keep the two in sync); this path is exercised end-to-end by the live
+ * round-trip. Emits {action:'present'|'added'} JSON.
  */
-const WIN_WRITE_PATH_PS = [
+const WIN_INSTALL_PATH_PS = [
 	"$ErrorActionPreference='Stop'",
-	"$new=$env:ADE_NEW_PATH",
-	"$kindName=$env:ADE_PATH_KIND",
-	"if($kindName -ne 'String'){ $kindName='ExpandString' }",
-	"$kind=[Microsoft.Win32.RegistryValueKind]::$kindName",
+	"[Console]::OutputEncoding=[System.Text.Encoding]::UTF8",
+	"$dir=$env:ADE_BIN_DIR",
 	"$key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment',$true)",
 	"if(-not $key){ $key=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment') }",
-	"$key.SetValue('Path',$new,$kind)",
+	"$raw=''",
+	"$kind='ExpandString'",
+	"if(($key.GetValueNames()) -contains 'Path'){",
+	"  $raw=[string]$key.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)",
+	"  $kind=$key.GetValueKind('Path').ToString()",
+	"}",
+	"if($kind -ne 'String'){ $kind='ExpandString' }",
+	// membership: trim, strip trailing slash/backslash, case-insensitive; skip empties
+	"$norm={ param($s) $s.Trim().TrimEnd('\\','/').ToLowerInvariant() }",
+	"$target=(& $norm $dir)",
+	"$present=$false",
+	"foreach($e in ($raw -split ';')){ if($e.Trim() -ne '' -and (& $norm $e) -eq $target){ $present=$true; break } }",
+	"if($present){",
+	"  $key.Close()",
+	"  [Console]::Out.Write((New-Object psobject -Property @{ action='present' } | ConvertTo-Json -Compress))",
+	"  exit 0",
+	"}",
+	// append with a single separator, collapsing a stray trailing one
+	"if($raw -eq ''){ $new=$dir } elseif($raw.EndsWith(';')){ $new=\"$raw$dir\" } else { $new=\"$raw;$dir\" }",
+	"$rvk=[Microsoft.Win32.RegistryValueKind]::$kind",
+	"$key.SetValue('Path',$new,$rvk)",
 	"$key.Close()",
 	// ponytail: a throwaway-var round-trip fires .NET's built-in
 	// WM_SETTINGCHANGE broadcast. Swap for SendMessageTimeout via Add-Type only
@@ -347,6 +366,7 @@ const WIN_WRITE_PATH_PS = [
 	"$sig='ADE_PATH_REFRESH'",
 	"[Environment]::SetEnvironmentVariable($sig,'1','User')",
 	"[Environment]::SetEnvironmentVariable($sig,$null,'User')",
+	"[Console]::Out.Write((New-Object psobject -Property @{ action='added' } | ConvertTo-Json -Compress))",
 ].join("\n");
 
 function defaultWinExec(script: string, env: NodeJS.ProcessEnv): WinExecResult {
@@ -390,36 +410,23 @@ export async function runWinInstall(
 		return EXIT.USAGE;
 	}
 
-	const read = exec(WIN_READ_PATH_PS, { ...process.env });
-	if (read.status !== 0) {
+	const res = exec(WIN_INSTALL_PATH_PS, { ...process.env, ADE_BIN_DIR: binDir });
+	if (res.status !== 0) {
 		io.stderr(
-			`ade cli install: could not read your user PATH: ${read.stderr.trim() || "powershell exited nonzero"}`,
+			`ade cli install: could not update your user PATH: ${res.stderr.trim() || "powershell exited nonzero"}`,
 		);
 		return EXIT.USAGE;
 	}
-	const current = parsePathRead(read.stdout);
-	if (current === null) {
+	const action = parseInstallResult(res.stdout);
+	if (action === null) {
 		io.stderr(
-			"ade cli install: could not parse your user PATH from the registry.",
+			"ade cli install: could not parse the result of the PATH update.",
 		);
 		return EXIT.USAGE;
 	}
-
-	if (userPathHasDir(current.raw, binDir)) {
+	if (action === "present") {
 		io.stdout(`Already on PATH: ${binDir}`);
 		return EXIT.OK;
-	}
-
-	const write = exec(WIN_WRITE_PATH_PS, {
-		...process.env,
-		ADE_NEW_PATH: appendPathEntry(current.raw, binDir),
-		ADE_PATH_KIND: current.kind,
-	});
-	if (write.status !== 0) {
-		io.stderr(
-			`ade cli install: could not update your user PATH: ${write.stderr.trim() || "powershell exited nonzero"}`,
-		);
-		return EXIT.USAGE;
 	}
 
 	io.stdout(`Installed: added ${binDir} to your user PATH.`);
