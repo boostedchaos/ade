@@ -226,6 +226,23 @@ export function createConfig(target: BuildTarget = "default"): Configuration {
 				to: "resources/migrations",
 				filter: ["**/*"],
 			},
+			// Compiled `ade` CLI entry. agent-setup/ade-cli-bin.ts resolves
+			// <resourcesPath>/cli/index.mjs FIRST; without this file the packaged
+			// app falls back to a repo checkout that does not exist in a bundle and
+			// agents get no `ade` on PATH. Produced by `bun run build:cli`.
+			{
+				from: "../../packages/cli/dist/index.mjs",
+				to: "cli/index.mjs",
+			},
+			// Bundled agent skills. agent-setup/ade-workspace-skill.ts resolves
+			// <resourcesPath>/skills/<name>/SKILL.md first, repo root second; a
+			// packaged build has no repo root, so omitting this makes the skill
+			// install warn-and-skip on every boot.
+			{
+				from: "../../skills",
+				to: "skills",
+				filter: ["**/*"],
+			},
 		],
 
 		files: buildFiles(target),

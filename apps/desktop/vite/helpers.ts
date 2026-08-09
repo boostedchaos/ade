@@ -41,10 +41,29 @@ const RESOURCES_TO_COPY = [
 		dest: resolve(__dirname, "..", devPath, "resources/migrations"),
 	},
 	{
-		src: resolve(__dirname, "../src/main/lib/agent-setup/templates"),
+		// agent-setup lives in packages/server-core; notify-hook.ts reads the
+		// template from `<__dirname>/templates`, which is dist/main/templates in
+		// a built bundle. copyDir() no-ops on a missing src, so pointing this at
+		// a stale path makes setupAgentHooks() THROW at runtime — aborting before
+		// createAdeCliBin() and createAdeWorkspaceSkill() ever run.
+		src: resolve(
+			__dirname,
+			"../../../packages/server-core/src/agent-setup/templates",
+		),
 		dest: resolve(__dirname, "..", devPath, "main/templates"),
 	},
 ];
+
+/** Fail loudly if a required resource source vanishes (see templates note). */
+function assertResourceSourcesExist(): void {
+	const missing = RESOURCES_TO_COPY.filter((r) => !existsSync(r.src));
+	if (missing.length === 0) return;
+	throw new Error(
+		`copy-resources: missing source director${
+			missing.length === 1 ? "y" : "ies"
+		}:\n${missing.map((r) => `  ${r.src}`).join("\n")}`,
+	);
+}
 
 /**
  * Copies resources to dist/ for preview/production mode.
@@ -55,6 +74,7 @@ export function copyResourcesPlugin(): Plugin {
 	return {
 		name: "copy-resources",
 		writeBundle() {
+			assertResourceSourcesExist();
 			for (const resource of RESOURCES_TO_COPY) {
 				copyDir(resource);
 			}

@@ -25,6 +25,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { getAdeDirName } from "../socket-path";
 
 export interface PaneRecord {
 	id: string;
@@ -88,7 +89,7 @@ export function emptyStore(): StoreData {
 }
 
 export function defaultStoreDir(env: NodeJS.ProcessEnv = process.env): string {
-	return env.ADE_TMUX_COMPAT_DIR ?? join(homedir(), ".ade");
+	return env.ADE_TMUX_COMPAT_DIR ?? join(homedir(), getAdeDirName(env.SUPERSET_WORKSPACE_NAME));
 }
 
 const sleep = (ms: number): Promise<void> =>

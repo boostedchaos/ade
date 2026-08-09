@@ -13,6 +13,7 @@
 		}
 	},
 	"scripts": {
+		"build": "bun build ./src/index.ts --target=node --format=esm --outfile ./dist/index.mjs",
 		"clean": "git clean -xdf .cache .turbo dist node_modules",
 		"typecheck": "tsc --noEmit --emitDeclarationOnly false",
 		"test": "bun test"
