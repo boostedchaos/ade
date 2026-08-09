@@ -7,6 +7,8 @@ import {
 	isNamedPipePath,
 } from "./socket-path";
 
+const skipWin = process.platform === "win32";
+
 describe("data-dir derivation", () => {
 	it("uses .ade for the default workspace name", () => {
 		expect(getWorkspaceSuffix("superset")).toBeUndefined();
@@ -120,7 +122,9 @@ describe("ADE_DATA_DIR_NAME precedence", () => {
 });
 
 describe("control endpoint paths", () => {
-	it("builds a unix socket path under the data dir", () => {
+	// getControlTokenPathFor uses the host's path.join, so the POSIX literal
+	// only holds on POSIX; the win32 socket case below is the Windows contract.
+	it.skipIf(skipWin)("builds a unix socket path under the data dir", () => {
 		expect(getControlSocketPathFor(".ade", "/home/k", "darwin")).toBe(
 			"/home/k/.ade/control.sock",
 		);

@@ -52,9 +52,82 @@ jobs:
         timeout-minutes: 10
         run: bun run test:win
 
+      - name: Unit tests (control-plane)
+        working-directory: packages/control-plane
+        # Fresh Windows-green suite — no ratchet/baseline; any failure fails CI.
+        timeout-minutes: 5
+        run: bun test
+
+      - name: Unit tests (cli)
+        working-directory: packages/cli
+        # Fresh Windows-green suite — no ratchet/baseline; any failure fails CI.
+        timeout-minutes: 5
+        run: bun test
+
       - name: Build Windows package (full pipeline incl. verify)
         working-directory: apps/desktop
         run: bun run build:win
+
+      - name: "Verify packaged resources: cli, skills, hook templates"
+        working-directory: apps/desktop
+        shell: pwsh
+        # Belt to verify-win-package.ts's suspenders: that guard checks native
+        # binaries; this asserts the agent-runtime payload also shipped. cli and
+        # skills are loose extraResources (electron-builder.ts); the hook
+        # templates are packed INSIDE app.asar at main/templates (asar: true),
+        # copied there from packages/server-core by vite/helpers.ts — so they are
+        # verified by reading the asar header index, not by a loose Test-Path.
+        run: |
+          @'
+          const fs = require("fs");
+          const path = require("path");
+          const resources = path.join(process.argv[2], "resources");
+          const missing = [];
+
+          for (const rel of ["cli/index.mjs", "skills/ade-workspace/SKILL.md"]) {
+            const p = path.join(resources, rel);
+            if (fs.existsSync(p)) console.log(`  OK (extraResource): resources/${rel}`);
+            else missing.push(`resources/${rel} (loose extraResource absent)`);
+          }
+
+          const asar = path.join(resources, "app.asar");
+          const templates = [
+            "agent-shim.template.mjs",
+            "copilot-hook.template.mjs",
+            "cursor-hook.template.mjs",
+            "gemini-hook.template.mjs",
+            "notify-hook.template.mjs",
+          ];
+          if (!fs.existsSync(asar)) {
+            missing.push("resources/app.asar (missing — cannot verify hook templates)");
+          } else {
+            // asar header: JSON length is a UInt32LE at byte 12, JSON begins at byte 16.
+            const fd = fs.openSync(asar, "r");
+            try {
+              const head = Buffer.alloc(16);
+              fs.readSync(fd, head, 0, 16, 0);
+              const jsonLen = head.readUInt32LE(12);
+              const json = Buffer.alloc(jsonLen);
+              fs.readSync(fd, json, 0, jsonLen, 16);
+              const header = json.toString("utf8");
+              for (const t of templates) {
+                if (header.includes(t)) console.log(`  OK (in app.asar): main/templates/${t}`);
+                else missing.push(`main/templates/${t} (absent from app.asar index)`);
+              }
+            } finally {
+              fs.closeSync(fd);
+            }
+          }
+
+          if (missing.length) {
+            console.error("[verify-resources] packaged agent-runtime resources missing:");
+            for (const m of missing) console.error(`  - ${m}`);
+            process.exit(1);
+          }
+          console.log("[verify-resources] OK: cli, skills, and hook templates all present");
+          '@ | Set-Content verify-resources.cjs
+          node verify-resources.cjs "release/win-unpacked"
+          exit $LASTEXITCODE
 
       - name: "Smoke: native modules load under packaged Electron"
         working-directory: apps/desktop
@@ -124,6 +197,75 @@ jobs:
           }
           Write-Output "APP_ALIVE_AND_DB_INITIALIZED"
           Stop-Process -Id $p.Id -Force
+          exit 0
+
+      - name: "Smoke: bundled CLI reaches control server over named pipe"
+        working-directory: apps/desktop
+        shell: pwsh
+        # Self-contained (separate from the boot smoke so a failure attributes
+        # cleanly): boot the packaged app under a redirected USERPROFILE, wait for
+        # the control server to publish its token, then drive the BUNDLED cli over
+        # the named pipe. The app and cli must resolve the same data dir + pipe:
+        # the pipe name derives from os.userInfo().username (the CI user, not
+        # USERPROFILE), while the token path follows homedir()==USERPROFILE — so
+        # both processes share the redirected profile and neither may see a
+        # workspace/data-dir override (scrubbed below). Success = exit 0 + a
+        # listing, NOT the exit-3 "not running (no control socket)" error.
+        run: |
+          $smokeProfile = Join-Path $env:RUNNER_TEMP "ade-cli-smoke-profile"
+          New-Item -ItemType Directory -Force $smokeProfile | Out-Null
+          $env:USERPROFILE = $smokeProfile
+          Remove-Item Env:\SUPERSET_WORKSPACE_NAME -ErrorAction SilentlyContinue
+          Remove-Item Env:\ADE_DATA_DIR_NAME -ErrorAction SilentlyContinue
+          Remove-Item -Force -ErrorAction SilentlyContinue cli-smoke-result.txt
+
+          $app = Start-Process -FilePath "release/win-unpacked/ADE.exe" -PassThru
+          # The control server writes control.token once .ade is initialized; poll
+          # for it as the readiness signal rather than a fixed sleep.
+          $token = Join-Path $smokeProfile ".ade\control.token"
+          $ready = $false
+          for ($i = 0; $i -lt 45; $i++) {
+            if (Test-Path $token) { $ready = $true; break }
+            if ($app.HasExited) {
+              Write-Error "ADE.exe exited early (code $($app.ExitCode)) before control.token appeared"
+              exit 1
+            }
+            Start-Sleep -Seconds 1
+          }
+          if (-not $ready) {
+            Write-Error "control.token never appeared under $smokeProfile\.ade — control server did not come up"
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            exit 1
+          }
+
+          $cli = "release/win-unpacked/resources/cli/index.mjs"
+          function Invoke-AdeList {
+            # bun is a console binary (on PATH via setup-bun) and spawns no PTY for
+            # this command, so $LASTEXITCODE is reliable here — no marker needed for
+            # the call itself; the marker below records the judged pass/fail.
+            $out = & bun $cli list-workspaces 2>&1 | Out-String
+            return @{ Code = $LASTEXITCODE; Out = $out }
+          }
+          $r = Invoke-AdeList
+          if ($r.Code -ne 0 -or $r.Out -match "not running") {
+            # The pipe can come up a beat after the token file; allow one retry.
+            Start-Sleep -Seconds 3
+            $r = Invoke-AdeList
+          }
+          Write-Output "ade list-workspaces exit=$($r.Code)"
+          Write-Output "----- output -----"
+          Write-Output $r.Out
+          Write-Output "------------------"
+          if ($r.Code -eq 0 -and $r.Out -notmatch "not running") {
+            Set-Content cli-smoke-result.txt "OK"
+          }
+
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+          if (!(Test-Path cli-smoke-result.txt) -or (Get-Content cli-smoke-result.txt) -ne 'OK') {
+            Write-Error "CLI pipe smoke failed — 'ade list-workspaces' did not reach the control server"
+            exit 1
+          }
+          Write-Output "CLI_PIPE_SMOKE_PASS"
           exit 0
 
       - name: Upload artifacts

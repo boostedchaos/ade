@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { userInfo } from "node:os";
+import { basename, dirname } from "node:path";
 
 /**
  * Per-launch control token.
@@ -16,8 +18,120 @@ import { dirname } from "node:path";
 export function writeControlToken(tokenPath: string): string {
 	mkdirSync(dirname(tokenPath), { recursive: true, mode: 0o700 });
 	const token = randomBytes(32).toString("hex");
+	// Fresh file per launch: delete any prior token first so its DACL dies with
+	// it. `/inheritance:r` (below) strips only INHERITED ACEs, so an arbitrary
+	// explicit ACE some environment stamped onto a pre-existing token file would
+	// otherwise survive a rotation. Writing a brand-new file means it starts from
+	// just the directory's inherited ACL, which the hardening then locks down.
+	// force:true ignores "already absent"; nothing holds this open (it is written
+	// once at startup before any client connects), so the unlink is safe.
+	rmSync(tokenPath, { force: true });
+	// mode 0o600 is a no-op on Windows; the ACL below does the real work there.
 	writeFileSync(tokenPath, token, { mode: 0o600 });
+	if (process.platform === "win32") hardenTokenFileAcl(tokenPath);
 	return token;
+}
+
+/** Outcome of an ACL-hardening attempt, so callers/tests can observe it
+ * instead of trusting a swallowed best-effort catch. */
+export type HardenResult = { applied: boolean; reason?: string };
+
+/**
+ * Restrict the token file's ACL to the current user only (Windows).
+ *
+ * ~/.ade normally inherits the user-profile ACL (user + Admins + SYSTEM), but
+ * environments can inject extra ACEs — e.g. this box carries an inherited
+ * `CodexSandboxUsers:(RX)` ACE on ~/.ade, which would let that group READ
+ * control.token and drive the whole app. `/inheritance:r` strips every
+ * INHERITED ACE and `/grant:r "<user>:F"` leaves the one explicit user grant.
+ *
+ * But `/inheritance:r` does NOT touch EXPLICIT (non-inherited) ACEs, and some
+ * environments (notably GitHub-hosted windows runners) stamp explicit
+ * SYSTEM + BUILTIN\Administrators ACEs onto temp files. Those survive
+ * `/inheritance:r`, leaving 3 ACEs — so we also `/remove:g` them by well-known
+ * SID (`*S-1-5-18` SYSTEM, `*S-1-5-32-544` Administrators; SIDs are
+ * locale-independent, unlike display names). On a normal box those principals
+ * are only inherited, so the removes are harmless no-ops there. Net: exactly
+ * one explicit user ACE in every environment.
+ *
+ * Ceiling: this hardens the FILE only. The listener pipe keeps its default
+ * DACL (Everyone read-only, no write — see socket-path.ts / the listen sites),
+ * which is the real command-injection boundary; the token is the auth layer on
+ * top. TOCTOU between writeFileSync and icacls is accepted: the directory ACL
+ * already gates who can open a handle at creation time, so the sub-millisecond
+ * window exposes nothing the directory didn't already permit.
+ *
+ * Best-effort: on any icacls failure we warn and continue. Bricking startup
+ * over an ACL tweak is worse than the residual read-only exposure, which the
+ * pipe's no-write DACL and the 32-byte token entropy still cover. The outcome
+ * is RETURNED (not just warned) so tests can assert hardening actually applied
+ * rather than passing vacuously when the catch swallowed a no-op.
+ */
+export function hardenTokenFileAcl(tokenPath: string): HardenResult {
+	const user = currentWindowsUser();
+	if (!user) {
+		const reason = "could not resolve current Windows user";
+		console.warn(
+			`[control-token] ${reason}; skipping ACL hardening for ${tokenPath} ` +
+				`(token entropy + pipe read-only DACL still apply).`,
+		);
+		return { applied: false, reason };
+	}
+	// spawnSync with an args array + shell:false: no shell quoting, so a
+	// username with spaces is passed intact as a single argv element.
+	const result = spawnSync(
+		"icacls",
+		[
+			tokenPath,
+			"/inheritance:r",
+			// Drop explicit SYSTEM + Administrators ACEs that /inheritance:r
+			// leaves untouched (GH runners stamp these non-inherited).
+			"/remove:g",
+			"*S-1-5-18",
+			"*S-1-5-32-544",
+			"/grant:r",
+			`${user}:F`,
+		],
+		{ shell: false, encoding: "utf-8", windowsHide: true },
+	);
+	if (result.status !== 0) {
+		const reason = `icacls exited ${result.status ?? "n/a"} for user "${user}": ${result.stderr?.trim() || result.error?.message || "unknown"}`;
+		console.warn(
+			`[control-token] hardening failed for ${tokenPath} (${reason}); ` +
+				`token entropy + pipe read-only DACL still apply.`,
+		);
+		return { applied: false, reason };
+	}
+	return { applied: true };
+}
+
+/**
+ * The current Windows account name, for icacls. `whoami` is the PRIMARY source:
+ * it prints the exact `MACHINE\user` (or `DOMAIN\user`) principal the process
+ * runs as, which icacls always accepts — critical on CI runners where the
+ * account is domain/machine-qualified and a bare SAM name may not resolve. It
+ * runs fine under bun via spawnSync (unlike `os.userInfo().username`, which bun
+ * returns as the literal "unknown" on Windows without populating %USERNAME%).
+ * Falls back to userInfo → %USERNAME% → %USERPROFILE% basename if whoami is
+ * somehow unavailable; a bad resolution only downgrades to a logged warning
+ * (hardening reports applied:false), never a security hole. Exported so the ACL
+ * test asserts against the same identity.
+ */
+export function currentWindowsUser(): string | null {
+	const fromWhoami = spawnSync("whoami", [], {
+		shell: false,
+		encoding: "utf-8",
+		windowsHide: true,
+	});
+	if (fromWhoami.status === 0) {
+		const name = fromWhoami.stdout?.trim();
+		if (name) return name;
+	}
+	const fromUserInfo = userInfo().username;
+	if (fromUserInfo && fromUserInfo !== "unknown") return fromUserInfo;
+	if (process.env.USERNAME) return process.env.USERNAME;
+	if (process.env.USERPROFILE) return basename(process.env.USERPROFILE);
+	return null;
 }
 
 export function readControlToken(tokenPath: string): string {
@@ -28,9 +142,12 @@ export function readControlToken(tokenPath: string): string {
  * Constant-time token comparison.
  *
  * The daemon uses a plain `===`, which is acceptable there only because its
- * socket is owner-restricted on POSIX. On Windows the named pipe's DACL is
- * permissive (see socket-path.ts) and this socket executes arbitrary
- * commands, so the timing side channel is worth closing.
+ * socket is owner-restricted on POSIX. On Windows the named pipe's default
+ * DACL grants Everyone READ-ONLY (no write — a local user cannot inject
+ * commands, only observe; see socket-path.ts). The token is this socket's
+ * command-auth layer, and its file is ACL-hardened at write (writeControlToken
+ * above). Since a reader could still capture the token off the pipe, closing
+ * the comparison timing side channel is worth it.
  */
 export function tokensMatch(expected: string, provided: unknown): boolean {
 	if (typeof provided !== "string") return false;

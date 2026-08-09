@@ -70,6 +70,25 @@ describe("readAdeWorkspaceSkill", () => {
 	 * skill from disk instead of a TypeScript constant is that there is one copy,
 	 * and a test against a fixture would pass while the shipped document rotted.
 	 */
+	it("normalizes a UTF-8 BOM, CRLF, and a lone CR to a bare LF frontmatter", () => {
+		// A checkout/unzip on Windows can prepend a BOM and use CRLF (or a stray
+		// lone CR); the frontmatter must still start at a bare "---\n" for the
+		// agentskills.io parser, and no CR may survive anywhere in the body.
+		const root = mkdtempSync(join(tmpdir(), "ade-skill-eol-"));
+		const skillDir = join(root, "skills", ADE_WORKSPACE_SKILL_NAME);
+		mkdirSync(skillDir, { recursive: true });
+		writeFileSync(
+			join(skillDir, "SKILL.md"),
+			"﻿---\r\nname: x\rdescription: y\r\n---\r\nbody\r\n",
+			"utf8",
+		);
+		const text = readAdeWorkspaceSkill({ repoRoot: root }) ?? "";
+		expect(text.startsWith("---\n")).toBe(true);
+		expect(text).not.toContain("\r");
+		expect(text).not.toContain("﻿");
+		expect(text).toBe("---\nname: x\ndescription: y\n---\nbody\n");
+	});
+
 	it("reads the bundled skill and it is a usable agentskills.io document", () => {
 		const contents = readAdeWorkspaceSkill();
 		expect(contents).not.toBeNull();

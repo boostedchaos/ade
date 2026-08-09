@@ -34,6 +34,11 @@ import {
 	shimScript,
 } from "./teams";
 
+// claude-teams is macOS-only (win32 exits 2), and these tests spawn POSIX
+// /bin/sh shims and assert executable bits and ':'-delimited PATHs. Skip the
+// POSIX-semantics ones on win32; the win32-refusal test below still runs.
+const skipWin = process.platform === "win32";
+
 let dir: string;
 let dumpPath: string;
 
@@ -95,7 +100,7 @@ afterEach(() => {
 });
 
 describe("shim materialization", () => {
-	it("writes an executable tmux that execs `ade tmux-compat`", () => {
+	it.skipIf(skipWin)("writes an executable tmux that execs `ade tmux-compat`", () => {
 		const shimDir = materializeShim(dir, "'/bin/bun' '/repo/cli.ts'");
 		const path = join(shimDir, "tmux");
 		expect(shimDir).toBe(join(dir, SHIM_DIRNAME));
@@ -115,7 +120,7 @@ describe("shim materialization", () => {
 		expect(readFileSync(path, "utf8")).toBe(first);
 	});
 
-	it("forwards argv verbatim through the shim to tmux-compat", () => {
+	it.skipIf(skipWin)("forwards argv verbatim through the shim to tmux-compat", () => {
 		// The shim is a real shell script; run it with a stub `ade` to prove the
 		// "$@" quoting survives arguments containing spaces and quotes.
 		const echo = join(dir, "echo-args.sh");
@@ -171,7 +176,7 @@ describe("shim materialization", () => {
 });
 
 describe("launch plan", () => {
-	it("prepends the shim dir and sets the teams env", () => {
+	it.skipIf(skipWin)("prepends the shim dir and sets the teams env", () => {
 		const plan = buildLaunch([], { PATH: "/usr/bin" }, "/shim", "/compat");
 		expect(plan.env.PATH).toBe("/shim:/usr/bin");
 		expect(plan.env.TMUX).toBe("/fake-socket,0,0");
@@ -222,7 +227,7 @@ describe("runClaudeTeams", () => {
 		expect(existsSync(join(dir, SHIM_DIRNAME))).toBe(false);
 	});
 
-	it("launches claude with the shim on PATH and returns its exit code", async () => {
+	it.skipIf(skipWin)("launches claude with the shim on PATH and returns its exit code", async () => {
 		const binDir = join(dir, "bin");
 		mkdirSync(binDir, { recursive: true });
 		installStubClaude(binDir, 7);
@@ -365,7 +370,7 @@ describe("per-launch compat dir", () => {
 		);
 	});
 
-	it("the spawned claude actually receives the per-launch dir", async () => {
+	it.skipIf(skipWin)("the spawned claude actually receives the per-launch dir", async () => {
 		const binDir = join(dir, "bin");
 		mkdirSync(binDir, { recursive: true });
 		installStubClaude(binDir);

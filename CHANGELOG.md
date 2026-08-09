@@ -3,7 +3,10 @@
 Notable changes to ADE. Releases before 0.4.0 were recorded only as GitHub
 release notes — see the [releases page](https://github.com/boostedchaos/ade/releases).
 
-## 0.4.0 — 2026-08-09 ([mac-v0.4.0](https://github.com/boostedchaos/ade/releases/tag/mac-v0.4.0))
+## 0.4.0 — 2026-08-09 ([mac-v0.4.0](https://github.com/boostedchaos/ade/releases/tag/mac-v0.4.0) · [windows-v0.4.0](https://github.com/boostedchaos/ade/releases/tag/windows-v0.4.0))
+
+Both channels ship the same Mission Control feature set from one `main`. The
+macOS release led; the Windows release adds the platform-specific pieces below.
 
 ### Added
 
@@ -54,3 +57,23 @@ release notes — see the [releases page](https://github.com/boostedchaos/ade/re
   a repo checkout that does not exist in a bundle, and agents got no `ade`.
 - The `tmux-compat` store directory now honours the workspace suffix, so a
   suffixed workspace no longer shares state with the default one.
+
+### Windows
+
+- **Mission Control lands on Windows.** The `ade` command line talks to the app
+  over a Windows named pipe, and every terminal pane ADE starts has `ade` on its
+  PATH — the same feature set as macOS, minus `ade claude-teams` (still macOS
+  only; Windows exits 2). See [`WINDOWS.md`](WINDOWS.md).
+- **Attention badges on the taskbar.** macOS shows unread counts on the Dock;
+  Windows shows them as a red taskbar overlay badge (`9+` past nine) and flashes
+  the taskbar button when a new one arrives while the window is unfocused.
+- **`ade cli install` works on Windows.** It adds `~/.ade\bin` to your user PATH
+  in the registry (`HKCU\Environment`), preserving unexpanded `%VAR%` entries
+  and never using `setx`. Restart your shell afterwards.
+- **Token file ACL hardening.** The per-launch control token is written with
+  restrictive ACLs (`icacls /inheritance:r`), so only your account can read it.
+  The control pipe's default DACL grants other accounts read-only access only —
+  it is not a command-injection surface ([#8](https://github.com/boostedchaos/ade/issues/8)).
+- **Fixed: bundled `ade-workspace` skill read on Windows.** The skill reader now
+  normalizes CRLF line endings, so the skill is served correctly on Windows CI
+  and installs.

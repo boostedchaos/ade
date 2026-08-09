@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import {
 	dockBadgeText,
 	isUnread,
+	overlayBadgeKey,
+	paintBadges,
 	panesWithUnreadAttention,
 	unreadAttentionByPane,
 	unreadCount,
@@ -107,5 +109,61 @@ describe("dockBadgeText", () => {
 		expect(dockBadgeText(1)).toBe("1");
 		expect(dockBadgeText(99)).toBe("99");
 		expect(dockBadgeText(100)).toBe("99+");
+	});
+});
+
+describe("overlayBadgeKey", () => {
+	it("is null for zero and negatives — the caller then clears the overlay", () => {
+		expect(overlayBadgeKey(0)).toBeNull();
+		expect(overlayBadgeKey(-1)).toBeNull();
+	});
+
+	it("maps 1..9 to a single digit", () => {
+		expect(overlayBadgeKey(1)).toBe("1");
+		expect(overlayBadgeKey(9)).toBe("9");
+	});
+
+	it("caps at 9+ from 10 up — tighter than the Dock's 99+ for a 16px icon", () => {
+		expect(overlayBadgeKey(10)).toBe("9+");
+		expect(overlayBadgeKey(100)).toBe("9+");
+	});
+});
+
+describe("paintBadges", () => {
+	it("clears both badges at zero and still forwards 0 to the overlay sink", () => {
+		const calls: { dock: string[]; overlay: number[] } = {
+			dock: [],
+			overlay: [],
+		};
+		paintBadges(
+			{
+				setDockBadge: (t) => calls.dock.push(t),
+				setOverlayBadge: (c) => calls.overlay.push(c),
+			},
+			0,
+		);
+		// Empty Dock string clears it; the overlay sink receives 0 and maps it to
+		// a clear (overlayBadgeKey(0) === null).
+		expect(calls.dock).toEqual([""]);
+		expect(calls.overlay).toEqual([0]);
+	});
+
+	it("forwards the count to both badges", () => {
+		const dock: string[] = [];
+		const overlay: number[] = [];
+		paintBadges(
+			{ setDockBadge: (t) => dock.push(t), setOverlayBadge: (c) => overlay.push(c) },
+			150,
+		);
+		expect(dock).toEqual(["99+"]);
+		expect(overlay).toEqual([150]);
+	});
+
+	it("works with a Dock-only sink (no overlay support)", () => {
+		const dock: string[] = [];
+		expect(() =>
+			paintBadges({ setDockBadge: (t) => dock.push(t) }, 3),
+		).not.toThrow();
+		expect(dock).toEqual(["3"]);
 	});
 });

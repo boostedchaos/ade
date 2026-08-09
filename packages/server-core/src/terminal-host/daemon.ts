@@ -787,6 +787,9 @@ async function startServer(): Promise<void> {
 			}
 		});
 
+		// Pipe intentionally left at the default DACL (Everyone = read-only,
+		// cannot write commands). NEVER pass readableAll/writableAll — they
+		// widen to Everyone-write and libuv has no API to narrow it back.
 		newServer.listen(SOCKET_PATH, () => {
 			// Set socket permissions (readable/writable by owner only)
 			try {

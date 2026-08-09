@@ -180,7 +180,7 @@ export const browserCommands: Command[] = [
 			"  ade browser open --url https://example.com --direction right --focus false\n" +
 			'  ade browser type --pane pane:2 --selector "#email" --text me@example.com\n' +
 			'  ade browser fill --pane pane:2 --fields \'{"#user":"kyle","#pw":"hunter2"}\'\n' +
-			"  ade browser screenshot --pane pane:2 --path /tmp/shot.png\n\n" +
+			"  ade browser screenshot --pane pane:2 --path ./shot.png\n\n" +
 			`NOT SUPPORTED:\n${UNSUPPORTED.map((line) => `  - ${line}`).join("\n")}\n\n` +
 			"`fill` applies fields in order and STOPS at the first failure, reporting\n" +
 			"how many were filled — it never leaves a half-filled form looking like a\n" +
