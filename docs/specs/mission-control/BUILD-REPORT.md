@@ -22,10 +22,14 @@ the pane with focus restored (event stream showed the restore),
 info/screenshot worked, tables rendered, and Kyle visually confirmed the
 attention ring + Dock badge from `set-status needsInput`. Artifacts were
 rebuilt at `4dac3e2`: DMG sha256 `c1ae94c0…7b616d`, zip `7448e64e…162054`
-(SHA256SUMS.txt updated). Still open on the manual checklist: one toast
-per real permission ask, a real `claude-teams` teammate spawn, and
-`echo $ADE_DATA_DIR_NAME` printing `.ade-default` in a fresh agent pane
-(never verifiable headlessly). Noted twice, cause unknown: occasional
+(SHA256SUMS.txt updated). Later the same day, live on Kyle's installed 0.4.0: `ade claude-teams`
+spawned a real teammate pane through the shim (task completed, file
+written, ZERO unknown-verb entries in tmux-compat.log), and a fresh agent
+pane carried `ADE_DATA_DIR_NAME=.ade-default`. Still open: one-toast-per-
+permission-ask (bypass mode skips asks; will verify in normal daily use).
+Operational gotcha found: the detached terminal-host daemon survives app
+upgrades running from the OLD bundle path — new PTY spawns die until it is
+restarted (issue filed). Noted twice, cause unknown: occasional
 >25s SIGTERM quit in the smoke harness.
 
 ## What shipped
