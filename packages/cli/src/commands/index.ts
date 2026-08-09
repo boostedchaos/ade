@@ -4,7 +4,9 @@ import { notificationCommands } from "./notifications";
 import { paneCommands } from "./panes";
 import { sessionCommands } from "./sessions";
 import { stubCommands } from "./stubs";
+import { teamsCommands } from "./teams";
 import { terminalIoCommands } from "./terminal-io";
+import { tmuxCompatCommands } from "./tmux-compat";
 import { workspaceCommands } from "./workspaces";
 
 export const COMMANDS: Command[] = [
@@ -14,6 +16,8 @@ export const COMMANDS: Command[] = [
 	...sessionCommands,
 	...notificationCommands,
 	...eventCommands,
+	...teamsCommands,
+	...tmuxCompatCommands,
 	...stubCommands,
 ];
 
@@ -24,6 +28,7 @@ export const GROUP_ORDER = [
 	"Agent sessions",
 	"Notifications",
 	"Events",
+	"Teams",
 	"Not yet implemented",
 ];
 

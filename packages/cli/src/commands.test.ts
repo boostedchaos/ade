@@ -39,9 +39,17 @@ describe("registry", () => {
 		}
 	});
 
-	it("gives every non-stub command a build()", () => {
+	it("gives every command a way to run: build(), runLocal(), or stub", () => {
 		for (const command of COMMANDS) {
 			if (command.kind === "stub") continue;
+			// `local` commands (tmux-compat, claude-teams) own their argv and never
+			// produce a wire request — PROTOCOL.md: tmux-compat never appears on
+			// the wire.
+			if (command.kind === "local") {
+				expect(typeof command.runLocal).toBe("function");
+				expect(command.build).toBeUndefined();
+				continue;
+			}
 			expect(typeof command.build).toBe("function");
 		}
 	});

@@ -89,18 +89,38 @@ describe("usage failures exit 2", () => {
 	it("registers a stub for every command SPEC.md lists but has not built yet", async () => {
 		const { findCommand } = await import("./commands");
 		// hooks / agent-event / agent-sessions left this list in Phase 2; the four
-		// notification verbs left it in Phase 3.
+		// notification verbs left it in Phase 3; claude-teams / tmux-compat left
+		// it in Phase 4.
 		for (const name of [
 			"set-status",
 			"set-progress",
-			"claude-teams",
-			"tmux-compat",
 			"todo",
 			"browser",
 			"cli",
 		]) {
 			expect(findCommand(name)?.kind).toBe("stub");
 		}
+	});
+
+	it("routes the Phase 4 teams commands to local handlers, not stubs", async () => {
+		const { findCommand } = await import("./commands");
+		for (const name of ["claude-teams", "tmux-compat"]) {
+			const command = findCommand(name);
+			expect(command?.kind).toBe("local");
+			expect(typeof command?.runLocal).toBe("function");
+		}
+	});
+
+	it("does not read `-h` in a tmux argv as a request for help", async () => {
+		// `split-window -h` means horizontal, and the generic rawArgs help sniff
+		// would have swallowed it and printed usage instead of splitting.
+		const capture = captureIo();
+		const code = await run(
+			["tmux-compat", "-V", "-h"],
+			capture as unknown as Parameters<typeof run>[1],
+		);
+		expect(code).toBe(EXIT.OK);
+		expect(capture.stdoutText()).toBe("tmux 3.4");
 	});
 });
 

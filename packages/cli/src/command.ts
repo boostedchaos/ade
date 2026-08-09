@@ -9,7 +9,14 @@ import type { OptionDef, ParsedInput, PositionalDef } from "./args";
  * command called from an agent's hook must have, so that a closed app or a
  * terminal outside ADE never breaks the agent. Only `agent-event` uses it.
  */
-export type CommandKind = "request" | "stream" | "stub" | "silent";
+/**
+ * `local` runs entirely in the CLI process and owns its own argv, exit codes
+ * and (if any) socket use. `tmux-compat` must answer tmux's exit-code
+ * contract rather than the CLI's, and `claude-teams` replaces the process with
+ * `claude` — neither maps onto a single wire request, and PROTOCOL.md is
+ * explicit that `tmux-compat` never appears on the wire.
+ */
+export type CommandKind = "request" | "stream" | "stub" | "silent" | "local";
 
 export interface WireRequest {
 	cmd: string;
@@ -40,6 +47,18 @@ export interface Command {
 	 * fallback, leaving the normal exit-3 behaviour in place.
 	 */
 	offlineFallback?: (input: ParsedInput) => string | null;
+	/**
+	 * `local`: run the command yourself and return the process exit code. Gets
+	 * raw argv (no parseArgs pass) because tmux's grammar collides with the
+	 * CLI's — `-h` means "split horizontally" there, not "help".
+	 */
+	runLocal?: (argv: string[], io: LocalIo) => Promise<number>;
+}
+
+/** What a `local` command is given to talk to the terminal. */
+export interface LocalIo {
+	stdout: (line: string) => void;
+	stderr: (line: string) => void;
 }
 
 /** Drops undefined values so the wire request stays minimal. */

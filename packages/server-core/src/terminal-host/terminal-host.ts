@@ -33,8 +33,28 @@ import type {
 
 /** Timeout for force-disposing sessions that don't exit after kill */
 const KILL_TIMEOUT_MS = 5000;
-const MAX_CONCURRENT_SPAWNS = 3;
+/**
+ * How many PTYs may be spawning at once.
+ *
+ * Raised from 3 to 8 for agent teams: a team spawn burst creates several panes
+ * back to back and would otherwise queue behind the cap, so teammates appear
+ * one slow batch at a time. Override with ADE_MAX_CONCURRENT_SPAWNS.
+ */
+const DEFAULT_MAX_CONCURRENT_SPAWNS = 8;
 const SPAWN_READY_TIMEOUT_MS = 5000;
+
+/** Positive integer or nothing: a malformed override falls back, never throws. */
+export function resolveMaxConcurrentSpawns(
+	raw: string | undefined = process.env.ADE_MAX_CONCURRENT_SPAWNS,
+	fallback: number = DEFAULT_MAX_CONCURRENT_SPAWNS,
+): number {
+	const value = raw?.trim();
+	// Plain decimal digits only: "1e3" and "0x10" parse as numbers but are
+	// typos in a config value, not intentions.
+	if (!value || !/^\d+$/.test(value)) return fallback;
+	const parsed = Number(value);
+	return parsed >= 1 ? parsed : fallback;
+}
 
 function promiseWithTimeout<T>(
 	promise: Promise<T>,
@@ -60,7 +80,7 @@ function promiseWithTimeout<T>(
 export class TerminalHost {
 	private sessions: Map<string, Session> = new Map();
 	private killTimers: Map<string, NodeJS.Timeout> = new Map();
-	private spawnLimiter = new Semaphore(MAX_CONCURRENT_SPAWNS);
+	private spawnLimiter = new Semaphore(resolveMaxConcurrentSpawns());
 	private onUnattachedExit?: (event: {
 		sessionId: string;
 		exitCode: number;

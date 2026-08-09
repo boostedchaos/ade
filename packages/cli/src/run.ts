@@ -110,6 +110,16 @@ async function runCommand(
 	argv: string[],
 	io: RunIo,
 ): Promise<ExitCode> {
+	// `local` first, and before any help sniffing: a tmux argv legitimately
+	// contains `-h` (split horizontally), so only argv[0] may mean help here.
+	if (command.kind === "local" && command.runLocal) {
+		if (argv[0] === "--help" || argv[0] === "-h") {
+			io.stdout(commandHelp(command));
+			return EXIT.OK;
+		}
+		return (await command.runLocal(argv, io)) as ExitCode;
+	}
+
 	if (command.rawArgs) {
 		if (argv.includes("--help") || argv.includes("-h")) {
 			io.stdout(commandHelp(command));

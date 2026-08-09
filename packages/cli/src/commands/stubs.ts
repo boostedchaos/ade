@@ -26,18 +26,6 @@ const STUBS: StubSpec[] = [
 		phase: "Phase 2 — agent session tracking",
 	},
 	{
-		name: "claude-teams",
-		group: "Not yet implemented",
-		summary: "Launch Claude Code with agent-teams pointed at ADE's tmux shim",
-		phase: "Phase 4 — teams shim",
-	},
-	{
-		name: "tmux-compat",
-		group: "Not yet implemented",
-		summary: "Internal: tmux vocabulary shim target",
-		phase: "Phase 4 — teams shim",
-	},
-	{
 		name: "todo",
 		group: "Not yet implemented",
 		summary: "Workspace todos (add | list | start | done | rm)",
