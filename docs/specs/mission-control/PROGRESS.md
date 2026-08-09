@@ -5,6 +5,15 @@ Orchestrator: Fable (architect only); execution via parallel Opus 5 subagents.
 
 ## Current phase
 
+**BUILD COMPLETE 2026-08-09.** All six ship gates resolved — see
+`BUILD-REPORT.md` (gate results, divergences, Kyle's 5-minute manual
+checklist). Branch pushed to boosted/mission-control, NOT merged. Artifacts
+
++ SHA256SUMS.txt at the project root. Everything below is the historical
+build trail.
+
+## Build trail (historical)
+
 **Phase 5b — CLI wiring for parity extras** (dispatched to CLI lane, 2026-08-09).
 
 Phase 4 COMPLETE at `a78777e`: tmux-compat translator (per-verb flag tables,
@@ -67,13 +76,13 @@ corrector (structurally cannot invent sessions), agent-state-changed events,
 outside ADE), `agent-sessions`; read-only daemon `snapshot` (no-resize
 canary-proven) wired end to end. Notes for later phases:
 
-- Phase 6 smoke asserts: live pane → `source: "live-screen"`; exited pane →
++ Phase 6 smoke asserts: live pane → `source: "live-screen"`; exited pane →
   `scrollback-history` with NO "live screen read failed" warning in main log.
-- `packages/server-core/src/notifications/map-event-type.ts` is a SECOND
++ `packages/server-core/src/notifications/map-event-type.ts` is a SECOND
   copy serving apps/server (web shell) — not extended; web path ignores the
   new events (forward-compat safe). Extend if Feature 3 must cover web.
-- `agentKind` field exists but nothing populates it yet (defaults claude).
-- Never run biome --write over agent-setup/ (corrupts {{MARKER}} templates).
++ `agentKind` field exists but nothing populates it yet (defaults claude).
++ Never run biome --write over agent-setup/ (corrupts {{MARKER}} templates).
 
 Earlier:
 
@@ -82,42 +91,42 @@ renderer bridge (40 tests), agent-setup bin injection (58 tests), all
 verified independently; desktop failures identical to baseline (22, all
 pre-existing in static-ports/loader.test.ts). Notable:
 
-- Reads bypass renderer (main's app-state mirror incl. layout); bridge =
++ Reads bypass renderer (main's app-state mirror incl. layout); bridge =
   mutations only. Focused workspace = window URL.
-- send-key: CLI pre-encodes (`data`), server prefers it; 112-case
++ send-key: CLI pre-encodes (`data`), server prefers it; 112-case
   cross-package contract test pins both key tables (dep edge
   @ade/cli → control-plane devDeps, 1-line lockfile delta).
-- Real bug found+fixed: bridge originally split at layout ROOT always;
++ Real bug found+fixed: bridge originally split at layout ROOT always;
   now path-based split + swap-at-path (identity-preserving).
-- Divergences (accepted, for build report): browser new-pane = new tab
++ Divergences (accepted, for build report): browser new-pane = new tab
   (split-in action deferred to Phase 5); --command on splits → UNSUPPORTED;
   new-workspace routes via renderer tRPC mutation; read-screen/capture-pane
   read persisted scrollback (low fidelity for TUIs) until Phase 2 daemon
   snapshot; ade bin requires bun in dev checkouts (packaged build must ship
   compiled dist entry — Phase 6 item); bin entry-missing exit = 127.
-- Desktop tests MUST run from apps/desktop cwd or they error spuriously.
++ Desktop tests MUST run from apps/desktop cwd or they error spuriously.
 
 Phase 0 was committed at `b611c0e` (probe: agent-teams flag LIVE).
 
-- [x] Branch created, base verified (`302d183` is ancestor of HEAD)
-- [x] Socket schema + amendments → `PROTOCOL.md` (this dir)
-- [x] Ground truth re-verified at HEAD: 26/26 CONFIRMED, 0 drift → `RECON-HEAD.md`
-- [x] Package scaffolds `@ade/control-plane`, `@ade/cli` (bun install clean, no lockfile change)
-- [x] Agent-teams probe DONE — flag LIVE in 2.1.226, real contract captured →
++ [x] Branch created, base verified (`302d183` is ancestor of HEAD)
++ [x] Socket schema + amendments → `PROTOCOL.md` (this dir)
++ [x] Ground truth re-verified at HEAD: 26/26 CONFIRMED, 0 drift → `RECON-HEAD.md`
++ [x] Package scaffolds `@ade/control-plane`, `@ade/cli` (bun install clean, no lockfile change)
++ [x] Agent-teams probe DONE — flag LIVE in 2.1.226, real contract captured →
       `probe/PROBE-CONTRACT.md` + raw `probe/tmux-calls.log`
 
 Probe findings that re-scope Phase 4 (tmux-compat):
 
-- Command channel is `set-option -p -t %N remain-on-exit failed` +
++ Command channel is `set-option -p -t %N remain-on-exit failed` +
   `respawn-pane -k -t %N -- '<shell string>'` on a pane born running `cat`.
   send-keys and capture-pane are NEVER called; stdin never written; nothing
   polls. Teardown = kill-pane only. **respawn-pane (replace process, keep
   paneId) is the load-bearing verb.**
-- Verbs used: display-message, list-panes, split-window, set-option,
++ Verbs used: display-message, list-panes, split-window, set-option,
   select-pane, respawn-pane, kill-pane, has-session, new-session, -V,
   show/show-environment. Format strings read: `#{pane_id}`, `#{window_id}`,
   `#{window_name}`, `#{session_name}:#{window_id}.#{pane_id}`.
-- Launcher must pass `--teammate-mode tmux` (default is in-process even with
++ Launcher must pass `--teammate-mode tmux` (default is in-process even with
   the env var) and needs a real PTY (headless -p forces in-process).
   `CLAUDE_CODE_TEAMMATE_COMMAND` is a clean interpose seam.
   Server-side kill switch exists (`tengu_amber_flint`) → keep launcher
@@ -125,12 +134,12 @@ Probe findings that re-scope Phase 4 (tmux-compat):
 
 Key design amendments from recon (detail in PROTOCOL.md):
 
-- Feature 2 = extend existing hook pipeline (`~/.ade/hooks/claude-settings.json`
-  - `--settings` + notification server + useAgentHookListener); NO
++ Feature 2 = extend existing hook pipeline (`~/.ade/hooks/claude-settings.json`
+  + `--settings` + notification server + useAgentHookListener); NO
   ~/.claude/settings.json merge. SUPERSET_PANE_ID stays; ADE_SURFACE_ID aliased.
-- Control token per-launch (unconditional write); auth via wrapper middleware.
-- Phase 1 must verify main's tabsState mirror — reads may skip renderer bridge.
-- Phase 6 note: docs/releasing-mac.md wants SUPERSET_WORKSPACE_NAME unset for
++ Control token per-launch (unconditional write); auth via wrapper middleware.
++ Phase 1 must verify main's tabsState mirror — reads may skip renderer bridge.
++ Phase 6 note: docs/releasing-mac.md wants SUPERSET_WORKSPACE_NAME unset for
   public artifacts; spec gate 6 bakes `default`. Two artifacts/two purposes —
   state which was produced, don't reconcile.
 
@@ -143,12 +152,12 @@ Key design amendments from recon (detail in PROTOCOL.md):
 
 ## Open items
 
-- Hybrid harness clause: decide after probe whether one mechanical lane runs via agent teams.
-- Phase 6 smoke must confirm: (a) the PTY-level `stty size` snapshot test in
++ Hybrid harness clause: decide after probe whether one mechanical lane runs via agent teams.
++ Phase 6 smoke must confirm: (a) the PTY-level `stty size` snapshot test in
   terminal-host/snapshot.test.ts (gated on a beforeAll probe; did NOT run in
   the build worktree — PTY writes EBADF there) runs on a normal machine;
   (b) `ade read-screen` on a live pane reports `source: "live-screen"`.
-- Phase 6 packaging must ship a compiled Node-runnable CLI entry
++ Phase 6 packaging must ship a compiled Node-runnable CLI entry
   (dist/index.mjs or resources/cli/index.mjs) — the dev `ade` bin requires
   bun otherwise.
 
