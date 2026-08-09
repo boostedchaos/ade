@@ -69,6 +69,27 @@ export async function run(argv: string[], io: RunIo): Promise<ExitCode> {
 	try {
 		return await runCommand(command, rest, io);
 	} catch (err) {
+		// A hook-invoked command must never surface a failure — see the `silent`
+		// kind in command.ts. This is the outermost of three guards (build,
+		// connect, dispatch) so nothing can leak past it.
+		if (command.kind === "silent") return EXIT.OK;
+		if (
+			err instanceof CliError &&
+			err.code === EXIT.NOT_RUNNING &&
+			command.offlineFallback
+		) {
+			const text = command.offlineFallback(
+				parseCommandArgs(
+					rest,
+					command.options ?? [],
+					command.positionals ?? [],
+				),
+			);
+			if (text !== null) {
+				io.stdout(text);
+				return EXIT.OK;
+			}
+		}
 		if (err instanceof CliError) {
 			io.stderr(
 				err.serverCode ? `${err.serverCode}: ${err.message}` : err.message,
@@ -129,10 +150,13 @@ async function runCommand(
 	try {
 		await client.connect();
 		const result = await client.request(request.cmd, request.args);
+		if (command.kind === "silent") return EXIT.OK;
 		if (input.json) {
 			io.stdout(JSON.stringify(result ?? null));
 		} else {
-			const text = formatResult(result);
+			const text = command.format
+				? command.format(result, input)
+				: formatResult(result);
 			if (text) io.stdout(text);
 		}
 		return EXIT.OK;

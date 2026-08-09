@@ -62,7 +62,10 @@ const {
 	buildWrapperScript,
 	createCodexWrapper,
 	createMastraWrapper,
+	backupClaudeSettings,
+	CLAUDE_HOOK_EVENTS,
 	getClaudeSettingsContent,
+	readClaudeHookCoverage,
 	getCursorHooksJsonContent,
 	getCopilotHookScriptPath,
 	getGeminiSettingsJsonContent,
@@ -435,13 +438,10 @@ describe("agent-wrappers copilot", () => {
 			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
 		};
 
-		const events = [
-			"UserPromptSubmit",
-			"Stop",
-			"PostToolUse",
-			"PostToolUseFailure",
-			"PermissionRequest",
-		] as const;
+		// Derived from the module's own event table, so a spec event added there
+		// is automatically covered here rather than needing this list edited.
+		const events = Object.keys(CLAUDE_HOOK_EVENTS);
+		expect(events.length).toBeGreaterThan(0);
 
 		for (const eventName of events) {
 			const entries = parsed.hooks[eventName];
@@ -456,6 +456,116 @@ describe("agent-wrappers copilot", () => {
 			);
 			expect(command).toContain("2>&1");
 		}
+	});
+
+	it("registers the full Mission Control event set", () => {
+		const parsed = JSON.parse(getClaudeSettingsContent('"/tmp/notify.sh"')) as {
+			hooks: Record<string, unknown[]>;
+		};
+		// The states are what session tracking reads; the names are the contract
+		// with Claude Code. Both live in one table so they cannot drift apart.
+		expect(CLAUDE_HOOK_EVENTS.SessionStart).toBe("idle");
+		expect(CLAUDE_HOOK_EVENTS.PreToolUse).toBe("working");
+		expect(CLAUDE_HOOK_EVENTS.Notification).toBe("needsInput");
+		expect(CLAUDE_HOOK_EVENTS.SessionEnd).toBe("ended");
+
+		for (const name of [
+			"SessionStart",
+			"PreToolUse",
+			"Notification",
+			"SessionEnd",
+		]) {
+			expect(Array.isArray(parsed.hooks[name])).toBe(true);
+		}
+	});
+
+	it("scopes only tool events with a matcher", () => {
+		const parsed = JSON.parse(getClaudeSettingsContent('"/tmp/notify.sh"')) as {
+			hooks: Record<string, Array<{ matcher?: string }>>;
+		};
+		expect(parsed.hooks.PostToolUse?.[0]?.matcher).toBe("*");
+		// A session-lifecycle event has no tool to match on.
+		expect(parsed.hooks.SessionStart?.[0]?.matcher).toBeUndefined();
+		expect(parsed.hooks.Stop?.[0]?.matcher).toBeUndefined();
+	});
+
+	describe("readClaudeHookCoverage", () => {
+		it("reports what the file on disk actually registers", () => {
+			const file = path.join(TEST_HOOKS_DIR, "coverage-partial.json");
+			writeFileSync(
+				file,
+				JSON.stringify({
+					hooks: {
+						Stop: [{ hooks: [] }],
+						SessionStart: [],
+						UserPromptSubmit: [{ hooks: [{ type: "command", command: "x" }] }],
+					},
+				}),
+			);
+			const coverage = readClaudeHookCoverage(file);
+
+			expect(coverage.present).toBe(true);
+			// An empty array is not coverage — SessionStart is registered with no
+			// entries, so it is reported missing.
+			expect(coverage.registered.sort()).toEqual(["Stop", "UserPromptSubmit"]);
+			expect(coverage.missing).toContain("SessionStart");
+			expect(coverage.missing).toContain("SessionEnd");
+		});
+
+		it("reports a missing file as no coverage rather than throwing", () => {
+			const coverage = readClaudeHookCoverage(
+				path.join(TEST_HOOKS_DIR, "does-not-exist.json"),
+			);
+			expect(coverage.present).toBe(false);
+			expect(coverage.registered).toEqual([]);
+			expect(coverage.missing.length).toBe(
+				Object.keys(CLAUDE_HOOK_EVENTS).length,
+			);
+		});
+
+		it("reports an unparseable file as no coverage", () => {
+			const file = path.join(TEST_HOOKS_DIR, "broken.json");
+			writeFileSync(file, "{not json");
+			expect(readClaudeHookCoverage(file).present).toBe(false);
+		});
+
+		it("sees full coverage in the file this module writes", () => {
+			const file = path.join(TEST_HOOKS_DIR, "written.json");
+			writeFileSync(file, getClaudeSettingsContent('"/tmp/notify.sh"'));
+			expect(readClaudeHookCoverage(file).missing).toEqual([]);
+		});
+	});
+
+	describe("backupClaudeSettings", () => {
+		it("copies the old content aside when the content changes", () => {
+			const file = path.join(TEST_HOOKS_DIR, "backup-me.json");
+			writeFileSync(file, '{"hooks":{"Stop":[]}}');
+
+			const backupPath = backupClaudeSettings(
+				file,
+				'{"hooks":{"Stop":[],"SessionEnd":[]}}',
+				new Date("2026-08-09T12:34:56.000Z"),
+			);
+
+			expect(backupPath).toBe(`${file}.2026-08-09T12-34-56-000Z.bak`);
+			expect(readFileSync(backupPath as string, "utf-8")).toBe(
+				'{"hooks":{"Stop":[]}}',
+			);
+			// The original is untouched — writing the new content is the caller's job.
+			expect(readFileSync(file, "utf-8")).toBe('{"hooks":{"Stop":[]}}');
+		});
+
+		it("writes no backup when the content is identical", () => {
+			const file = path.join(TEST_HOOKS_DIR, "unchanged.json");
+			writeFileSync(file, "same");
+			expect(backupClaudeSettings(file, "same")).toBeNull();
+		});
+
+		it("writes no backup when there is no file yet", () => {
+			expect(
+				backupClaudeSettings(path.join(TEST_HOOKS_DIR, "absent.json"), "new"),
+			).toBeNull();
+		});
 	});
 
 	it.skipIf(process.platform === "win32")("replaces stale Mastra hook commands from old superset paths", () => {

@@ -5,10 +5,11 @@ import {
 	FALLBACK_SHELL,
 	getDefaultShell,
 	getLocale,
+	HOOK_PROTOCOL_VERSION,
 	removeAppEnvVars,
-	setOpenRouterKeyResolver,
 	SHELL_CRASH_THRESHOLD_MS,
 	sanitizeEnv,
+	setOpenRouterKeyResolver,
 } from "./env";
 
 describe("env", () => {
@@ -756,6 +757,15 @@ describe("env", () => {
 				expect(result.SUPERSET_WORKSPACE_ID).toBe("ws-1");
 			});
 
+			it("should alias pane/workspace ids as ADE_* without dropping SUPERSET_*", () => {
+				const result = buildTerminalEnv(baseParams);
+
+				expect(result.ADE_SURFACE_ID).toBe("pane-1");
+				expect(result.ADE_WORKSPACE_ID).toBe("ws-1");
+				expect(result.ADE_SURFACE_ID).toBe(result.SUPERSET_PANE_ID);
+				expect(result.ADE_WORKSPACE_ID).toBe(result.SUPERSET_WORKSPACE_ID);
+			});
+
 			it("should handle optional workspace params", () => {
 				const result = buildTerminalEnv({
 					...baseParams,
@@ -792,13 +802,15 @@ describe("env", () => {
 		it("should include SUPERSET_ENV for dev/prod separation", () => {
 			const result = buildTerminalEnv(baseParams);
 			expect(result.SUPERSET_ENV).toBeDefined();
-			expect(["development", "production"]).toContain(result.SUPERSET_ENV ?? "");
+			expect(["development", "production"]).toContain(
+				result.SUPERSET_ENV ?? "",
+			);
 		});
 
 		it("should include SUPERSET_HOOK_VERSION for protocol versioning", () => {
 			const result = buildTerminalEnv(baseParams);
 			expect(result.SUPERSET_HOOK_VERSION).toBeDefined();
-			expect(result.SUPERSET_HOOK_VERSION).toBe("2");
+			expect(result.SUPERSET_HOOK_VERSION).toBe(HOOK_PROTOCOL_VERSION);
 		});
 
 		describe("SSL_CERT_FILE fallback on macOS", () => {

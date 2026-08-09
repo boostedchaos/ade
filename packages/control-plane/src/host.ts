@@ -119,7 +119,78 @@ export interface ControlPlaneHost {
 		 * limitation this carries.
 		 */
 		readScrollback(workspaceId: string, paneId: string): Promise<string | null>;
+		/** Read-only live screen read. Returns null when the daemon has no session. */
+		readSnapshot?(
+			paneId: string,
+			options: { includeScrollback?: boolean; maxLines?: number },
+		): Promise<{
+			text: string;
+			cols: number;
+			rows: number;
+			scrollbackLines: number;
+			alternateScreen: boolean;
+			cwd: string | null;
+			isAlive: boolean;
+			flushed: boolean;
+		} | null>;
 	};
 
+	/**
+	 * Agent session tracking (Feature 2). Optional so a host that predates it —
+	 * or a test host — still satisfies the interface; the commands answer
+	 * UNSUPPORTED when it is absent rather than throwing INTERNAL.
+	 */
+	agents?: AgentSessionsHost;
+
 	log(level: "info" | "warn" | "error", message: string): void;
+}
+
+export type AgentSessionStateName = "working" | "needsInput" | "idle" | "ended";
+
+export interface AgentSessionSnapshot {
+	surfaceId: string;
+	workspaceId: string | null;
+	agentKind: string;
+	sessionId: string | null;
+	transcriptPath: string | null;
+	state: AgentSessionStateName;
+	pid: number | null;
+	lastActivityAt: number;
+}
+
+export interface HooksSetupResult {
+	agent: string;
+	settingsPath: string;
+	changed: boolean;
+	/** Set only when an existing file with different content was replaced. */
+	backupPath: string | null;
+	registered: string[];
+	missing: string[];
+}
+
+export interface HooksStatusResult {
+	agent: string;
+	settingsPath: string;
+	present: boolean;
+	registered: string[];
+	missing: string[];
+}
+
+export interface AgentSessionsHost {
+	listSessions(): AgentSessionSnapshot[];
+	/**
+	 * Feeds the SAME ingest path the HTTP hook receiver uses. Returns the
+	 * transition, or null when the event did not change state.
+	 */
+	ingestEvent(input: {
+		surfaceId: string;
+		eventType: string;
+		workspaceId?: string;
+		sessionId?: string;
+		transcriptPath?: string;
+		agentKind?: string;
+	}): { from: AgentSessionStateName; to: AgentSessionStateName } | null;
+	/** Rewrites ADE's own hooks file. Throws UNSUPPORTED for non-claude agents. */
+	setupHooks(agent: string): HooksSetupResult;
+	hooksStatus(agent: string): HooksStatusResult;
 }

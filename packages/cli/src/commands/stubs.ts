@@ -14,19 +14,6 @@ interface StubSpec {
 
 const STUBS: StubSpec[] = [
 	{
-		name: "hooks",
-		group: "Not yet implemented",
-		summary:
-			"Manage Claude Code hook wiring (hooks setup claude | hooks status)",
-		phase: "Phase 2 — agent session tracking",
-	},
-	{
-		name: "agent-event",
-		group: "Not yet implemented",
-		summary: "Report an agent lifecycle event (called by Claude Code hooks)",
-		phase: "Phase 2 — agent session tracking",
-	},
-	{
 		name: "set-status",
 		group: "Not yet implemented",
 		summary: "Set a pane's agent status (working | needsInput | idle)",
@@ -36,12 +23,6 @@ const STUBS: StubSpec[] = [
 		name: "set-progress",
 		group: "Not yet implemented",
 		summary: "Set a pane's progress indicator (0-100 | clear)",
-		phase: "Phase 2 — agent session tracking",
-	},
-	{
-		name: "agent-sessions",
-		group: "Not yet implemented",
-		summary: "List tracked agent sessions, one per terminal pane",
 		phase: "Phase 2 — agent session tracking",
 	},
 	{

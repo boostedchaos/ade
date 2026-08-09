@@ -245,6 +245,57 @@ export interface ListSessionsResponse {
 }
 
 /**
+ * READ-ONLY screen read of a live session.
+ *
+ * Distinct from `createOrAttach`, which also returns a snapshot but is a
+ * mutation: it registers the caller as an attached client and RESIZES the
+ * session to the caller's requested cols/rows. A reader that only wants to see
+ * the screen must not do either, so this request exists. It never attaches,
+ * never resizes, never writes, and does not disturb the event stream.
+ *
+ * Additive-only per this file's header: an older daemon answers UNKNOWN_TYPE,
+ * which the client turns into a fallback rather than an error.
+ */
+export interface SnapshotRequest {
+	sessionId: string;
+	/**
+	 * Include lines that have scrolled off the top. Ignored on the alternate
+	 * screen, which has no scrollback.
+	 */
+	includeScrollback?: boolean;
+	/** Cap the returned lines, counted from the END (most recent). */
+	maxLines?: number;
+	/**
+	 * Also return the serialized ANSI form. Off by default — it is several
+	 * times larger than the text and most callers want to read, not replay.
+	 */
+	includeAnsi?: boolean;
+}
+
+export interface SnapshotResponse {
+	/** Rendered plain text, newline-joined. What a human would see. */
+	text: string;
+	/** Serialized ANSI, only when `includeAnsi` was set. */
+	ansi?: string;
+	/** The session's CURRENT dimensions — not anything the caller asked for. */
+	cols: number;
+	rows: number;
+	/** Lines held in the active buffer, viewport included. */
+	scrollbackLines: number;
+	/** True when a full-screen TUI is drawing (vim, htop, Claude Code). */
+	alternateScreen: boolean;
+	cwd: string | null;
+	pid: number | null;
+	isAlive: boolean;
+	/**
+	 * False when the pre-read flush timed out under continuous output — the
+	 * text is then very slightly behind. Reported rather than hidden so a
+	 * caller can tell "quiet terminal" from "we gave up waiting".
+	 */
+	flushed: boolean;
+}
+
+/**
  * Clear scrollback for a session
  */
 export interface ClearScrollbackRequest {
@@ -359,6 +410,7 @@ export type RequestTypeMap = {
 	kill: { request: KillRequest; response: EmptyResponse };
 	killAll: { request: KillAllRequest; response: EmptyResponse };
 	listSessions: { request: undefined; response: ListSessionsResponse };
+	snapshot: { request: SnapshotRequest; response: SnapshotResponse };
 	clearScrollback: { request: ClearScrollbackRequest; response: EmptyResponse };
 	shutdown: { request: ShutdownRequest; response: EmptyResponse };
 };

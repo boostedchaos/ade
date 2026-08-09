@@ -48,9 +48,20 @@ describe("registry", () => {
 
 	it("maps CLI verbs 1:1 onto wire commands, except events", () => {
 		// Positionals that are not targets need a value the command accepts.
-		const samples: Record<string, string> = { key: "Enter", text: "hi" };
+		const samples: Record<string, string> = {
+			key: "Enter",
+			text: "hi",
+			subcommand: "status",
+		};
+		// `hooks` is the one verb that is a command GROUP, not a command: its
+		// subcommands dispatch to `hooks-setup` / `hooks-status`. Everything else
+		// must keep the 1:1 property, which is what this test protects.
+		const NOT_ONE_TO_ONE = new Set(["hooks"]);
+		// agent-event reads the pane from the environment ADE injects.
+		process.env.ADE_SURFACE_ID = "pane-test";
 		for (const command of COMMANDS) {
 			if (!command.build || command.kind === "stream") continue;
+			if (NOT_ONE_TO_ONE.has(command.name)) continue;
 			const positionals = (command.positionals ?? []).map(
 				(p) => samples[p.name] ?? "focused",
 			);
@@ -61,6 +72,16 @@ describe("registry", () => {
 			}
 			expect(build(command.name, argv).cmd).toBe(command.name);
 		}
+		delete process.env.ADE_SURFACE_ID;
+	});
+
+	it("dispatches hooks subcommands to their own wire commands", () => {
+		expect(build("hooks", ["setup"]).cmd).toBe("hooks-setup");
+		expect(build("hooks", ["setup", "claude"]).args).toEqual({
+			agent: "claude",
+		});
+		expect(build("hooks", ["status"]).cmd).toBe("hooks-status");
+		expect(() => build("hooks", ["frobnicate"])).toThrow();
 	});
 });
 

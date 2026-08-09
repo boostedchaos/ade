@@ -208,6 +208,68 @@ export class HeadlessEmulator {
 	}
 
 	/**
+	 * True when the session is on the alternate screen — i.e. a full-screen TUI
+	 * (vim, htop, Claude Code's own interface) is drawing. Callers reading text
+	 * need this: on the alt screen there is no meaningful scrollback, and the
+	 * persisted output stream is redraw traffic rather than a transcript.
+	 */
+	isAlternateScreen(): boolean {
+		return (
+			this.modes.alternateScreen ||
+			this.terminal.buffer.active.type === "alternate"
+		);
+	}
+
+	/**
+	 * RENDERED PLAIN TEXT of the terminal, read out of the active buffer.
+	 *
+	 * This is what a human sees, which the serialized ANSI snapshot is not: the
+	 * serializer emits escape sequences to REPRODUCE a screen, so a caller who
+	 * wants to read the screen would have to strip them and would still get
+	 * redraw traffic for an alt-screen TUI. Reading `translateToString` off the
+	 * buffer gives the composed result instead.
+	 *
+	 * Read-only: touches no terminal state, resizes nothing, and is safe to
+	 * call on a live session at any time.
+	 *
+	 * @param includeScrollback include lines scrolled off the top of the screen.
+	 *   Ignored on the alternate screen, which has no scrollback by definition.
+	 * @param maxLines cap the result, counted from the END (most recent).
+	 */
+	getRenderedText(
+		options: { includeScrollback?: boolean; maxLines?: number } = {},
+	): string[] {
+		const buffer = this.terminal.buffer.active;
+		const onAltScreen = this.isAlternateScreen();
+		const includeScrollback =
+			options.includeScrollback === true && !onAltScreen;
+
+		// baseY is the first row of the visible viewport; everything above it is
+		// scrollback. On the alt screen baseY is 0 and length === rows.
+		const start = includeScrollback ? 0 : buffer.baseY;
+		const end = buffer.baseY + this.terminal.rows;
+
+		const lines: string[] = [];
+		for (let i = start; i < end; i += 1) {
+			const line = buffer.getLine(i);
+			// `true` trims trailing whitespace, which every cell-based buffer pads
+			// out to the full width.
+			lines.push(line ? line.translateToString(true) : "");
+		}
+
+		// Trailing blank rows are padding, not content — a 24-row viewport with
+		// three lines of output would otherwise return 21 empty strings.
+		while (lines.length > 0 && (lines[lines.length - 1] ?? "").trim() === "") {
+			lines.pop();
+		}
+
+		if (options.maxLines !== undefined && lines.length > options.maxLines) {
+			return lines.slice(lines.length - options.maxLines);
+		}
+		return lines;
+	}
+
+	/**
 	 * Flush all pending writes to the terminal.
 	 * Call this before getSnapshot() if you've written data without waiting.
 	 */

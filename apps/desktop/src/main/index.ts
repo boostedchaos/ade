@@ -25,6 +25,7 @@ import {
 } from "shared/constants";
 import { getWorkspaceName } from "shared/env.shared";
 import { backfillAgentMemory } from "./lib/agent-memory-backfill";
+import { stopAgentSessionTracking } from "./lib/agent-sessions";
 import { setupAgentHooks } from "./lib/agent-setup";
 import { SUPERSET_HOME_DIR } from "./lib/app-environment";
 import { initAppState } from "./lib/app-state";
@@ -184,6 +185,10 @@ async function gracefulShutdown(): Promise<void> {
 		} catch (error) {
 			console.error("[main] Control plane shutdown step failed:", error);
 		}
+
+		// Stop the stuck-state sweep before the DB closes — a sweep landing
+		// mid-teardown would try to persist into a checkpointed database.
+		stopAgentSessionTracking();
 
 		const stopAgents = getStopAgentsOnQuitSetting();
 		try {

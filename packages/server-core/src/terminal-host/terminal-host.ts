@@ -10,6 +10,7 @@
 
 import type { Socket } from "node:net";
 import { homedir } from "node:os";
+import { createSession, type Session } from "./session";
 import type {
 	ClearScrollbackRequest,
 	CreateOrAttachRequest,
@@ -21,9 +22,10 @@ import type {
 	ListSessionsResponse,
 	ResizeRequest,
 	SignalRequest,
+	SnapshotRequest,
+	SnapshotResponse,
 	WriteRequest,
 } from "./types";
-import { createSession, type Session } from "./session";
 
 // =============================================================================
 // TerminalHost Class
@@ -265,6 +267,25 @@ export class TerminalHost {
 			});
 		}
 		return { success: true };
+	}
+
+	/**
+	 * Read-only screen read. Uses `sessions.get` rather than
+	 * `getActiveSession` on purpose: a reader should still be able to see the
+	 * final screen of a session that has exited but not yet been disposed —
+	 * that is often exactly the output someone wants — so a terminating
+	 * session is readable, only a MISSING one is an error.
+	 */
+	async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
+		const session = this.sessions.get(request.sessionId);
+		if (!session) {
+			throw new Error(`Session not found: ${request.sessionId}`);
+		}
+		return session.readSnapshot({
+			includeScrollback: request.includeScrollback,
+			maxLines: request.maxLines,
+			includeAnsi: request.includeAnsi,
+		});
 	}
 
 	/**

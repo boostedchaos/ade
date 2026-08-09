@@ -4,9 +4,9 @@ import os from "node:os";
 import { join } from "node:path";
 import type { AgentRuntime } from "@superset/local-db";
 import defaultShell from "default-shell";
-import { env } from "../env.shared";
 import { getAgentCodexHome } from "../agent-home";
 import { getShellEnv } from "../agent-setup/shell-wrappers";
+import { env } from "../env.shared";
 
 const MACOS_SYSTEM_CERT_FILE = "/etc/ssl/cert.pem";
 let cachedUtf8Locale: string | null = null;
@@ -35,7 +35,10 @@ function startLocaleProbe(): void {
  * Increment when making breaking changes to the hook protocol.
  * The server logs this for debugging version mismatches.
  */
-export const HOOK_PROTOCOL_VERSION = "2";
+// v3 (Mission Control Feature 2): the notify hook additionally sends
+// `transcriptPath`, and ADE's claude hooks file registers the full
+// SessionStart/PreToolUse/Notification/SessionEnd event set.
+export const HOOK_PROTOCOL_VERSION = "3";
 
 export const FALLBACK_SHELL = os.platform() === "win32" ? "cmd.exe" : "/bin/sh";
 export const SHELL_CRASH_THRESHOLD_MS = 1000;
@@ -530,6 +533,11 @@ export function buildTerminalEnv(params: {
 		SUPERSET_PANE_ID: paneId,
 		SUPERSET_TAB_ID: tabId,
 		SUPERSET_WORKSPACE_ID: workspaceId,
+		// ADE_* aliases carry the same values under the names the `ade` CLI and
+		// the Mission Control hooks read. Both spellings ship: SUPERSET_* is the
+		// name every existing hook script and wrapper already looks for.
+		ADE_SURFACE_ID: paneId,
+		ADE_WORKSPACE_ID: workspaceId,
 		SUPERSET_WORKSPACE_NAME: workspaceName || "",
 		SUPERSET_WORKSPACE_PATH: workspacePath || "",
 		SUPERSET_ROOT_PATH: rootPath || "",

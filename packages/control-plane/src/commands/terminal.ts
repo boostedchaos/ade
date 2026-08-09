@@ -12,25 +12,57 @@ import { resolveTarget } from "../target-resolution";
 
 /**
  * Terminal I/O group. These go main → terminal-host daemon directly (through
- * the app's existing TerminalRuntime, which is the same client machinery the
- * tRPC terminal router uses); no renderer hop, per SPEC.
+ * the app's existing client machinery); no renderer hop, per SPEC.
  *
- * READ LIMITATION — stated because a wrong screen read is worse than none.
- * `read-screen` / `capture-pane` are served from the pane's PERSISTED
- * scrollback (`~/.ade[-ws]/terminal-history/<workspaceId>/<paneId>/`), not
- * from the daemon's @xterm/headless emulator. Two consequences:
- *   1. What you get is the output STREAM the PTY produced, replayed with ANSI
- *      stripped — not a rendered screen. A full-screen/alt-screen TUI (Claude
- *      Code's own interface, vim, htop) will read as the raw redraw traffic
- *      flattened, not as what is on screen.
- *   2. It lags by the history writer's flush.
- * The accurate source is the daemon's serialized snapshot, but the only way to
- * obtain it today is `createOrAttach`, which RESIZES a live session to the
- * caller's requested dimensions (terminal-host.ts, the `else` branch of
- * createOrAttach) — i.e. reading would mutate the user's terminal. Getting a
- * true rendered screen needs a new read-only `snapshot` request on the daemon,
- * which is outside this lane's file ownership. Flagged for the next phase.
+ * SCREEN READS now prefer the daemon's read-only `snapshot` request, which
+ * returns the @xterm/headless mirror's RENDERED text — what a human sees,
+ * including a correctly composed alt-screen TUI (Claude Code's own interface,
+ * vim, htop). Phase 1 could only read persisted scrollback, which is the raw
+ * output STREAM and reads as flattened redraw traffic for exactly those cases.
+ * The accurate source used to be reachable only via `createOrAttach`, which
+ * RESIZES the live session — reading would have mutated the user's terminal.
+ * The new request attaches nothing, resizes nothing and writes nothing.
+ *
+ * Persisted scrollback remains the FALLBACK, and it is still the right answer
+ * for a pane whose session the daemon no longer holds (closed pane, daemon
+ * restarted): the history file outlives the session. Every response says which
+ * source answered, because "the screen right now" and "what was on disk" are
+ * different claims and a caller acting on the wrong one would not be able to
+ * tell.
  */
+
+/** Which source produced the text in a read response. */
+export type ScreenSource = "live-screen" | "scrollback-history";
+
+/**
+ * The daemon-backed read, as commands need it. Declared here rather than on
+ * `ControlPlaneHost.terminal` because `host.ts` and the desktop adapter that
+ * implements it belong to another lane in this phase; probing for the method
+ * lets the daemon work land now and start being used the moment the adapter
+ * supplies it, instead of the two halves having to merge together.
+ *
+ * CONSEQUENCE, stated plainly: until the adapter implements `readSnapshot`,
+ * every read silently takes the fallback and reports
+ * `source: "scrollback-history"` — i.e. Phase 1 behaviour. The `source` field
+ * is how you can tell from the outside which half is live.
+ */
+export interface LiveScreenRead {
+	text: string;
+	cols: number;
+	rows: number;
+	scrollbackLines: number;
+	alternateScreen: boolean;
+	cwd: string | null;
+	isAlive: boolean;
+	flushed: boolean;
+}
+
+interface MaybeSnapshotCapable {
+	readSnapshot?: (
+		paneId: string,
+		options: { includeScrollback?: boolean; maxLines?: number },
+	) => Promise<LiveScreenRead | null>;
+}
 
 // Built from named constants via `new RegExp` rather than written as literals:
 // Biome's noControlCharactersInRegex rejects a raw ESC in a regex literal, and
@@ -48,7 +80,10 @@ const CSI_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, "g");
 /** Remaining two-byte escapes (ESC followed by one @-Z or \\-_). */
 const ESC_PATTERN = new RegExp(`${ESC}[@-Z\\\\-_]`, "g");
 
-/** Strip CSI/OSC/ESC sequences so a scrollback dump is readable as text. */
+/**
+ * Strip CSI/OSC/ESC sequences so a raw scrollback dump is readable as text.
+ * Only the FALLBACK path needs this — daemon snapshots are already rendered.
+ */
 export function stripAnsi(input: string): string {
 	return (
 		input
@@ -93,6 +128,33 @@ function resolvePaneAndWorkspace(
 	return { paneId, workspaceId: tab.workspaceId };
 }
 
+/**
+ * Try the daemon's read-only snapshot. Returns null — meaning "use the
+ * fallback" — when the host cannot do it, when the daemon has no such session,
+ * or when the request fails for any reason (an older daemon answers with an
+ * error). A screen read must degrade to the persisted transcript rather than
+ * failing the command.
+ */
+export async function tryLiveScreenRead(
+	terminal: unknown,
+	paneId: string,
+	options: { includeScrollback?: boolean; maxLines?: number },
+	log: (level: "info" | "warn" | "error", message: string) => void,
+): Promise<LiveScreenRead | null> {
+	const capable = terminal as MaybeSnapshotCapable;
+	if (typeof capable.readSnapshot !== "function") return null;
+	try {
+		return await capable.readSnapshot(paneId, options);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		log(
+			"warn",
+			`live screen read failed for ${paneId}, using history: ${message}`,
+		);
+		return null;
+	}
+}
+
 export const terminalCommands: CommandRegistry = {
 	send: (session, args) => {
 		const { paneId } = resolvePaneAndWorkspace(session, args);
@@ -124,34 +186,95 @@ export const terminalCommands: CommandRegistry = {
 		return { paneId, key, encodedBy };
 	},
 
+	/**
+	 * The last N lines of output. `includeScrollback` is set because "the last
+	 * 200 lines" means output, not "the viewport, truncated" — and the emulator
+	 * ignores the flag on the alternate screen, where the rendered viewport IS
+	 * the whole answer and there is no scrollback by definition.
+	 */
 	"read-screen": async (session, args) => {
 		const { paneId, workspaceId } = resolvePaneAndWorkspace(session, args);
 		const lines = optionalPositiveInt(args, "lines") ?? 50;
+
+		const live = await tryLiveScreenRead(
+			session.host.terminal,
+			paneId,
+			{ includeScrollback: true, maxLines: lines },
+			session.host.log,
+		);
+		if (live) {
+			return {
+				paneId,
+				lines,
+				text: live.text,
+				source: "live-screen" satisfies ScreenSource,
+				cols: live.cols,
+				rows: live.rows,
+				alternateScreen: live.alternateScreen,
+				isAlive: live.isAlive,
+				// False means the pre-read flush timed out under continuous
+				// output, so the text is marginally behind. Surfaced rather than
+				// hidden, so a caller can distinguish it from a quiet terminal.
+				flushed: live.flushed,
+			};
+		}
+
 		const raw = await session.host.terminal.readScrollback(workspaceId, paneId);
 		if (raw === null) {
 			throw new ControlError(
 				"NOT_FOUND",
-				`No recorded output for pane ${paneId}`,
+				`No live session and no recorded output for pane ${paneId}`,
 			);
 		}
-		const text = lastLines(stripAnsi(raw), lines);
-		return { paneId, lines, text, source: "scrollback-history" };
+		return {
+			paneId,
+			lines,
+			text: lastLines(stripAnsi(raw), lines),
+			source: "scrollback-history" satisfies ScreenSource,
+		};
 	},
 
+	/** Everything the pane has, screen plus scrollback. */
 	"capture-pane": async (session, args) => {
 		const { paneId, workspaceId } = resolvePaneAndWorkspace(session, args);
+		const keepAnsi = optionalBoolean(args, "raw", false);
+
+		// `--raw` asks for the escape sequences, which only the persisted stream
+		// carries — the daemon read returns rendered text by design. Go straight
+		// to history rather than reading the screen and ignoring the flag.
+		if (!keepAnsi) {
+			const live = await tryLiveScreenRead(
+				session.host.terminal,
+				paneId,
+				{ includeScrollback: true },
+				session.host.log,
+			);
+			if (live) {
+				return {
+					paneId,
+					text: live.text,
+					source: "live-screen" satisfies ScreenSource,
+					cols: live.cols,
+					rows: live.rows,
+					scrollbackLines: live.scrollbackLines,
+					alternateScreen: live.alternateScreen,
+					isAlive: live.isAlive,
+					flushed: live.flushed,
+				};
+			}
+		}
+
 		const raw = await session.host.terminal.readScrollback(workspaceId, paneId);
 		if (raw === null) {
 			throw new ControlError(
 				"NOT_FOUND",
-				`No recorded output for pane ${paneId}`,
+				`No live session and no recorded output for pane ${paneId}`,
 			);
 		}
-		const keepAnsi = optionalBoolean(args, "raw", false);
 		return {
 			paneId,
 			text: keepAnsi ? raw : stripAnsi(raw),
-			source: "scrollback-history",
+			source: "scrollback-history" satisfies ScreenSource,
 		};
 	},
 };

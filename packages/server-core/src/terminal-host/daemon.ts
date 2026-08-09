@@ -36,6 +36,7 @@ import {
 	isNamedPipePath,
 	removeSocketFile,
 } from "./socket-path";
+import { TerminalHost } from "./terminal-host";
 import {
 	type ClearScrollbackRequest,
 	type CreateOrAttachRequest,
@@ -52,11 +53,11 @@ import {
 	type ResizeRequest,
 	type ShutdownRequest,
 	type SignalRequest,
+	type SnapshotRequest,
 	type TerminalErrorEvent,
 	type TerminalExitEvent,
 	type WriteRequest,
 } from "./types";
-import { TerminalHost } from "./terminal-host";
 
 // =============================================================================
 // Configuration
@@ -503,6 +504,32 @@ const handlers: Record<string, RequestHandler> = {
 
 		const response = terminalHost.listSessions();
 		sendSuccess(socket, id, response);
+	},
+
+	/**
+	 * READ-ONLY screen read. No attach, no resize, no write — see
+	 * SnapshotRequest in types.ts for why this exists alongside createOrAttach.
+	 * Unlike createOrAttach it needs no stream socket, because it pushes
+	 * nothing and subscribes to nothing.
+	 */
+	snapshot: async (socket, id, payload, clientState) => {
+		if (!clientState.authenticated) {
+			sendError(socket, id, "NOT_AUTHENTICATED", "Must authenticate first");
+			return;
+		}
+		if (clientState.role !== "control") {
+			sendError(socket, id, "INVALID_ROLE", "snapshot requires control");
+			return;
+		}
+
+		const request = payload as SnapshotRequest;
+		try {
+			const response = await terminalHost.snapshot(request);
+			sendSuccess(socket, id, response);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			sendError(socket, id, "SNAPSHOT_FAILED", message);
+		}
 	},
 
 	clearScrollback: (socket, id, payload, clientState) => {

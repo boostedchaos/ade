@@ -86,14 +86,12 @@ describe("usage failures exit 2", () => {
 		}
 	});
 
-	it("registers a stub for every command SPEC.md lists but Phase 1 defers", async () => {
+	it("registers a stub for every command SPEC.md lists but has not built yet", async () => {
 		const { findCommand } = await import("./commands");
+		// hooks / agent-event / agent-sessions left this list in Phase 2.
 		for (const name of [
-			"hooks",
-			"agent-event",
 			"set-status",
 			"set-progress",
-			"agent-sessions",
 			"notify",
 			"list-notifications",
 			"mark-notification-read",

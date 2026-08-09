@@ -74,6 +74,13 @@ Key design amendments from recon (detail in PROTOCOL.md):
 ## Open items
 
 - Hybrid harness clause: decide after probe whether one mechanical lane runs via agent teams.
+- Phase 6 smoke must confirm: (a) the PTY-level `stty size` snapshot test in
+  terminal-host/snapshot.test.ts (gated on a beforeAll probe; did NOT run in
+  the build worktree — PTY writes EBADF there) runs on a normal machine;
+  (b) `ade read-screen` on a live pane reports `source: "live-screen"`.
+- Phase 6 packaging must ship a compiled Node-runnable CLI entry
+  (dist/index.mjs or resources/cli/index.mjs) — the dev `ade` bin requires
+  bun otherwise.
 
 ## Resume notes
 

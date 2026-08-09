@@ -49,6 +49,8 @@ import {
 	type ResizeRequest,
 	type ShutdownRequest,
 	type SignalRequest,
+	type SnapshotRequest,
+	type SnapshotResponse,
 	type TerminalDataEvent,
 	type TerminalErrorEvent,
 	type TerminalExitEvent,
@@ -1157,17 +1159,18 @@ export class TerminalHostClient extends EventEmitter {
 						? daemonSpawnArgsResolver(daemonScript)
 						: [daemonScript],
 					{
-					detached: true,
-					// Prevent a console window from flashing when spawning the detached
-					// daemon on Windows. No-op on POSIX.
-					windowsHide: true,
-					stdio: logFd >= 0 ? ["ignore", logFd, logFd] : "ignore",
-					env: {
-						...process.env,
-						ELECTRON_RUN_AS_NODE: "1",
-						NODE_ENV: process.env.NODE_ENV,
+						detached: true,
+						// Prevent a console window from flashing when spawning the detached
+						// daemon on Windows. No-op on POSIX.
+						windowsHide: true,
+						stdio: logFd >= 0 ? ["ignore", logFd, logFd] : "ignore",
+						env: {
+							...process.env,
+							ELECTRON_RUN_AS_NODE: "1",
+							NODE_ENV: process.env.NODE_ENV,
+						},
 					},
-				});
+				);
 			} finally {
 				if (logFd >= 0) {
 					try {
@@ -1446,6 +1449,21 @@ export class TerminalHostClient extends EventEmitter {
 		return {
 			sessions: response.sessions.map((s) => ({ ...s, pid: s.pid ?? null })),
 		};
+	}
+
+	/**
+	 * READ-ONLY screen read of a live session.
+	 *
+	 * Does not attach and does not resize, unlike createOrAttach — which is the
+	 * whole reason it exists. Needs no stream socket.
+	 *
+	 * Version skew: a daemon predating this request answers with an error
+	 * rather than a response. Callers that have a fallback (persisted history)
+	 * should catch and use it rather than surfacing a failure.
+	 */
+	async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
+		await this.ensureConnected();
+		return this.sendRequest<SnapshotResponse>("snapshot", request);
 	}
 
 	/**

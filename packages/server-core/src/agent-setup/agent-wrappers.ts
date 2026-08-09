@@ -1,6 +1,10 @@
 export {
+	backupClaudeSettings,
 	buildCodexWrapperExecLine,
+	CLAUDE_HOOK_EVENTS,
 	CLAUDE_SETTINGS_FILE,
+	type ClaudeHookEventName,
+	type ClaudeSettingsWriteResult,
 	cleanupGlobalOpenCodePlugin,
 	createClaudeWrapper,
 	createCodexWrapper,
@@ -13,6 +17,8 @@ export {
 	getOpenCodePluginPath,
 	OPENCODE_PLUGIN_FILE,
 	OPENCODE_PLUGIN_MARKER,
+	readClaudeHookCoverage,
+	writeClaudeSettings,
 } from "./agent-wrappers-claude-codex-opencode";
 export {
 	buildWrapperScript,

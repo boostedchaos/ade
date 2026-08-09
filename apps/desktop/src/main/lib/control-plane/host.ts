@@ -1,18 +1,29 @@
+import {
+	getClaudeSettingsPath,
+	readClaudeHookCoverage,
+	writeClaudeSettings,
+} from "@ade/server-core/agent-setup/agent-wrappers";
 import { HistoryReader } from "@ade/server-core/terminal-history";
 import { getWorkspaceRuntimeRegistry } from "@ade/server-core/workspace-runtime";
 import { projects, workspaces, worktrees } from "@superset/local-db";
 import { eq, isNull } from "drizzle-orm";
 import type { BrowserWindow } from "electron";
 import { getWorkspacesInVisualOrder } from "lib/trpc/routers/workspaces/procedures/query";
-import type {
-	ControlPlaneHost,
-	ControlPlaneSnapshot,
-	SnapshotPane,
-	SnapshotTab,
+import {
+	ControlError,
+	type ControlPlaneHost,
+	type ControlPlaneSnapshot,
+	type SnapshotPane,
+	type SnapshotTab,
 } from "../../../../../../packages/control-plane/src/index";
+import { ingestAgentEvent, listAgentSessions } from "../agent-sessions";
 import { appState } from "../app-state";
 import { localDb } from "../local-db";
+import { mapAgentSessionState } from "../notifications/map-event-type";
 import { extractWorkspaceIdFromUrl } from "../notifications/utils";
+// Through the desktop shim, not @ade/server-core directly: importing it
+// registers the Electron daemon-script path resolver as a side effect.
+import { getTerminalHostClient } from "../terminal-host/client";
 import type { RendererBridge } from "./renderer-bridge";
 
 /**
@@ -174,6 +185,94 @@ export function createControlPlaneHost(params: {
 				const reader = new HistoryReader(workspaceId, paneId);
 				if (!(await reader.exists())) return null;
 				return reader.readScrollback();
+			},
+			/**
+			 * Live screen read straight from the daemon — no renderer hop and no
+			 * attach/resize. Terminal sessions are keyed by paneId (verified at
+			 * terminal/daemon/daemon-manager.ts), so the pane id IS the session id.
+			 *
+			 * The daemon THROWS `Session not found` for a pane with no live
+			 * session, which is the ordinary case for a finished agent's pane. That
+			 * is translated to null here so `read-screen` takes its history
+			 * fallback quietly; any other failure is rethrown so the caller logs it
+			 * rather than silently downgrading a real fault to "no session".
+			 */
+			readSnapshot: async (paneId, options) => {
+				try {
+					return await getTerminalHostClient().snapshot({
+						sessionId: paneId,
+						includeScrollback: options.includeScrollback,
+						maxLines: options.maxLines,
+					});
+				} catch (error) {
+					const message =
+						error instanceof Error ? error.message : String(error);
+					if (message.includes("Session not found")) return null;
+					throw error;
+				}
+			},
+		},
+
+		/**
+		 * Agent session tracking. `ingestEvent` deliberately routes through the
+		 * same `ingestAgentEvent` the HTTP hook receiver uses — the control
+		 * socket is a second door onto one registry, not a second registry.
+		 */
+		agents: {
+			listSessions: () =>
+				listAgentSessions().map((record) => ({
+					surfaceId: record.surfaceId,
+					workspaceId: record.workspaceId,
+					agentKind: record.agentKind,
+					sessionId: record.sessionId,
+					transcriptPath: record.transcriptPath,
+					state: record.state,
+					pid: record.pid,
+					lastActivityAt: record.lastActivityAt,
+				})),
+
+			ingestEvent: (input) => {
+				const state = mapAgentSessionState(input.eventType);
+				if (!state) {
+					throw new ControlError(
+						"BAD_REQUEST",
+						`Unknown hook event "${input.eventType}"`,
+					);
+				}
+				const transition = ingestAgentEvent({
+					surfaceId: input.surfaceId,
+					state,
+					workspaceId: input.workspaceId ?? null,
+					agentKind: input.agentKind,
+					sessionId: input.sessionId,
+					transcriptPath: input.transcriptPath,
+				});
+				return transition ? { from: transition.from, to: transition.to } : null;
+			},
+
+			setupHooks: (agent) => {
+				const written = writeClaudeSettings();
+				const coverage = readClaudeHookCoverage(written.settingsPath);
+				return {
+					agent,
+					settingsPath: written.settingsPath,
+					changed: written.changed,
+					backupPath: written.backupPath,
+					registered: coverage.registered,
+					missing: coverage.missing,
+				};
+			},
+
+			hooksStatus: (agent) => {
+				const settingsPath = getClaudeSettingsPath();
+				const coverage = readClaudeHookCoverage(settingsPath);
+				return {
+					agent,
+					settingsPath,
+					present: coverage.present,
+					registered: coverage.registered,
+					missing: coverage.missing,
+				};
 			},
 		},
 

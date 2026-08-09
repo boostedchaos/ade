@@ -9,16 +9,22 @@
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import type { Socket } from "node:net";
 import { homedir } from "node:os";
 import * as path from "node:path";
-import { existsSync } from "node:fs";
 import { getShellArgs } from "../agent-setup/shell-wrappers";
 import {
 	buildSafeEnv,
 	getDefaultShell as getEnvDefaultShell,
 } from "../terminal/env";
+import { treeKillAsync } from "../tree-kill";
 import { HeadlessEmulator } from "./headless-emulator";
+import {
+	createFrameHeader,
+	PtySubprocessFrameDecoder,
+	PtySubprocessIpcType,
+} from "./pty-subprocess-ipc";
 import type {
 	CreateOrAttachRequest,
 	IpcEvent,
@@ -28,12 +34,6 @@ import type {
 	TerminalExitEvent,
 	TerminalSnapshot,
 } from "./types";
-import { treeKillAsync } from "../tree-kill";
-import {
-	createFrameHeader,
-	PtySubprocessFrameDecoder,
-	PtySubprocessIpcType,
-} from "./pty-subprocess-ipc";
 
 // =============================================================================
 // Constants
@@ -203,9 +203,11 @@ export class Session {
 		// package). When the daemon runs from TS source (bun tests) fall back
 		// to the .ts — spawning a missing file would smear an error message
 		// across the framed IPC stream.
-		const subprocessPath = ["pty-subprocess.js", "pty-subprocess.cjs"]
-			.map((f) => path.join(__dirname, f))
-			.find((p) => existsSync(p)) ?? path.join(__dirname, "pty-subprocess.ts");
+		const subprocessPath =
+			["pty-subprocess.js", "pty-subprocess.cjs"]
+				.map((f) => path.join(__dirname, f))
+				.find((p) => existsSync(p)) ??
+			path.join(__dirname, "pty-subprocess.ts");
 
 		// Spawn subprocess with filtered env to prevent leaking NODE_ENV etc.
 		const electronPath = process.execPath;
@@ -758,6 +760,64 @@ export class Session {
 	 */
 	getSnapshot(): TerminalSnapshot {
 		return this.emulator.getSnapshot();
+	}
+
+	/**
+	 * READ-ONLY screen read. Deliberately NOT `attach()`:
+	 *   - it does not add the caller to `attachedClients`, so it cannot affect
+	 *     backpressure, stdout pausing, or `clientCount`;
+	 *   - it does not touch `lastAttachedAt`;
+	 *   - it never calls `resize()`, on the PTY or the emulator.
+	 *
+	 * It shares only the snapshot-boundary flush, which is a read barrier: it
+	 * waits for data received BEFORE this call to reach the emulator so the
+	 * text is a consistent point in time rather than a half-applied frame. That
+	 * flush drains a queue the session owns and writes nothing to the PTY.
+	 */
+	async readSnapshot(
+		options: {
+			includeScrollback?: boolean;
+			maxLines?: number;
+			includeAnsi?: boolean;
+		} = {},
+	): Promise<{
+		text: string;
+		ansi?: string;
+		cols: number;
+		rows: number;
+		scrollbackLines: number;
+		alternateScreen: boolean;
+		cwd: string | null;
+		pid: number | null;
+		isAlive: boolean;
+		flushed: boolean;
+	}> {
+		if (this.disposed) {
+			throw new Error("Session disposed");
+		}
+
+		const flushed = await this.flushToSnapshotBoundary(ATTACH_FLUSH_TIMEOUT_MS);
+
+		const dims = this.emulator.getDimensions();
+		const lines = this.emulator.getRenderedText({
+			includeScrollback: options.includeScrollback,
+			maxLines: options.maxLines,
+		});
+
+		return {
+			text: lines.join("\n"),
+			ansi: options.includeAnsi
+				? this.emulator.getSnapshot().snapshotAnsi
+				: undefined,
+			cols: dims.cols,
+			rows: dims.rows,
+			scrollbackLines: this.emulator.getScrollbackLines(),
+			alternateScreen: this.emulator.isAlternateScreen(),
+			cwd: this.emulator.getCwd(),
+			pid: this.pid,
+			isAlive: this.isAlive,
+			flushed,
+		};
 	}
 
 	/**

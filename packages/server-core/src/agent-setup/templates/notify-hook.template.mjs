@@ -42,6 +42,11 @@ async function main() {
 	const input = argInput && argInput.length > 0 ? argInput : await readStdin();
 
 	const sessionId = extractString(input, "session_id");
+	// Claude Code's JSON-escaped path; the stuck-state corrector tails this file.
+	const transcriptPath = extractString(input, "transcript_path").replace(
+		/\\\\/g,
+		"\\",
+	);
 
 	// Skip if this isn't a Superset terminal hook and there's no Mastra session.
 	if (!process.env.SUPERSET_TAB_ID && !sessionId) return;
@@ -80,6 +85,7 @@ async function main() {
 		tabId: process.env.SUPERSET_TAB_ID ?? "",
 		workspaceId: process.env.SUPERSET_WORKSPACE_ID ?? "",
 		sessionId: sessionId ?? "",
+		transcriptPath: transcriptPath ?? "",
 		eventType,
 		env: process.env.SUPERSET_ENV ?? "",
 		version: process.env.SUPERSET_HOOK_VERSION ?? "",

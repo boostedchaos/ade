@@ -10,10 +10,11 @@ import type {
 	AgentMessageEvent,
 } from "shared/notification-types";
 import { getAgentEntry } from "../agent-config/registry";
-import { localDb } from "../local-db";
+import { ingestAgentEvent } from "../agent-sessions";
 import { appState } from "../app-state";
+import { localDb } from "../local-db";
 import { HOOK_PROTOCOL_VERSION } from "../terminal/env";
-import { mapEventType } from "./map-event-type";
+import { mapAgentSessionState, mapEventType } from "./map-event-type";
 
 // Re-export types for backwards compatibility
 export type {
@@ -106,6 +107,8 @@ app.get("/hook/complete", (req, res) => {
 		tabId,
 		workspaceId,
 		sessionId,
+		transcriptPath,
+		agentKind,
 		eventType,
 		env: clientEnv,
 		version,
@@ -129,10 +132,11 @@ app.get("/hook/complete", (req, res) => {
 	}
 
 	const mappedEventType = mapEventType(eventType as string | undefined);
+	const sessionState = mapAgentSessionState(eventType as string | undefined);
 
 	// Unknown or missing eventType: return success but don't process
 	// This ensures forward compatibility and doesn't block the agent
-	if (!mappedEventType) {
+	if (!mappedEventType && !sessionState) {
 		if (eventType) {
 			console.log("[notifications] Ignoring unknown eventType:", eventType);
 		}
@@ -145,6 +149,27 @@ app.get("/hook/complete", (req, res) => {
 		workspaceId as string | undefined,
 		sessionId as string | undefined,
 	);
+
+	// Feed the AgentSession registry (Feature 2). This is a superset of the
+	// lifecycle vocabulary — SessionStart and SessionEnd carry no PaneStatus
+	// meaning but do move the session record, which is why the guard above
+	// accepts either mapping.
+	if (sessionState && resolvedPaneId) {
+		ingestAgentEvent({
+			surfaceId: resolvedPaneId,
+			state: sessionState,
+			workspaceId: (workspaceId as string | undefined) ?? null,
+			agentKind: (agentKind as string | undefined) || undefined,
+			sessionId: (sessionId as string | undefined) || undefined,
+			transcriptPath: (transcriptPath as string | undefined) || undefined,
+		});
+	}
+
+	// Events with no PaneStatus meaning stop here: emitting a lifecycle event
+	// for them would make the renderer set a status the spec does not ask for.
+	if (!mappedEventType) {
+		return res.json({ success: true, paneId: resolvedPaneId, tabId });
+	}
 
 	const event: AgentLifecycleEvent = {
 		paneId: resolvedPaneId,
@@ -241,13 +266,7 @@ app.post("/agent/invoke", async (req, res) => {
  *   POST /agent/message  { agent, content, conversation?, role?, metadata? }
  */
 app.post("/agent/message", (req, res) => {
-	const {
-		agent,
-		content,
-		conversation,
-		role,
-		metadata,
-	} = (req.body ?? {}) as {
+	const { agent, content, conversation, role, metadata } = (req.body ?? {}) as {
 		agent?: string;
 		content?: string;
 		conversation?: string;

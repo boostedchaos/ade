@@ -4,7 +4,12 @@
  */
 import type { OptionDef, ParsedInput, PositionalDef } from "./args";
 
-export type CommandKind = "request" | "stream" | "stub";
+/**
+ * `silent` is `request` with every failure swallowed and exit 0 — the shape a
+ * command called from an agent's hook must have, so that a closed app or a
+ * terminal outside ADE never breaks the agent. Only `agent-event` uses it.
+ */
+export type CommandKind = "request" | "stream" | "stub" | "silent";
 
 export interface WireRequest {
 	cmd: string;
@@ -27,6 +32,14 @@ export interface Command {
 	build?: (input: ParsedInput) => WireRequest;
 	/** request: render the server result for humans. Defaults to formatResult. */
 	format?: (result: unknown, input: ParsedInput) => string;
+	/**
+	 * request: what to print when the app is not running, instead of exiting 3.
+	 * For commands whose answer is partly on disk — `hooks status` can still
+	 * report the hooks file's coverage with ADE closed, and "socket unreachable"
+	 * is the most useful half of what it was asked. Returning null declines the
+	 * fallback, leaving the normal exit-3 behaviour in place.
+	 */
+	offlineFallback?: (input: ParsedInput) => string | null;
 }
 
 /** Drops undefined values so the wire request stays minimal. */

@@ -281,6 +281,13 @@
       "when": 1784048321809,
       "tag": "0039_add_stop_agents_on_quit_setting",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1786280413356,
+      "tag": "0040_add_agent_sessions",
+      "breakpoints": true
     }
   ]
 }

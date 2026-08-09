@@ -64,38 +64,137 @@ export function quietNotifyCommand(baseCommand: string): string {
 		: `${baseCommand} >/dev/null 2>&1`;
 }
 
+/**
+ * Claude Code hook events ADE registers, and the AgentSession state each one
+ * means. The state column is not written into the settings file — Claude only
+ * needs the event names — but it is the checked contract that this file covers
+ * the whole spec event set (Mission Control SPEC Feature 2). `hooks status`
+ * reports coverage against these names.
+ *
+ * `PreToolUse` is `working`, not a permission prompt: Claude fires it for every
+ * tool call, permitted or not. The needsInput signal is `Notification` /
+ * `PermissionRequest`.
+ */
+export const CLAUDE_HOOK_EVENTS = {
+	SessionStart: "idle",
+	UserPromptSubmit: "working",
+	PreToolUse: "working",
+	PostToolUse: "working",
+	PostToolUseFailure: "working",
+	Notification: "needsInput",
+	PermissionRequest: "needsInput",
+	Stop: "idle",
+	SessionEnd: "ended",
+} as const;
+
+export type ClaudeHookEventName = keyof typeof CLAUDE_HOOK_EVENTS;
+
+/** Events Claude Code scopes by tool name; the rest take no matcher. */
+const MATCHER_EVENTS = new Set<ClaudeHookEventName>([
+	"PreToolUse",
+	"PostToolUse",
+	"PostToolUseFailure",
+	"PermissionRequest",
+]);
+
 export function getClaudeSettingsContent(notifyCommand: string): string {
 	const command = quietNotifyCommand(notifyCommand);
-	const settings = {
-		hooks: {
-			UserPromptSubmit: [{ hooks: [{ type: "command", command }] }],
-			Stop: [{ hooks: [{ type: "command", command }] }],
-			PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command }] }],
-			PostToolUseFailure: [
-				{ matcher: "*", hooks: [{ type: "command", command }] },
-			],
-			PermissionRequest: [
-				{ matcher: "*", hooks: [{ type: "command", command }] },
-			],
-		},
-	};
+	const hooks: Record<string, unknown[]> = {};
+	for (const eventName of Object.keys(
+		CLAUDE_HOOK_EVENTS,
+	) as ClaudeHookEventName[]) {
+		hooks[eventName] = MATCHER_EVENTS.has(eventName)
+			? [{ matcher: "*", hooks: [{ type: "command", command }] }]
+			: [{ hooks: [{ type: "command", command }] }];
+	}
 
-	return JSON.stringify(settings);
+	return JSON.stringify({ hooks });
 }
 
 export function getOpenCodePluginContent(notifyPath: string): string {
 	const template = fs.readFileSync(OPENCODE_PLUGIN_TEMPLATE_PATH, "utf-8");
 	// On Windows the notify hook is a .mjs run via node; POSIX runs the .sh via bash.
 	const notifyRunner = IS_WINDOWS ? "node" : "bash";
-	return template
-		.replace("{{MARKER}}", OPENCODE_PLUGIN_MARKER)
-		.replace("{{NOTIFY_RUNNER}}", notifyRunner)
-		// JSON.stringify → a properly-escaped JS string literal, so Windows
-		// backslashes in the path can't be misread as JS escape sequences.
-		.replace("{{NOTIFY_PATH_JSON}}", JSON.stringify(notifyPath));
+	return (
+		template
+			.replace("{{MARKER}}", OPENCODE_PLUGIN_MARKER)
+			.replace("{{NOTIFY_RUNNER}}", notifyRunner)
+			// JSON.stringify → a properly-escaped JS string literal, so Windows
+			// backslashes in the path can't be misread as JS escape sequences.
+			.replace("{{NOTIFY_PATH_JSON}}", JSON.stringify(notifyPath))
+	);
 }
 
-function createClaudeSettings(): string {
+/**
+ * Which of the spec's events the file on disk actually registers. Backs
+ * `ade hooks status`, so a hooks file left over from an older ADE reports its
+ * real gaps instead of the gaps the current code would have written.
+ */
+export function readClaudeHookCoverage(
+	settingsPath = getClaudeSettingsPath(),
+): {
+	present: boolean;
+	registered: ClaudeHookEventName[];
+	missing: ClaudeHookEventName[];
+} {
+	const expected = Object.keys(CLAUDE_HOOK_EVENTS) as ClaudeHookEventName[];
+	let registered: ClaudeHookEventName[] = [];
+	let present = false;
+	try {
+		const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf-8")) as {
+			hooks?: Record<string, unknown>;
+		};
+		present = true;
+		const hooks = parsed.hooks ?? {};
+		registered = expected.filter(
+			(name) => Array.isArray(hooks[name]) && (hooks[name] as unknown[]).length,
+		);
+	} catch {
+		// Missing or unparseable — both are "no coverage", and the caller only
+		// needs to know which events are not wired.
+	}
+	return {
+		present,
+		registered,
+		missing: expected.filter((name) => !registered.includes(name)),
+	};
+}
+
+/**
+ * Copies the current hooks file aside before it is overwritten with different
+ * content. This is ADE's own file, not ~/.claude/settings.json (see PROTOCOL.md
+ * "Feature 2 amendment"), but the spec's back-up-what-you-edit rule applies to
+ * it just the same — the previous file is the only way back if a hook change
+ * breaks an agent mid-run. Returns the backup path, or null if nothing needed
+ * backing up.
+ */
+export function backupClaudeSettings(
+	settingsPath: string,
+	nextContent: string,
+	now = new Date(),
+): string | null {
+	let existing: string;
+	try {
+		existing = fs.readFileSync(settingsPath, "utf-8");
+	} catch {
+		return null;
+	}
+	if (existing === nextContent) return null;
+
+	const stamp = now.toISOString().replace(/[:.]/g, "-");
+	const backupPath = `${settingsPath}.${stamp}.bak`;
+	fs.writeFileSync(backupPath, existing, { mode: 0o644 });
+	return backupPath;
+}
+
+export interface ClaudeSettingsWriteResult {
+	settingsPath: string;
+	changed: boolean;
+	/** Set only when an existing file with different content was replaced. */
+	backupPath: string | null;
+}
+
+export function writeClaudeSettings(): ClaudeSettingsWriteResult {
 	const settingsPath = getClaudeSettingsPath();
 	const notifyPath = getNotifyScriptPath();
 	// On Windows the hook is a .mjs that Claude must run via node.
@@ -104,8 +203,18 @@ function createClaudeSettings(): string {
 		: `"${notifyPath}"`;
 	const settings = getClaudeSettingsContent(notifyCommand);
 
-	writeFileIfChanged(settingsPath, settings, 0o644);
-	return settingsPath;
+	const backupPath = backupClaudeSettings(settingsPath, settings);
+	const changed = writeFileIfChanged(settingsPath, settings, 0o644);
+	if (backupPath) {
+		console.log(
+			`[agent-setup] Previous claude hooks file saved: ${backupPath}`,
+		);
+	}
+	return { settingsPath, changed, backupPath };
+}
+
+function createClaudeSettings(): string {
+	return writeClaudeSettings().settingsPath;
 }
 
 export function createClaudeWrapper(): void {

@@ -408,3 +408,37 @@ export const agentMessages = sqliteTable(
 
 export type InsertAgentMessage = typeof agentMessages.$inferInsert;
 export type SelectAgentMessage = typeof agentMessages.$inferSelect;
+
+/**
+ * Mission Control Feature 2: one row per terminal pane that has ever hosted an
+ * agent, keyed by the pane id (`ADE_SURFACE_ID`). The authoritative record is
+ * the in-memory registry in main — this table is a snapshot so state survives
+ * an app restart, and is reconciled on boot (a row whose pane no longer exists
+ * becomes `ended`).
+ */
+export const agentSessions = sqliteTable(
+	"agent_sessions",
+	{
+		// Pane id. One agent per pane, so the pane is the natural key.
+		surfaceId: text("surface_id").primaryKey(),
+		workspaceId: text("workspace_id"),
+		// "claude" today; codex/opencode when their hooks land.
+		agentKind: text("agent_kind").notNull().default("claude"),
+		// The agent CLI's own session id, when it reports one.
+		sessionId: text("session_id"),
+		// Conversation JSONL the stuck-state corrector tails.
+		transcriptPath: text("transcript_path"),
+		// working | needsInput | idle | ended
+		state: text("state").notNull().default("idle"),
+		pid: integer("pid"),
+		lastActivityAt: integer("last_activity_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [
+		index("agent_sessions_workspace_id_idx").on(table.workspaceId),
+		index("agent_sessions_state_idx").on(table.state),
+	],
+);
+
+export type InsertAgentSession = typeof agentSessions.$inferInsert;
+export type SelectAgentSession = typeof agentSessions.$inferSelect;
