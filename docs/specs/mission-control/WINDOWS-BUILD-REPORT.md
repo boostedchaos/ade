@@ -210,8 +210,16 @@ observed the temp bin dir appended, `KIND_PRESERVED=true`, then restored —
   control-plane/cli unit-test steps, packaged-resource guard, named-pipe CLI
   smoke, artifact upload) and ADE CI run **31338353203** (macOS + Windows).
   Earlier fully-green runs at `0dcadb1`: windows-ci **31337152855**, ADE CI
-  **31337152861**. *(release-SHA runs on main: TODO after merge)*
-- **Release URL:** *(published `windows-v0.4.0` release + SHA256SUMS.txt)*
+  **31337152861**. Release-SHA runs on `main` merge commit
+  `b1384a5ecdb0efe9433268698e51279b659f4113` (PR #7): windows-ci
+  **31339295427**, ADE CI **31339295411** — both fully green; the release
+  artifact was taken from run 31339295427.
+- **Release URL:** <https://github.com/boostedchaos/ade/releases/tag/windows-v0.4.0>
+  — `ADE-0.4.0-x64.exe` (sha256 `4a5250301e710def9f07d579882d6e913b67e2e79e2ca654d153ddeb7981d3f1`),
+  `ADE-0.4.0-x64.zip` (sha256 `7896686f72b868b8e1c2de8b0c971549bfddd7dfd54c0ddb09079deaaeae2e23`),
+  `SHA256SUMS.txt`. `latest.yml` deliberately NOT published (auto-update off).
+  Published assets re-downloaded and hash-verified against SHA256SUMS.txt
+  (all match, 2026-08-09). Tag targets the full merge SHA.
 
 ## Open follow-ups
 
