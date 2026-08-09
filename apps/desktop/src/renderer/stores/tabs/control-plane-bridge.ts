@@ -399,16 +399,11 @@ export function newPaneIds(before: Set<string>, after: Set<string>): string[] {
 	return [...after].filter((id) => !before.has(id));
 }
 
-/**
- * PURE. Swap the root branches of a mosaic layout. Returns the input unchanged
- * when it is a leaf (nothing to swap).
- */
-export function swapRootBranches<T>(layout: T): T {
-	if (!layout || typeof layout !== "object") return layout;
-	const node = layout as { first?: unknown; second?: unknown };
-	if (node.first === undefined || node.second === undefined) return layout;
-	return { ...node, first: node.second, second: node.first } as T;
-}
+// Deliberately no root-only swap helper lives here. An exported
+// `swapRootBranches(layout)` was the original bug: it rearranged the whole
+// tree for a split that happened deep inside it. `swapBranchesAtPath` above
+// is the only swap, and it requires a path, so the unscoped version cannot be
+// reached for again by accident.
 
 // ---------------------------------------------------------------------------
 // Impure half: apply a plan against the live store.

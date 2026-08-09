@@ -421,6 +421,49 @@ describe("swapBranchesAtPath", () => {
 		);
 	});
 
+	it("puts the new pane on the correct side and leaves the rest BYTE-IDENTICAL", () => {
+		// The acceptance case for FIX 2, written as the reviewer specified it.
+		// Layout below is a 4-pane tab AFTER a right-split of the nested `p1`;
+		// `pNew` sits in `second` (the right side). A `--direction left` split
+		// must move `pNew` to `first` of THAT node only.
+		const unrelated = {
+			direction: "column",
+			first: "p3",
+			second: { direction: "row", first: "p4", second: "p5" },
+		};
+		const layoutAfterSplit = {
+			direction: "row",
+			first: {
+				direction: "column",
+				first: { direction: "row", first: "p1", second: "pNew" },
+				second: "p2",
+			},
+			second: unrelated,
+		};
+		const unrelatedBefore = JSON.stringify(unrelated);
+		const wholeBefore = JSON.stringify(layoutAfterSplit);
+
+		const result = swapBranchesAtPath(layoutAfterSplit, ["first", "first"]);
+
+		// (1) the new pane ends up on the correct side of its OWN sibling
+		const swappedNode = (
+			result as { first: { first: { first: string; second: string } } }
+		).first.first;
+		expect(swappedNode.first).toBe("pNew");
+		expect(swappedNode.second).toBe("p1");
+
+		// (2) unrelated subtrees are byte-identical before and after
+		expect(JSON.stringify((result as { second: unknown }).second)).toBe(
+			unrelatedBefore,
+		);
+		// …and the input was not mutated in place.
+		expect(JSON.stringify(layoutAfterSplit)).toBe(wholeBefore);
+		// Structural sharing: the untouched subtree is the very same object.
+		expect((result as { second: unknown }).second).toBe(unrelated);
+		// The sibling `p2` alongside the swapped node is also untouched.
+		expect((result as { first: { second: string } }).first.second).toBe("p2");
+	});
+
 	it("preserves splitPercentage and other node fields", () => {
 		expect(
 			swapBranchesAtPath(
