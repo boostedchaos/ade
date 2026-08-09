@@ -12,7 +12,25 @@ Phase 0 complete except probe (still running; only gates Phase 4).
 - [x] Socket schema + amendments → `PROTOCOL.md` (this dir)
 - [x] Ground truth re-verified at HEAD: 26/26 CONFIRMED, 0 drift → `RECON-HEAD.md`
 - [x] Package scaffolds `@ade/control-plane`, `@ade/cli` (bun install clean, no lockfile change)
-- [ ] Agent-teams logging probe (claude 2.1.226) → agent `probe` running → `probe/`
+- [x] Agent-teams probe DONE — flag LIVE in 2.1.226, real contract captured →
+      `probe/PROBE-CONTRACT.md` + raw `probe/tmux-calls.log`
+
+Probe findings that re-scope Phase 4 (tmux-compat):
+
+- Command channel is `set-option -p -t %N remain-on-exit failed` +
+  `respawn-pane -k -t %N -- '<shell string>'` on a pane born running `cat`.
+  send-keys and capture-pane are NEVER called; stdin never written; nothing
+  polls. Teardown = kill-pane only. **respawn-pane (replace process, keep
+  paneId) is the load-bearing verb.**
+- Verbs used: display-message, list-panes, split-window, set-option,
+  select-pane, respawn-pane, kill-pane, has-session, new-session, -V,
+  show/show-environment. Format strings read: `#{pane_id}`, `#{window_id}`,
+  `#{window_name}`, `#{session_name}:#{window_id}.#{pane_id}`.
+- Launcher must pass `--teammate-mode tmux` (default is in-process even with
+  the env var) and needs a real PTY (headless -p forces in-process).
+  `CLAUDE_CODE_TEAMMATE_COMMAND` is a clean interpose seam.
+  Server-side kill switch exists (`tengu_amber_flint`) → keep launcher
+  marked experimental.
 
 Key design amendments from recon (detail in PROTOCOL.md):
 
