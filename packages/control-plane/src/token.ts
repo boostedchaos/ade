@@ -24,6 +24,10 @@ export function writeControlToken(tokenPath: string): string {
 	return token;
 }
 
+/** Outcome of an ACL-hardening attempt, so callers/tests can observe it
+ * instead of trusting a swallowed best-effort catch. */
+export type HardenResult = { applied: boolean; reason?: string };
+
 /**
  * Restrict the token file's ACL to the current user only (Windows).
  *
@@ -43,17 +47,19 @@ export function writeControlToken(tokenPath: string): string {
  *
  * Best-effort: on any icacls failure we warn and continue. Bricking startup
  * over an ACL tweak is worse than the residual read-only exposure, which the
- * pipe's no-write DACL and the 32-byte token entropy still cover.
+ * pipe's no-write DACL and the 32-byte token entropy still cover. The outcome
+ * is RETURNED (not just warned) so tests can assert hardening actually applied
+ * rather than passing vacuously when the catch swallowed a no-op.
  */
-function hardenTokenFileAcl(tokenPath: string): void {
+export function hardenTokenFileAcl(tokenPath: string): HardenResult {
 	const user = currentWindowsUser();
 	if (!user) {
+		const reason = "could not resolve current Windows user";
 		console.warn(
-			`[control-token] could not resolve current Windows user; ` +
-				`skipping ACL hardening for ${tokenPath} (token entropy + pipe ` +
-				`read-only DACL still apply).`,
+			`[control-token] ${reason}; skipping ACL hardening for ${tokenPath} ` +
+				`(token entropy + pipe read-only DACL still apply).`,
 		);
-		return;
+		return { applied: false, reason };
 	}
 	// spawnSync with an args array + shell:false: no shell quoting, so a
 	// username with spaces is passed intact as a single argv element.
@@ -63,24 +69,38 @@ function hardenTokenFileAcl(tokenPath: string): void {
 		{ shell: false, encoding: "utf-8", windowsHide: true },
 	);
 	if (result.status !== 0) {
+		const reason = `icacls exited ${result.status ?? "n/a"} for user "${user}": ${result.stderr?.trim() || result.error?.message || "unknown"}`;
 		console.warn(
-			`[control-token] icacls hardening failed for ${tokenPath} ` +
-				`(status ${result.status ?? "n/a"}: ${result.stderr?.trim() || result.error?.message || "unknown"}); ` +
+			`[control-token] hardening failed for ${tokenPath} (${reason}); ` +
 				`token entropy + pipe read-only DACL still apply.`,
 		);
+		return { applied: false, reason };
 	}
+	return { applied: true };
 }
 
 /**
- * The current Windows account name, for icacls. `os.userInfo().username` is the
- * right answer under Node/Electron (production), but bun returns the literal
- * "unknown" on Windows and does not populate %USERNAME% — so the test runner
- * (bun) needs the USERPROFILE fallback. The profile-folder basename equals the
- * SAM account name in every normal case (only a post-rename profile mismatch
- * would break it, which just downgrades to a logged warning — not a security
- * hole). Exported so the ACL test asserts against the same identity.
+ * The current Windows account name, for icacls. `whoami` is the PRIMARY source:
+ * it prints the exact `MACHINE\user` (or `DOMAIN\user`) principal the process
+ * runs as, which icacls always accepts — critical on CI runners where the
+ * account is domain/machine-qualified and a bare SAM name may not resolve. It
+ * runs fine under bun via spawnSync (unlike `os.userInfo().username`, which bun
+ * returns as the literal "unknown" on Windows without populating %USERNAME%).
+ * Falls back to userInfo → %USERNAME% → %USERPROFILE% basename if whoami is
+ * somehow unavailable; a bad resolution only downgrades to a logged warning
+ * (hardening reports applied:false), never a security hole. Exported so the ACL
+ * test asserts against the same identity.
  */
 export function currentWindowsUser(): string | null {
+	const fromWhoami = spawnSync("whoami", [], {
+		shell: false,
+		encoding: "utf-8",
+		windowsHide: true,
+	});
+	if (fromWhoami.status === 0) {
+		const name = fromWhoami.stdout?.trim();
+		if (name) return name;
+	}
 	const fromUserInfo = userInfo().username;
 	if (fromUserInfo && fromUserInfo !== "unknown") return fromUserInfo;
 	if (process.env.USERNAME) return process.env.USERNAME;

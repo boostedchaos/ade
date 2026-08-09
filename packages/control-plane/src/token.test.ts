@@ -3,7 +3,11 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { currentWindowsUser, writeControlToken } from "./token";
+import {
+	currentWindowsUser,
+	hardenTokenFileAcl,
+	writeControlToken,
+} from "./token";
 
 const IS_WIN = process.platform === "win32";
 
@@ -22,6 +26,19 @@ describe.skipIf(!IS_WIN)("writeControlToken — Windows ACL hardening", () => {
 		const tokenPath = join(dir, "control.token");
 		try {
 			writeControlToken(tokenPath);
+
+			// Hardening must ACTUALLY apply on win32 with icacls present. The
+			// production path is best-effort (warn-and-continue), so re-run it
+			// here to observe the outcome and fail LOUDLY with the captured
+			// reason if it no-op'd — otherwise the ACE assertion below would
+			// pass vacuously whenever icacls silently failed (e.g. an identity
+			// icacls can't resolve). Idempotent: same /inheritance:r /grant:r.
+			const harden = hardenTokenFileAcl(tokenPath);
+			if (!harden.applied) {
+				throw new Error(
+					`ACL hardening did not apply: ${harden.reason ?? "unknown"}`,
+				);
+			}
 
 			const out = spawnSync("icacls", [tokenPath], {
 				shell: false,
