@@ -114,7 +114,7 @@ export function readAdeWorkspaceSkill(params?: {
 		// (autocrlf) or unzipped with CRLF, and this one copy is what every
 		// consumer installs — the agentskills.io frontmatter must start with a
 		// bare "---\n" for parsers to read it, so canonicalize on the way out.
-		return fs.readFileSync(source, "utf8").replace(/\r\n/g, "\n");
+		return fs.readFileSync(source, "utf8").replace(/^﻿/, "").replace(/\r\n?/g, "\n");
 	} catch {
 		return null;
 	}
