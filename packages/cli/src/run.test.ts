@@ -88,14 +88,11 @@ describe("usage failures exit 2", () => {
 
 	it("registers a stub for every command SPEC.md lists but has not built yet", async () => {
 		const { findCommand } = await import("./commands");
-		// hooks / agent-event / agent-sessions left this list in Phase 2.
+		// hooks / agent-event / agent-sessions left this list in Phase 2; the four
+		// notification verbs left it in Phase 3.
 		for (const name of [
 			"set-status",
 			"set-progress",
-			"notify",
-			"list-notifications",
-			"mark-notification-read",
-			"jump-to-unread",
 			"claude-teams",
 			"tmux-compat",
 			"todo",

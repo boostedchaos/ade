@@ -142,6 +142,13 @@ export interface ControlPlaneHost {
 	 */
 	agents?: AgentSessionsHost;
 
+	/**
+	 * Attention notifications (Feature 3). Optional for the same reason `agents`
+	 * is: the commands answer UNSUPPORTED when the host predates the feature,
+	 * rather than throwing INTERNAL out of a handler.
+	 */
+	notifications?: NotificationsHost;
+
 	log(level: "info" | "warn" | "error", message: string): void;
 }
 
@@ -174,6 +181,41 @@ export interface HooksStatusResult {
 	present: boolean;
 	registered: string[];
 	missing: string[];
+}
+
+export type NotificationKind = "attention" | "custom";
+
+export interface NotificationSnapshot {
+	id: string;
+	kind: NotificationKind;
+	title: string;
+	body: string;
+	paneId: string | null;
+	workspaceId: string | null;
+	createdAt: number;
+	/** Null while unread. */
+	readAt: number | null;
+}
+
+export interface NotificationsHost {
+	/** Newest first. */
+	list(options: { unreadOnly?: boolean }): NotificationSnapshot[];
+	/** Returns null when the row could not be written. */
+	create(input: {
+		kind: NotificationKind;
+		title: string;
+		body: string;
+		paneId: string | null;
+		workspaceId: string | null;
+	}): NotificationSnapshot | null;
+	markRead(id: string): boolean;
+	markAllRead(): number;
+	/**
+	 * Panes with at least one unread ATTENTION notification, newest ask first.
+	 * The host does the kind filtering because "what counts as attention" is a
+	 * property of the store, not of the command.
+	 */
+	panesWithUnreadAttention(): string[];
 }
 
 export interface AgentSessionsHost {

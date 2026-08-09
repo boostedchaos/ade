@@ -1,5 +1,6 @@
 export * from "./args";
 export { phase1Commands } from "./commands";
+export { nextUnreadPane } from "./commands/notifications";
 export { lastLines, stripAnsi } from "./commands/terminal";
 export * from "./event-bus";
 export * from "./host";

@@ -20,6 +20,7 @@ import {
 	startAgentSessionTracking,
 } from "../lib/agent-sessions";
 import { appState } from "../lib/app-state";
+import { setAttentionDeps, startAttentionTracking } from "../lib/attention";
 import { browserManager } from "../lib/browser/browser-manager";
 import { createApplicationMenu, registerMenuHotkeyUpdates } from "../lib/menu";
 import { playNotificationSound } from "../lib/notification-sound";
@@ -278,6 +279,44 @@ export async function MainWindow() {
 	// the stuck-state sweep. Runs after the tabs mirror is available so boot
 	// reconciliation can see which panes still exist.
 	startAgentSessionTracking();
+
+	// Attention notifications (Feature 3). Wired AFTER session tracking so the
+	// registry exists to subscribe to, and given its Electron-facing bits here
+	// rather than importing electron in the store module.
+	setAttentionDeps({
+		setDockBadge: (text) => {
+			// Dock badges are macOS-only; `app.dock` is undefined elsewhere.
+			if (!PLATFORM.IS_MAC) return;
+			app.dock?.setBadge(text);
+		},
+		showNativeNotification: ({ title, body, paneId, workspaceId }) => {
+			if (!Notification.isSupported()) return;
+			const notification = new Notification({ title, body, silent: true });
+			notification.on("click", () => {
+				window.show();
+				window.focus();
+				// Same channel the agent-lifecycle notifications use, so pane focus
+				// has exactly one implementation in the renderer.
+				notificationsEmitter.emit(NOTIFICATION_EVENTS.FOCUS_TAB, {
+					paneId: paneId ?? undefined,
+					tabId: paneId
+						? appState.data?.tabsState?.panes?.[paneId]?.tabId
+						: undefined,
+					workspaceId: workspaceId ?? undefined,
+				});
+			});
+			notification.show();
+			playNotificationSound();
+		},
+		describePane: (paneId) =>
+			getNotificationTitle({
+				paneId,
+				tabId: appState.data?.tabsState?.panes?.[paneId]?.tabId,
+				tabs: appState.data?.tabsState?.tabs,
+				panes: appState.data?.tabsState?.panes,
+			}),
+	});
+	startAttentionTracking();
 
 	// macOS Sequoia+: occluded/minimized windows can lose compositor layers
 	if (PLATFORM.IS_MAC) {

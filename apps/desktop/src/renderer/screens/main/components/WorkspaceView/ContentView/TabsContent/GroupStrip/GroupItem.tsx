@@ -18,6 +18,7 @@ import { HiMiniXMark } from "react-icons/hi2";
 import { LuCheck, LuPalette, LuPencil } from "react-icons/lu";
 import { MosaicDragType } from "react-mosaic-component";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { AttentionBadge } from "renderer/screens/main/components/AttentionBadge";
 import { StatusIndicator } from "renderer/screens/main/components/StatusIndicator";
 import { useDragPaneStore } from "renderer/stores/drag-pane-store";
 import { useTabsStore } from "renderer/stores/tabs/store";
@@ -34,6 +35,8 @@ interface GroupItemProps {
 	isActive: boolean;
 	isRenaming?: boolean;
 	status: PaneStatus | null;
+	/** Unread attention notifications across this tab's panes. */
+	attentionCount: number;
 	onSelect: () => void;
 	onClose: () => void;
 	onRename: (newName: string) => void;
@@ -48,6 +51,7 @@ export function GroupItem({
 	isActive,
 	isRenaming,
 	status,
+	attentionCount,
 	onSelect,
 	onClose,
 	onRename,
@@ -265,6 +269,7 @@ export function GroupItem({
 							{status && status !== "idle" && (
 								<StatusIndicator status={status} />
 							)}
+							<AttentionBadge count={attentionCount} size="sm" />
 						</button>
 					)}
 					{!isEditing && (

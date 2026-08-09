@@ -5,7 +5,42 @@ Orchestrator: Fable (architect only); execution via parallel Opus 5 subagents.
 
 ## Current phase
 
-**Phase 2 — Agent session tracking** (dispatching, 2026-08-09).
+**Phase 4 — Teams shim** (dispatching, 2026-08-09).
+
+Phase 3 COMPLETE: notifications table (migration 0041) + attention module in
+main (registry-sourced, kind attention|custom, dedupe, auto-read on leaving
+needsInput), Dock badge, pane ring (BasePaneWindow + mosaic-theme.css, inset
+shadow), tab/rail badges via tRPC query+invalidation, NotificationPanel
+popover, jump-to-unread computed in main dispatching existing focus-pane op,
+4 CLI commands. 225/111 pass, desktop baseline-diff identical (37).
+Divergences: NO second native-toast path for needsInput (NotificationManager
+already fires; two toasts otherwise) — gap: needsInput via `ade agent-event`
+socket door gets no OS toast (documented in attention/index.ts, decide at
+ship); `ade notify` defaults --pane to $ADE_SURFACE_ID.
+Phase 6 live-smoke additions: exactly ONE toast per permission request; Dock
+badge disappears (not "0") at zero; ring visibly beats focused style both
+themes; migration 0041 upgrades a POPULATED db; jump-to-unread cycles+wraps
+live; notify-toast click lands on right pane.
+
+Earlier phases:
+
+Phase 2 COMPLETE at `b4eeba7`: env aliases, full hook-event coverage (4 new
+events, protocol v3, timestamped backup of ADE's hooks file), AgentSession
+registry + `agent_sessions` table (migration 0040), stuck-state transcript
+corrector (structurally cannot invent sessions), agent-state-changed events,
+`ade hooks setup/status`, `agent-event` (silent-fail, never breaks Claude
+outside ADE), `agent-sessions`; read-only daemon `snapshot` (no-resize
+canary-proven) wired end to end. Notes for later phases:
+
+- Phase 6 smoke asserts: live pane → `source: "live-screen"`; exited pane →
+  `scrollback-history` with NO "live screen read failed" warning in main log.
+- `packages/server-core/src/notifications/map-event-type.ts` is a SECOND
+  copy serving apps/server (web shell) — not extended; web path ignores the
+  new events (forward-compat safe). Extend if Feature 3 must cover web.
+- `agentKind` field exists but nothing populates it yet (defaults claude).
+- Never run biome --write over agent-setup/ (corrupts {{MARKER}} templates).
+
+Earlier:
 
 Phase 1 COMPLETE: control-plane server (181 tests), `ade` CLI (82 tests),
 renderer bridge (40 tests), agent-setup bin injection (58 tests), all

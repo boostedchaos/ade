@@ -54,6 +54,17 @@ export function BasePaneWindow({
 	contentClassName = "w-full h-full overflow-hidden",
 }: BasePaneWindowProps) {
 	const isActive = useTabsStore((s) => s.focusedPaneIds[tabId] === paneId);
+	/**
+	 * Mission Control Feature 3's attention ring. Driven by the pane status the
+	 * agent-hook pipeline already writes (`permission` === the agent is blocked
+	 * on a human), so there is no second source of truth for "this pane wants
+	 * you" — and it lives here rather than in TabPane so a browser, file-viewer
+	 * or devtools pane sharing a tab with a blocked agent cannot look identical
+	 * to it. The visual is `.mosaic-window-attention` in mosaic-theme.css.
+	 */
+	const needsAttention = useTabsStore(
+		(s) => s.panes[paneId]?.status === "permission",
+	);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const splitOrientation = useSplitOrientation(containerRef);
 	const isDragging = useDragPaneStore((s) => s.draggingPaneId !== null);
@@ -98,7 +109,12 @@ export function BasePaneWindow({
 					renderToolbar(handlers)
 				)
 			}
-			className={isActive ? "mosaic-window-focused" : ""}
+			className={[
+				isActive ? "mosaic-window-focused" : "",
+				needsAttention ? "mosaic-window-attention" : "",
+			]
+				.filter(Boolean)
+				.join(" ")}
 			onDragStart={() => setDragging(paneId, tabId)}
 			onDragEnd={() => clearDragging()}
 		>

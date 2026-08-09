@@ -9,6 +9,7 @@ import {
 	useState,
 } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { useAttention } from "renderer/stores/attention/useAttention";
 import { useAppHotkey } from "renderer/stores/hotkeys";
 import { useRenamePaneStore } from "renderer/stores/rename-pane-store";
 import { useTabsStore } from "renderer/stores/tabs/store";
@@ -116,6 +117,20 @@ export function GroupStrip() {
 		{ preventDefault: true },
 		[activeTabId],
 	);
+
+	// Unread-attention count per tab (Mission Control Feature 3). Summed over
+	// the tab's panes rather than counted per tab, because a notification is
+	// always about a pane and a tab can hold several blocked agents at once.
+	const { unreadAttentionByPane } = useAttention();
+	const tabAttentionMap = useMemo(() => {
+		const result = new Map<string, number>();
+		for (const [paneId, count] of Object.entries(unreadAttentionByPane)) {
+			const pane = panes[paneId];
+			if (!pane || count <= 0) continue;
+			result.set(pane.tabId, (result.get(pane.tabId) ?? 0) + count);
+		}
+		return result;
+	}, [unreadAttentionByPane, panes]);
 
 	// Compute aggregate status per tab using shared priority logic
 	const tabStatusMap = useMemo(() => {
@@ -332,6 +347,7 @@ export function GroupStrip() {
 											isActive={tab.id === activeTabId}
 											isRenaming={renamingTabId === tab.id}
 											status={tabStatusMap.get(tab.id) ?? null}
+											attentionCount={tabAttentionMap.get(tab.id) ?? 0}
 											onSelect={() => handleSelectGroup(tab.id)}
 											onClose={() => handleCloseGroup(tab.id)}
 											onRename={(newName) => handleRenameGroup(tab.id, newName)}

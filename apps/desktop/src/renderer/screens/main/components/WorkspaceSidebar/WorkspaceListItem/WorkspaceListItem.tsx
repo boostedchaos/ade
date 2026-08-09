@@ -39,6 +39,10 @@ import { navigateToWorkspace } from "renderer/routes/_authenticated/_dashboard/u
 import { useBranchSyncInvalidation } from "renderer/screens/main/hooks/useBranchSyncInvalidation";
 import { useGitChangesStatus } from "renderer/screens/main/hooks/useGitChangesStatus";
 import { useWorkspaceRename } from "renderer/screens/main/hooks/useWorkspaceRename";
+import {
+	countAttentionForPanes,
+	useAttention,
+} from "renderer/stores/attention/useAttention";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import { extractPaneIdsFromLayout } from "renderer/stores/tabs/utils";
 import { getHighestPriorityStatus } from "shared/tabs-types";
@@ -203,18 +207,29 @@ export function WorkspaceListItem({
 		return { additions, deletions };
 	}, [localChanges]);
 
-	const workspaceStatus = useMemo(() => {
+	const workspacePaneIds = useMemo(() => {
 		const workspaceTabs = tabs.filter((t) => t.workspaceId === id);
-		const paneIds = new Set(
+		return new Set(
 			workspaceTabs.flatMap((t) => extractPaneIdsFromLayout(t.layout)),
 		);
+	}, [tabs, id]);
+
+	// Unread attention across this workspace's panes (Mission Control Feature 3).
+	const { unreadAttentionByPane } = useAttention();
+	const attentionCount = useMemo(
+		() => countAttentionForPanes(unreadAttentionByPane, workspacePaneIds),
+		[unreadAttentionByPane, workspacePaneIds],
+	);
+
+	const workspaceStatus = useMemo(() => {
+		const paneIds = workspacePaneIds;
 		function* paneStatuses() {
 			for (const paneId of paneIds) {
 				yield panes[paneId]?.status;
 			}
 		}
 		return getHighestPriorityStatus(paneStatuses());
-	}, [tabs, panes, id]);
+	}, [workspacePaneIds, panes]);
 
 	const handleClick = () => {
 		if (!rename.isRenaming) {
@@ -315,6 +330,7 @@ export function WorkspaceListItem({
 				isActive={isActive}
 				isUnread={isUnread}
 				workspaceStatus={workspaceStatus}
+				attentionCount={attentionCount}
 				iconUrl={iconUrl}
 				tintColor={tintColor}
 				role={role}
@@ -384,6 +400,7 @@ export function WorkspaceListItem({
 							isActive={isActive}
 							isUnread={isUnread}
 							workspaceStatus={workspaceStatus}
+							attentionCount={attentionCount}
 							variant="expanded"
 							iconUrl={iconUrl}
 							tintColor={tintColor}

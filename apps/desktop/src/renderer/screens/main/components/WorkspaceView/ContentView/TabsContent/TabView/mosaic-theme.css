@@ -114,3 +114,29 @@
 	border: 1px solid rgba(59, 130, 246, 0.3);
 	opacity: 1;
 }
+
+/*
+ * Mission Control Feature 3: the attention ring.
+ *
+ * Applied by BasePaneWindow when the pane's status is `permission` — an agent
+ * is blocked waiting on a human. Declared AFTER .mosaic-window-focused so it
+ * wins the border-color for a pane that is both focused and blocked; the two
+ * states co-occur constantly and the blocked one is the one you need to see.
+ *
+ * An inset shadow rather than a wider border: the border participates in
+ * mosaic's layout, so growing it would shift the terminal by a pixel every
+ * time an agent asked a question.
+ */
+:is(.mosaic-theme-dark, .mosaic-theme-light) .mosaic-window-attention {
+	border-color: var(--color-destructive);
+	box-shadow: inset 0 0 0 2px var(--color-destructive);
+}
+:is(.mosaic-theme-dark, .mosaic-theme-light)
+	.mosaic-window-attention
+	.mosaic-window-toolbar {
+	background: color-mix(
+		in srgb,
+		var(--color-destructive) 14%,
+		var(--color-secondary)
+	);
+}

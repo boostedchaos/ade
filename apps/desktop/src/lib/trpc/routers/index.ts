@@ -1,5 +1,6 @@
 import type { BrowserWindow } from "electron";
 import { router } from "..";
+import { createAttentionRouter } from "./attention";
 import { createAuthRouter } from "./auth";
 import { createAutoUpdateRouter } from "./auto-update";
 import { createBrowserRouter } from "./browser/browser";
@@ -34,6 +35,7 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		browser: createBrowserRouter(),
 		browserHistory: createBrowserHistoryRouter(),
 		auth: createAuthRouter(),
+		attention: createAttentionRouter(),
 		autoUpdate: createAutoUpdateRouter(),
 		cache: createCacheRouter(),
 		window: createWindowRouter(getWindow),

@@ -442,3 +442,46 @@ export const agentSessions = sqliteTable(
 
 export type InsertAgentSession = typeof agentSessions.$inferInsert;
 export type SelectAgentSession = typeof agentSessions.$inferSelect;
+
+/**
+ * Mission Control Feature 3: the attention inbox.
+ *
+ * Two producers, one table. `kind = "attention"` rows are created
+ * automatically when a pane's agent session enters `needsInput`; `kind =
+ * "custom"` rows come from an explicit `ade notify`. The distinction is
+ * load-bearing rather than cosmetic — the pane ring, the tab/rail badges and
+ * `jump-to-unread` all count only unread ATTENTION rows, so an agent
+ * announcing "build finished" cannot make a pane look like it is blocking on
+ * a human.
+ *
+ * A row is unread while `read_at` is null. Rows are never deleted on read:
+ * the panel lists history newest-first, and read/unread is the only state.
+ */
+export const notifications = sqliteTable(
+	"notifications",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => uuidv4()),
+		// "attention" (agent needs input) | "custom" (ade notify)
+		kind: text("kind").notNull().default("attention"),
+		title: text("title").notNull(),
+		body: text("body").notNull().default(""),
+		// The pane this is about. Null for a notification with no pane context.
+		paneId: text("pane_id"),
+		workspaceId: text("workspace_id"),
+		createdAt: integer("created_at")
+			.notNull()
+			.$defaultFn(() => Date.now()),
+		// Null while unread.
+		readAt: integer("read_at"),
+	},
+	(table) => [
+		index("notifications_created_at_idx").on(table.createdAt),
+		index("notifications_read_at_idx").on(table.readAt),
+		index("notifications_pane_id_idx").on(table.paneId),
+	],
+);
+
+export type InsertNotification = typeof notifications.$inferInsert;
+export type SelectNotification = typeof notifications.$inferSelect;

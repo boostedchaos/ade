@@ -1,5 +1,6 @@
 import type { Command } from "../command";
 import { eventCommands } from "./events";
+import { notificationCommands } from "./notifications";
 import { paneCommands } from "./panes";
 import { sessionCommands } from "./sessions";
 import { stubCommands } from "./stubs";
@@ -11,6 +12,7 @@ export const COMMANDS: Command[] = [
 	...workspaceCommands,
 	...terminalIoCommands,
 	...sessionCommands,
+	...notificationCommands,
 	...eventCommands,
 	...stubCommands,
 ];
@@ -20,6 +22,7 @@ export const GROUP_ORDER = [
 	"Tabs / workspaces",
 	"Terminal I/O",
 	"Agent sessions",
+	"Notifications",
 	"Events",
 	"Not yet implemented",
 ];

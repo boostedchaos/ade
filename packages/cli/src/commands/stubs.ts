@@ -26,30 +26,6 @@ const STUBS: StubSpec[] = [
 		phase: "Phase 2 — agent session tracking",
 	},
 	{
-		name: "notify",
-		group: "Not yet implemented",
-		summary: "Raise a notification against a pane",
-		phase: "Phase 3 — attention notifications",
-	},
-	{
-		name: "list-notifications",
-		group: "Not yet implemented",
-		summary: "List notifications, newest first",
-		phase: "Phase 3 — attention notifications",
-	},
-	{
-		name: "mark-notification-read",
-		group: "Not yet implemented",
-		summary: "Mark one notification read, or all of them",
-		phase: "Phase 3 — attention notifications",
-	},
-	{
-		name: "jump-to-unread",
-		group: "Not yet implemented",
-		summary: "Focus the next pane with unread attention",
-		phase: "Phase 3 — attention notifications",
-	},
-	{
 		name: "claude-teams",
 		group: "Not yet implemented",
 		summary: "Launch Claude Code with agent-teams pointed at ADE's tmux shim",

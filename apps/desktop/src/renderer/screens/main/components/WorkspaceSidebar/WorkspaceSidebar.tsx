@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { LuPlus } from "react-icons/lu";
 import { useWorkspaceShortcuts } from "renderer/hooks/useWorkspaceShortcuts";
 import { useOpenNewCategoryModal } from "renderer/stores/new-category-modal";
+import { NotificationPanel } from "./NotificationPanel";
 import { PortsList } from "./PortsList";
 import { ProjectSection } from "./ProjectSection";
 import { SidebarDropZone } from "./SidebarDropZone";
@@ -39,19 +40,27 @@ export function WorkspaceSidebar({
 					<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
 						Teams
 					</span>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								onClick={() => openNewCategory()}
-								className="flex items-center justify-center size-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-								aria-label="New team"
-							>
-								<LuPlus className="size-4" />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent side="right">New team</TooltipContent>
-					</Tooltip>
+					<div className="flex items-center gap-0.5">
+						<NotificationPanel />
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<button
+									type="button"
+									onClick={() => openNewCategory()}
+									className="flex items-center justify-center size-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+									aria-label="New team"
+								>
+									<LuPlus className="size-4" />
+								</button>
+							</TooltipTrigger>
+							<TooltipContent side="right">New team</TooltipContent>
+						</Tooltip>
+					</div>
+				</div>
+			)}
+			{isCollapsed && (
+				<div className="flex h-10 shrink-0 items-center justify-center">
+					<NotificationPanel isCollapsed />
 				</div>
 			)}
 			<div className="flex-1 overflow-y-auto hide-scrollbar">

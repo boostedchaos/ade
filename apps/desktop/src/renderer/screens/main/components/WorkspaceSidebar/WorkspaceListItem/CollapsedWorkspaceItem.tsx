@@ -29,6 +29,7 @@ interface CollapsedWorkspaceItemProps {
 	isActive: boolean;
 	isUnread: boolean;
 	workspaceStatus: ActivePaneStatus | null;
+	attentionCount: number;
 	iconUrl?: string | null;
 	tintColor?: string | null;
 	role?: string | null;
@@ -49,6 +50,7 @@ export function CollapsedWorkspaceItem({
 	isActive,
 	isUnread,
 	workspaceStatus,
+	attentionCount,
 	iconUrl,
 	tintColor,
 	role,
@@ -92,6 +94,7 @@ export function CollapsedWorkspaceItem({
 				isActive={isActive}
 				isUnread={isUnread}
 				workspaceStatus={workspaceStatus}
+				attentionCount={attentionCount}
 				variant="collapsed"
 				iconUrl={iconUrl}
 				tintColor={tintColor}

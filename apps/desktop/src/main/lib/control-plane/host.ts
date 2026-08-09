@@ -13,11 +13,20 @@ import {
 	ControlError,
 	type ControlPlaneHost,
 	type ControlPlaneSnapshot,
+	type NotificationSnapshot,
 	type SnapshotPane,
 	type SnapshotTab,
 } from "../../../../../../packages/control-plane/src/index";
 import { ingestAgentEvent, listAgentSessions } from "../agent-sessions";
 import { appState } from "../app-state";
+import {
+	createNotification,
+	listNotifications,
+	markAllRead,
+	markRead,
+	type NotificationRecord,
+	panesWithUnreadAttention,
+} from "../attention";
 import { localDb } from "../local-db";
 import { mapAgentSessionState } from "../notifications/map-event-type";
 import { extractWorkspaceIdFromUrl } from "../notifications/utils";
@@ -111,6 +120,26 @@ export function buildSnapshot(
 		tabLayouts,
 		focusedWorkspaceId,
 		workspaceOrder,
+	};
+}
+
+/**
+ * The store's record and the wire's snapshot are structurally identical today.
+ * Mapped explicitly anyway so that adding a field to the DB row does not
+ * silently widen the socket's response shape.
+ */
+function toNotificationSnapshot(
+	record: NotificationRecord,
+): NotificationSnapshot {
+	return {
+		id: record.id,
+		kind: record.kind,
+		title: record.title,
+		body: record.body,
+		paneId: record.paneId,
+		workspaceId: record.workspaceId,
+		createdAt: record.createdAt,
+		readAt: record.readAt,
 	};
 }
 
@@ -274,6 +303,34 @@ export function createControlPlaneHost(params: {
 					missing: coverage.missing,
 				};
 			},
+		},
+
+		/**
+		 * Attention notifications. Same shape as `agents` above: a second front
+		 * door onto main's single store, not a second store. `create` routes
+		 * through `createNotification`, which is what emits the `notification`
+		 * bus event and repaints the Dock badge, so a row made by `ade notify`
+		 * and one made by an agent transition are indistinguishable downstream.
+		 */
+		notifications: {
+			list: (options) =>
+				listNotifications({ unreadOnly: options.unreadOnly }).map(
+					toNotificationSnapshot,
+				),
+			create: (input) => {
+				const record = createNotification({
+					kind: input.kind,
+					title: input.title,
+					body: input.body,
+					paneId: input.paneId,
+					workspaceId: input.workspaceId,
+				});
+				return record ? toNotificationSnapshot(record) : null;
+			},
+			markRead: (id) => markRead(id),
+			markAllRead: () => markAllRead(),
+			panesWithUnreadAttention: () =>
+				panesWithUnreadAttention(listNotifications()),
 		},
 
 		log: (level, message) => {
