@@ -119,9 +119,24 @@ Windows CI, packaged named-pipe `ade list-workspaces` smoke.) TODO: final
 - **server-core** — 474 pass / 20 skip / **0 fail** (phase 0 fixed the
   `readAdeWorkspaceSkill` Windows failure).
 
-TODO (orchestrator): paste the exact final `bun test` tails + pinned-tsc exit
-codes for any package touched after this report, and confirm the desktop ratchet
-against the same baseline commit.
+Post-Codex-fix re-run (each from its package cwd on this Windows box; pinned tsc
+= `node apps/desktop/node_modules/typescript/bin/tsc -p <pkg>/tsconfig.json
+--noEmit`, judged by exit code):
+
+- **control-plane** — `194 pass / 82 skip / 0 fail` (541 expect); tsc exit **0**.
+  (+1 vs the pre-Codex 193: the new F4 fresh-file/Guests-ACE win32 test.)
+- **cli** — `197 pass / 91 skip / 0 fail` (627 expect); tsc exit **0**. (Net −1
+  test vs 198: the two-process read/write mocks were replaced by single-invocation
+  - parse-failure tests for F1/F2.)
+- **server-core** — `475 pass / 20 skip / 0 fail` (1194 expect); tsc exit **0**.
+  (+1 vs 474: the F5 BOM/CRLF/lone-CR normalization test.)
+- **desktop** — NOT touched by the Codex round (no desktop source changed), so the
+  61-vs-79 ratchet is unchanged from the baseline above.
+
+LIVE evidence (F2): backed up the real `HKCU\Environment\Path` (kind
+`ExpandString`, 572 chars), ran `ade cli install` against a throwaway temp home,
+observed the temp bin dir appended, `KIND_PRESERVED=true`, then restored —
+`RESTORED_BYTE_IDENTICAL=true`.
 
 ### Gotchas proven along the way (durable)
 
@@ -161,11 +176,25 @@ against the same baseline commit.
 
 ## TODO slots — orchestrator fills before ship
 
-- **Codex review round findings:** *(codex exec read-only pass after phases 1–5;
-  list findings + resolutions)*
+- **Codex review round findings:** 7 findings from an adversarial diff review;
+  triaged and resolved as below. Branch `windows-0.4`, base head `0dcadb1`.
+
+  | # | Sev | Finding | Resolution | Commit |
+  | - | --- | ------- | ---------- | ------ |
+  | F1 | major | cli-install PS stdout decoded utf8 but console OutputEncoding is the OEM code page → a non-ASCII PATH entry (`C:\工具`) is mangled on read and written back corrupted | FIXED — the install script sets `[Console]::OutputEncoding=UTF8` before any output; unit test asserts the script contains it | `2fb6806` |
+  | F2 | major | cli-install PATH read + write were TWO PowerShell processes → a concurrent PATH editor between them is clobbered | FIXED — collapsed read→check-membership→append→write into ONE script returning `{action}`; residual mid-write race is inherent to Windows PATH editing (setx/dialog share it) and not enlarged. %VAR%+kind preserved; verified by a LIVE byte-identical HKCU round-trip | `2fb6806` |
+  | F3 | major | token.ts unqualified username could grant the wrong local account on a domain machine | VERIFIED-ALREADY-FIXED — `currentWindowsUser()` uses `whoami` (DOMAIN\user-qualified) as PRIMARY and `hardenTokenFileAcl` grants `${user}:F` with it; the bare `userInfo/%USERNAME%/%USERPROFILE%` fallbacks fire ONLY when whoami itself fails (status≠0/empty), and a bad resolution downgrades to `applied:false` + warning, never a silent wrong-account grant. Accepted residual: the fallback path can still pass an unqualified name, but only in the whoami-unavailable case. No code change | (4d22d6c/0dcadb1) |
+  | F4 | minor | `/inheritance:r /grant:r` does not remove an arbitrary EXPLICIT ACE (any SID) on a pre-existing token file | FIXED — `rmSync(force)` the token file before `writeFileSync` so each launch writes a FRESH file whose DACL starts from just the dir's inherited ACL; existing SYSTEM/Admins strip kept as a proven-needed belt for GH runners. Test pre-stamps a Guests ACE and asserts it is gone (1 ACE) on win32 | `f9e3b0a` |
+  | F5 | minor | ade-workspace-skill normalization handled only `\r\n`; a UTF-8 BOM or lone `\r` would still break frontmatter | FIXED — strip leading `﻿` and normalize `/\r\n?/g`→`\n` in the same chokepoint; CRLF test extended with BOM + lone-CR cases | `94cb8c0` |
+  | F6 | minor | windows-ci natives smoke writes its success marker before the Electron process exits | PRE-EXISTING / OUT-OF-SCOPE — `git diff main...windows-0.4` shows the natives-smoke marker is from `main` (commit `b869c9f`), not this branch; tracked separately. The branch's NEW pipe smoke does NOT share the flaw: it writes `cli-smoke-result.txt` only AFTER `bun <cli> list-workspaces` returns with its exit code + output captured and judged. No fix | (n/a) |
+  | F7 | minor | golden.test fixture gate silently skips the whole suite on ALL platforms (probe log uncommitted) → regressions report green everywhere | FIXED — on a NON-Windows platform with the fixture missing, emit a loud `console.warn` naming the fixture + how to regenerate it; Windows skip stays silent (expected, no /bin/sh). Skip behavior unchanged | `33806d8` |
+
 - **Adversarial verifier verdict:** *(fresh reviewer at xhigh over the full diff)*
-- **Final CI run IDs/URLs:** *(windows-ci "ground truth" + "ADE CI" green on the
-  release SHA)*
+- **Final CI run IDs/URLs:** windows-ci "ground truth" + "ADE CI" were fully green
+  at base head `0dcadb1` (windows-ci run **31337152855** incl. the new
+  control-plane/cli unit-test steps, packaged-resource guard, and named-pipe CLI
+  smoke; ADE CI run **31337152861**). Final green runs on the post-Codex-fix head
+  are appended after the CI watch below. *(release-SHA runs: TODO after tag)*
 - **Release URL:** *(published `windows-v0.4.0` release + SHA256SUMS.txt)*
 
 ## Open follow-ups
