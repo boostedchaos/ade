@@ -60,11 +60,13 @@ describe("registry", () => {
 			key: "Enter",
 			text: "hi",
 			subcommand: "status",
+			state: "idle",
+			value: "clear",
 		};
-		// `hooks` is the one verb that is a command GROUP, not a command: its
-		// subcommands dispatch to `hooks-setup` / `hooks-status`. Everything else
+		// Command GROUPS, not commands: their subcommands dispatch to
+		// `hooks-status`, `todo-add`, `browser-click` and so on. Everything else
 		// must keep the 1:1 property, which is what this test protects.
-		const NOT_ONE_TO_ONE = new Set(["hooks"]);
+		const NOT_ONE_TO_ONE = new Set(["hooks", "todo", "browser"]);
 		// agent-event reads the pane from the environment ADE injects.
 		process.env.ADE_SURFACE_ID = "pane-test";
 		for (const command of COMMANDS) {

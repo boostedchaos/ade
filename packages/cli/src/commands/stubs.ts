@@ -14,31 +14,6 @@ interface StubSpec {
 
 const STUBS: StubSpec[] = [
 	{
-		name: "set-status",
-		group: "Not yet implemented",
-		summary: "Set a pane's agent status (working | needsInput | idle)",
-		phase: "Phase 2 — agent session tracking",
-	},
-	{
-		name: "set-progress",
-		group: "Not yet implemented",
-		summary: "Set a pane's progress indicator (0-100 | clear)",
-		phase: "Phase 2 — agent session tracking",
-	},
-	{
-		name: "todo",
-		group: "Not yet implemented",
-		summary: "Workspace todos (add | list | start | done | rm)",
-		phase: "Phase 5 — parity extras",
-	},
-	{
-		name: "browser",
-		group: "Not yet implemented",
-		summary:
-			"Drive a browser pane (open | navigate | click | type | screenshot)",
-		phase: "Phase 5 — parity extras",
-	},
-	{
 		name: "cli",
 		group: "Not yet implemented",
 		summary: "Manage the ade bin itself (cli install — put `ade` on PATH)",

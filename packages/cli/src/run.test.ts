@@ -90,15 +90,13 @@ describe("usage failures exit 2", () => {
 		const { findCommand } = await import("./commands");
 		// hooks / agent-event / agent-sessions left this list in Phase 2; the four
 		// notification verbs left it in Phase 3; claude-teams / tmux-compat left
-		// it in Phase 4.
-		for (const name of [
-			"set-status",
-			"set-progress",
-			"todo",
-			"browser",
-			"cli",
-		]) {
+		// it in Phase 4; todo / browser / set-status / set-progress left it in
+		// Phase 5b, which is why they are asserted as BUILT below.
+		for (const name of ["cli"]) {
 			expect(findCommand(name)?.kind).toBe("stub");
+		}
+		for (const name of ["todo", "browser", "set-status", "set-progress"]) {
+			expect(findCommand(name)?.kind).toBe("request");
 		}
 	});
 
