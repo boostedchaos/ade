@@ -51,7 +51,7 @@ ADE runs whatever CLI coding agents you already have installed. Claude Code, Ope
 
 Terminal sessions live in a detached daemon, not in the app: they survive app restarts, browser disconnects, and (by design) a phone that locks its screen mid-session.
 
-**Mission Control** gives the app a command line. The `ade` tool — already on the PATH of every terminal pane ADE opens — creates and splits panes, types into terminals and reads their screens, drives browser panes, and keeps per-workspace todos. Agents use it to show you what they are doing; a pane whose agent is blocked on you raises a ring and a badge you can jump straight to. See [`docs/mission-control.md`](docs/mission-control.md).
+**Mission Control** (new in 0.4.0) gives the app a command line. The `ade` tool — already on the PATH of every terminal pane ADE opens — creates and splits panes, types into terminals and reads their screens, drives browser panes, and keeps per-workspace todos. ADE tracks each agent's state from its own hooks — working, waiting on you, idle — and a pane whose agent is blocked raises a ring and a badge you can jump straight to. There is also an experimental `ade claude-teams` launcher (macOS) that runs Claude Code's agent-teams feature with each teammate materialized as a real pane you can watch. See [`docs/mission-control.md`](docs/mission-control.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Prerequisites
 
