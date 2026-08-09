@@ -10,8 +10,12 @@ import {
 } from "./lib/boot-errors";
 import { persistentHistory } from "./lib/persistent-hash-history";
 import { electronQueryClient } from "./providers/ElectronTRPCProvider";
-import { routeTree } from "./routeTree.gen";
 import { RouteError } from "./routes/route-error";
+import { routeTree } from "./routeTree.gen";
+import {
+	registerControlPlaneBridge,
+	setControlPlaneNavigator,
+} from "./stores/tabs/control-plane-bridge";
 
 import "./globals.css";
 
@@ -41,11 +45,20 @@ if (ipcRenderer) {
 	);
 }
 
+// Control plane (`ade` CLI): main serves reads itself and forwards only layout
+// MUTATIONS here. Registered on the same IPC channel pattern as deep links.
+setControlPlaneNavigator((workspaceId) => {
+	router.navigate({ to: `/workspace/${workspaceId}` });
+});
+const unregisterControlPlaneBridge = registerControlPlaneBridge();
+
 if (import.meta.hot) {
 	import.meta.hot.dispose(() => {
 		if (ipcRenderer) {
 			ipcRenderer.off("deep-link-navigate", handleDeepLink);
 		}
+		unregisterControlPlaneBridge();
+		setControlPlaneNavigator(null);
 		cleanupBootErrorHandling();
 	});
 }

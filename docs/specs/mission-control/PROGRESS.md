@@ -5,8 +5,29 @@ Orchestrator: Fable (architect only); execution via parallel Opus 5 subagents.
 
 ## Current phase
 
-**Phase 1 — Control plane + CLI core** (dispatching, 2026-08-09).
-Phase 0 complete except probe (still running; only gates Phase 4).
+**Phase 2 — Agent session tracking** (dispatching, 2026-08-09).
+
+Phase 1 COMPLETE: control-plane server (181 tests), `ade` CLI (82 tests),
+renderer bridge (40 tests), agent-setup bin injection (58 tests), all
+verified independently; desktop failures identical to baseline (22, all
+pre-existing in static-ports/loader.test.ts). Notable:
+
+- Reads bypass renderer (main's app-state mirror incl. layout); bridge =
+  mutations only. Focused workspace = window URL.
+- send-key: CLI pre-encodes (`data`), server prefers it; 112-case
+  cross-package contract test pins both key tables (dep edge
+  @ade/cli → control-plane devDeps, 1-line lockfile delta).
+- Real bug found+fixed: bridge originally split at layout ROOT always;
+  now path-based split + swap-at-path (identity-preserving).
+- Divergences (accepted, for build report): browser new-pane = new tab
+  (split-in action deferred to Phase 5); --command on splits → UNSUPPORTED;
+  new-workspace routes via renderer tRPC mutation; read-screen/capture-pane
+  read persisted scrollback (low fidelity for TUIs) until Phase 2 daemon
+  snapshot; ade bin requires bun in dev checkouts (packaged build must ship
+  compiled dist entry — Phase 6 item); bin entry-missing exit = 127.
+- Desktop tests MUST run from apps/desktop cwd or they error spuriously.
+
+Phase 0 was committed at `b611c0e` (probe: agent-teams flag LIVE).
 
 - [x] Branch created, base verified (`302d183` is ancestor of HEAD)
 - [x] Socket schema + amendments → `PROTOCOL.md` (this dir)

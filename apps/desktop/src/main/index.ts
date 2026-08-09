@@ -30,6 +30,7 @@ import { SUPERSET_HOME_DIR } from "./lib/app-environment";
 import { initAppState } from "./lib/app-state";
 import { startAppStateWatcher } from "./lib/app-state/watcher";
 import { setupAutoUpdater } from "./lib/auto-updater";
+import { startControlPlane, stopControlPlane } from "./lib/control-plane";
 import { setWorkspaceDockIcon } from "./lib/dock-icon";
 import { loadWebviewBrowserExtension } from "./lib/extensions";
 import { closeLocalDb, localDb } from "./lib/local-db";
@@ -176,6 +177,14 @@ const SHUTDOWN_TIMEOUT_MS = 4000;
  */
 async function gracefulShutdown(): Promise<void> {
 	const cleanup = (async () => {
+		// First: stop accepting new control-socket commands, so nothing arrives
+		// mid-teardown and tries to drive a terminal that is being flushed.
+		try {
+			await stopControlPlane();
+		} catch (error) {
+			console.error("[main] Control plane shutdown step failed:", error);
+		}
+
 		const stopAgents = getStopAgentsOnQuitSetting();
 		try {
 			if (stopAgents) {
@@ -367,6 +376,11 @@ if (!gotTheLock) {
 		console.log("[main] boot: makeAppSetup (create window)…");
 		await makeAppSetup(() => MainWindow());
 		console.log("[main] boot: window created");
+
+		// After the window exists: layout mutations need a renderer to dispatch
+		// to, and startControlPlane swallows its own failures so a socket that
+		// cannot bind never blocks boot.
+		await startControlPlane();
 		setupAutoUpdater();
 		initTray();
 

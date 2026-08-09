@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { BINARY_INSTALL } from "@superset/shared/agent-binaries";
+import { createAdeCliBin } from "./ade-cli-bin";
 import {
 	cleanupGlobalOpenCodePlugin,
 	createClaudeWrapper,
@@ -25,7 +26,7 @@ import {
 	createShimRuntime,
 	type ShimRuntimeConfig,
 } from "./agent-wrappers-common";
-import { getNotifyScriptPath, createNotifyScript } from "./notify-hook";
+import { createNotifyScript, getNotifyScriptPath } from "./notify-hook";
 import {
 	BASH_DIR,
 	BIN_DIR,
@@ -107,6 +108,11 @@ export function setupAgentHooks(): void {
 	createMastraHooksJson();
 	createCopilotHookScript();
 	createCopilotWrapper();
+
+	// `ade` CLI. Not a wrapper and not in SHIMMED_BINARIES — it is our own
+	// binary, and BIN_DIR is already on every agent's PATH, so writing the
+	// file here is the entire integration. See ade-cli-bin.ts.
+	createAdeCliBin();
 
 	// POSIX intercepts `claude`/`codex`/etc. via shell functions sourced from rc
 	// files. Windows has no rc files: BIN_DIR is prepended to PATH in getShellEnv

@@ -8,8 +8,8 @@
 	},
 	"exports": {
 		".": {
-			"types": "./src/index.ts",
-			"default": "./src/index.ts"
+			"types": "./src/lib.ts",
+			"default": "./src/lib.ts"
 		}
 	},
 	"scripts": {
