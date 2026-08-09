@@ -30,9 +30,13 @@ every push to `main`, and uploads `ade-windows-x64` (the `.exe`, the portable
    (`${productName}-${pkg.version}-${arch}.${ext}`). The other `apps/*`
    package.json versions are upstream's and are irrelevant here.
 2. Push to `main`. Wait for **Windows CI (ground truth)** to go green — it gates
-   on typecheck, the full suite against the Windows baseline, the package verify
-   step, and two smokes (native modules under packaged Electron; app boots and
-   initializes `~/.ade`).
+   on typecheck, the full desktop suite against the Windows baseline, the
+   `control-plane` and `cli` suites (no baseline — any failure fails CI), the
+   package verify step, a packaged-resource guard (the `ade` CLI, the bundled
+   `skills/`, and the agent hook templates are all present in the bundle), and
+   three smokes (native modules under packaged Electron; the app boots and
+   initializes `~/.ade`; and the bundled `ade` CLI reaches the control server
+   over the named pipe).
 3. Download the artifact and generate checksums:
 
    ```bash
