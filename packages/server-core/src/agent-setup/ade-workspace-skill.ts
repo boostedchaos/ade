@@ -110,7 +110,11 @@ export function readAdeWorkspaceSkill(params?: {
 	);
 	if (!source) return null;
 	try {
-		return fs.readFileSync(source, "utf8");
+		// Normalize CRLF→LF: on Windows the bundled SKILL.md can be checked out
+		// (autocrlf) or unzipped with CRLF, and this one copy is what every
+		// consumer installs — the agentskills.io frontmatter must start with a
+		// bare "---\n" for parsers to read it, so canonicalize on the way out.
+		return fs.readFileSync(source, "utf8").replace(/\r\n/g, "\n");
 	} catch {
 		return null;
 	}
