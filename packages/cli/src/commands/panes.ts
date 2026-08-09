@@ -1,5 +1,6 @@
 import type { OptionDef, PositionalDef } from "../args";
 import { type Command, compact, targetFrom } from "../command";
+import { formatListResult } from "../output";
 
 export const PANE_TYPES = [
 	"terminal",
@@ -73,7 +74,11 @@ const directionOption = (required: boolean): OptionDef => ({
 
 const REF_NOTE =
 	"Refs (pane:2, tab:1, workspace:1) are 1-based positions in the current UI\n" +
-	"order at resolution time — they are NOT stable across layout changes.";
+	"order at resolution time — they are NOT stable across layout changes.\n" +
+	"They count within the FOCUSED context: tab:<n> within the focused\n" +
+	"workspace, pane:<n> within the focused tab. Indices printed by\n" +
+	"`list-tabs --workspace <other>` are NOT addressable as tab:<n> — use the\n" +
+	"id from that listing instead.";
 
 export const paneCommands: Command[] = [
 	{
@@ -154,7 +159,6 @@ export const paneCommands: Command[] = [
 				placeholder: "<tab>",
 				description: "Destination tab: UUID, ref (tab:2), or `focused`",
 			},
-			focusOption,
 		],
 		notes: REF_NOTE,
 		build: (input) => ({
@@ -194,5 +198,7 @@ export const paneCommands: Command[] = [
 			cmd: "list-panes",
 			args: compact({ tab: input.options.tab }),
 		}),
+		format: (result) =>
+			formatListResult(result, "panes", { label: "Tab", key: "tabId" }),
 	},
 ];

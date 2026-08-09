@@ -92,7 +92,10 @@ export function topLevelHelp(): string {
 		"",
 		"Targets accept a UUID, a ref (workspace:1, tab:2, pane:3), or `focused`.",
 		"Refs are 1-based positions in current UI order and are not stable across",
-		"layout changes. Resolution happens inside ADE, not in the CLI.",
+		"layout changes. They count within the FOCUSED context — tab:<n> within",
+		"the focused workspace, pane:<n> within the focused tab — so indices from",
+		"`list-tabs --workspace <other>` must be used as ids, not as refs.",
+		"Resolution happens inside ADE, not in the CLI.",
 		"",
 		"Exit codes: 0 ok · 1 command failed · 2 usage or unsupported · 3 ADE not running",
 	);

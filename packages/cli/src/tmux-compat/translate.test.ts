@@ -288,6 +288,33 @@ describe("respawn-pane", () => {
 		]);
 	});
 
+	/**
+	 * The PTY race. `new-pane` returns when the renderer's layout store mutates;
+	 * the PTY spawns afterwards, so a `send` issued immediately throws and the
+	 * teammate never starts. FakeAde models the two stages via
+	 * `paneReadyAfterPolls`; against the pre-fix code (which sent straight after
+	 * `rebuildPane` with no readiness wait) this test fails with
+	 * "NOT_FOUND: Pane pane-N has no live terminal session" and exit 1.
+	 */
+	it("waits for the rebuilt pane's PTY before sending the exec line", async () => {
+		await makeTeammatePane();
+		await tmux(["respawn-pane", "-k", "-t", "%1", "--", teammate]);
+
+		// The pane created by the rebuild needs three polls before its PTY is up.
+		ade.paneReadyAfterPolls = 3;
+		const again = "cd /work && env A=2 claude --agent-id helper-2@team";
+		const result = await tmux(["respawn-pane", "-k", "-t", "%1", "--", again]);
+
+		expect(result.err).toEqual([]);
+		expect(result.code).toBe(0);
+		const after = new CompatStore(dir).read().panes["%1"];
+		expect(ade.sent.get(String(after?.adePaneId))).toEqual([
+			`exec /bin/sh -c '${again}'`,
+		]);
+		// It polled rather than guessing a fixed sleep.
+		expect(cmds().filter((c) => c === "pane-ready").length).toBeGreaterThan(1);
+	});
+
 	it("recovers when the ADE pane vanished entirely", async () => {
 		await makeTeammatePane();
 		await tmux(["respawn-pane", "-k", "-t", "%1", "--", teammate]);

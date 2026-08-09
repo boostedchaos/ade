@@ -510,4 +510,39 @@ describe.skipIf(IS_WIN)("ControlPlaneServer — subscribe", () => {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 		expect(bus.subscriberCount).toBe(0);
 	});
+
+	/**
+	 * The ack write can fail — a client that goes away between `subscribe` and
+	 * its acknowledgement. `write` handles that by closing the connection,
+	 * which removes the state object from `connections` and unsubscribes a
+	 * handle that is still null. Subscribing after that would attach a listener
+	 * nothing can ever reach to remove, leaking one closure per occurrence.
+	 *
+	 * Reaching into the private `connections` map is deliberate: this is the
+	 * only way to make the ack write fail deterministically, and a timing-based
+	 * version of this test would be flaky in exactly the situation it exists to
+	 * catch. Against the pre-fix code (no `connections.has` re-check before
+	 * subscribing) the final expectation reads 1.
+	 */
+	it("does not leak a subscriber when the ack write fails", async () => {
+		const client = await TestClient.connect(socketPath);
+		client.send({ id: "h", cmd: "hello", token });
+		await client.waitForFrames(1);
+
+		const connections = (
+			server as unknown as { connections: Map<Socket, unknown> }
+		).connections;
+		const [serverSocket] = [...connections.keys()];
+		expect(serverSocket).toBeDefined();
+		expect(connections.size).toBe(1);
+		(serverSocket as Socket).write = () => {
+			throw new Error("EPIPE: broken pipe");
+		};
+
+		client.send({ id: "s", cmd: "subscribe", args: { kinds: ["*"] } });
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		expect(connections.size).toBe(0);
+		expect(bus.subscriberCount).toBe(0);
+	});
 });

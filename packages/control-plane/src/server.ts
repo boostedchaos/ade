@@ -318,6 +318,14 @@ export class ControlPlaneServer {
 
 		this.write(socket, successResponse(id, { subscribed: true }));
 
+		// Writing the ack can fail, and `write` responds to that by closing the
+		// connection — which unsubscribes a handle that is still null and drops
+		// `state` from `connections`. Subscribing anyway would attach a listener
+		// to a state object nothing can ever reach again, leaking one closure
+		// into the bus per occurrence. Re-check rather than subscribing before
+		// the ack, so an event can never be framed ahead of it.
+		if (!this.connections.has(socket)) return;
+
 		state.unsubscribe = this.events.subscribe(kinds, (event: ControlEvent) => {
 			this.write(socket, event);
 		});

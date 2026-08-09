@@ -935,14 +935,94 @@ async function respawnPane(
 		}
 	}
 
+	const ref = adeRef(pane, ctx.env);
+	// Both respawn paths land here, and both can arrive before the pane can
+	// accept a write: the rebuild path has just created an ADE pane whose PTY
+	// spawns asynchronously, and the first respawn of a placeholder-shell pane
+	// races the shell's own spawn. Writing early throws, which the caller reads
+	// as "the respawn failed" and the teammate never starts.
+	if (!(await waitForPaneReady(api, ref, ctx))) {
+		ctx.io.stderr(`pane ${pane.id} did not become ready`);
+		return 1;
+	}
+
 	await api.request("send", {
-		pane: adeRef(pane, ctx.env),
+		pane: ref,
 		text: execLine(command),
 		enter: true,
 	});
 	pane.state = "execed";
 	pane.command = command;
 	return 0;
+}
+
+/** Total budget for a pane's PTY to come up. Generous: the spawn semaphore
+ * serialises 8 at a time, so a burst can queue. */
+const PANE_READY_TIMEOUT_MS = 10_000;
+/** First poll gap; doubles up to PANE_READY_MAX_INTERVAL_MS. */
+const PANE_READY_INITIAL_INTERVAL_MS = 25;
+const PANE_READY_MAX_INTERVAL_MS = 250;
+
+function delay(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Blocks until the control plane says the pane's PTY is alive.
+ *
+ * A pane exists in the layout well before it can be written to — `new-pane`
+ * replies when the renderer's store mutation lands, and the PTY is spawned
+ * afterwards by the terminal lifecycle effect. `pane-ready` is the only wire
+ * command that reports the second stage; `list-panes` and the layout snapshot
+ * both report the first.
+ *
+ * Returns false on timeout so the caller can exit 1 the way tmux would, rather
+ * than writing into a pane that cannot accept it.
+ *
+ * An ADE older than this command answers BAD_REQUEST "Unknown command", which
+ * is treated as "cannot check" and lets the send proceed — degrading to the
+ * previous racy behaviour rather than breaking respawn outright against a
+ * mismatched app.
+ */
+async function waitForPaneReady(
+	api: ControlApi,
+	ref: string,
+	ctx: Ctx,
+): Promise<boolean> {
+	const deadline = Date.now() + PANE_READY_TIMEOUT_MS;
+	let interval = PANE_READY_INITIAL_INTERVAL_MS;
+	let lastMessage = "";
+
+	for (;;) {
+		try {
+			const result = (await api.request("pane-ready", { pane: ref })) as {
+				ready?: boolean;
+			} | null;
+			if (result?.ready) return true;
+			lastMessage = "pane not ready";
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			if (message.includes("Unknown command")) {
+				ctx.store.log({ event: "pane-ready-unsupported", pane: ref });
+				return true;
+			}
+			// NOT_FOUND while the renderer is still materialising the pane is
+			// expected; keep polling and let the deadline decide.
+			lastMessage = message;
+		}
+
+		if (Date.now() >= deadline) {
+			ctx.store.log({
+				event: "pane-ready-timeout",
+				pane: ref,
+				waitedMs: PANE_READY_TIMEOUT_MS,
+				message: lastMessage,
+			});
+			return false;
+		}
+		await delay(Math.min(interval, Math.max(0, deadline - Date.now())));
+		interval = Math.min(interval * 2, PANE_READY_MAX_INTERVAL_MS);
+	}
 }
 
 /** Recreates a pane's ADE pane in place and remaps the tmux id onto it. */

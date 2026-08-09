@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { mapAgentSessionState, mapEventType } from "./map-event-type";
+import {
+	classifyNotificationMessage,
+	mapAgentSessionState,
+	mapEventType,
+} from "./map-event-type";
 
 describe("mapAgentSessionState", () => {
 	it("covers the spec's full Claude Code event set", () => {
@@ -59,5 +63,69 @@ describe("mapEventType", () => {
 		// Distinct from Claude's PascalCase PreToolUse — that spelling comes from
 		// a CLI that only fires it when it actually needs approval.
 		expect(mapEventType("preToolUse")).toBe("PermissionRequest");
+	});
+});
+
+describe("Notification message classification", () => {
+	// Claude Code fires one `Notification` event for two unrelated reasons.
+	// Representative wording of each kind, as Claude Code emits it.
+	const PERMISSION_MESSAGES = [
+		"Claude needs your permission to use Bash",
+		"Claude needs your permission to use Edit",
+		"Permission required to run npm install",
+		"Approve this action?",
+	];
+	const IDLE_MESSAGES = [
+		"Claude is waiting for your input",
+		"Claude is waiting for your input in /Users/x/project",
+	];
+
+	it("classifies both payload kinds", () => {
+		for (const message of PERMISSION_MESSAGES) {
+			expect(classifyNotificationMessage(message)).toBe("permission");
+		}
+		for (const message of IDLE_MESSAGES) {
+			expect(classifyNotificationMessage(message)).toBe("idle");
+		}
+	});
+
+	it("drops the idle nudge instead of painting an attention ring", () => {
+		// The ~60s "still waiting" nudge is not an ask. Mapping it to needsInput
+		// leaves a red ring and a Dock badge on every pane the user walks away
+		// from, clearable only by typing. Stop already put the session in idle.
+		for (const message of IDLE_MESSAGES) {
+			expect(mapAgentSessionState("Notification", message)).toBeNull();
+			expect(mapEventType("Notification", message)).toBeNull();
+		}
+	});
+
+	it("still surfaces a real permission ask", () => {
+		for (const message of PERMISSION_MESSAGES) {
+			expect(mapAgentSessionState("Notification", message)).toBe("needsInput");
+			expect(mapEventType("Notification", message)).toBe("PermissionRequest");
+		}
+	});
+
+	it("falls back to needsInput when no message reaches us", () => {
+		// A hooks file written by an older ADE forwards no `message`. Dropping
+		// those would silently lose real asks, so only positively-identified
+		// idle nudges are ignored.
+		expect(classifyNotificationMessage(undefined)).toBe("unknown");
+		expect(classifyNotificationMessage("")).toBe("unknown");
+		expect(classifyNotificationMessage("something we don't recognise")).toBe(
+			"unknown",
+		);
+		expect(mapAgentSessionState("Notification")).toBe("needsInput");
+		expect(mapAgentSessionState("Notification", "")).toBe("needsInput");
+		expect(mapEventType("Notification", "brand new wording")).toBe(
+			"PermissionRequest",
+		);
+	});
+
+	it("only qualifies Notification — other events ignore the message", () => {
+		const idle = "Claude is waiting for your input";
+		expect(mapAgentSessionState("PermissionRequest", idle)).toBe("needsInput");
+		expect(mapAgentSessionState("Stop", idle)).toBe("idle");
+		expect(mapEventType("preToolUse", idle)).toBe("PermissionRequest");
 	});
 });

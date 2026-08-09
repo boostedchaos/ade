@@ -1,4 +1,5 @@
 import { type Command, compact, targetFrom } from "../command";
+import { formatListResult } from "../output";
 
 export const workspaceCommands: Command[] = [
 	{
@@ -60,6 +61,11 @@ export const workspaceCommands: Command[] = [
 			cmd: "list-tabs",
 			args: compact({ workspace: input.options.workspace }),
 		}),
+		format: (result) =>
+			formatListResult(result, "tabs", {
+				label: "Workspace",
+				key: "workspaceId",
+			}),
 	},
 	{
 		name: "new-workspace",
@@ -94,6 +100,11 @@ export const workspaceCommands: Command[] = [
 		summary: "List workspaces",
 		kind: "request",
 		build: () => ({ cmd: "list-workspaces", args: {} }),
+		format: (result) =>
+			formatListResult(result, "workspaces", {
+				label: "Focused",
+				key: "focusedWorkspaceId",
+			}),
 	},
 	{
 		name: "focus-workspace",

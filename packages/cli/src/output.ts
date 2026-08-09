@@ -83,3 +83,32 @@ export function formatResult(result: unknown): string {
 
 	return JSON.stringify(result, null, 2);
 }
+
+/**
+ * A list result that also carries scalar context: `{tabId, panes: [...]}`,
+ * `{workspaceId, tabs: [...]}`, `{focusedWorkspaceId, workspaces: [...]}`.
+ *
+ * `formatResult` only unwraps a SINGLE-key wrapper, so every one of these fell
+ * through to the key/value branch and printed the whole array as one JSON blob
+ * on a `panes:` line — the first thing the ship gate has a human run from an
+ * external terminal. Rather than loosening the generic rule (which would start
+ * tabling result shapes that are not lists), each list command declares its
+ * array key here.
+ */
+export function formatListResult(
+	result: unknown,
+	listKey: string,
+	context?: { label: string; key: string },
+): string {
+	if (!isRecord(result)) return formatResult(result);
+	const rows = result[listKey];
+	if (!Array.isArray(rows)) return formatResult(result);
+
+	const lines: string[] = [];
+	if (context) {
+		const value = scalar(result[context.key]);
+		if (value !== "") lines.push(`${context.label}: ${value}`);
+	}
+	lines.push(rows.length === 0 ? "(none)" : formatResult(rows));
+	return lines.join("\n");
+}

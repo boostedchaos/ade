@@ -29,15 +29,20 @@ export const createAttentionRouter = () => {
 				const notifications = listNotifications({
 					unreadOnly: input.unreadOnly,
 				});
+				// Both derived numbers must see EVERY unread row, not just the
+				// unread rows inside the newest 200 — `notifications` is capped
+				// and rows are never deleted, so the two would drift apart as
+				// soon as the table passed 200.
+				const unreadRows = input.unreadOnly
+					? notifications
+					: listNotifications({ unreadOnly: true });
 				return {
 					notifications,
-					unread: notifications.filter((n) => n.readAt === null).length,
+					unread: unreadRows.length,
 					// Computed here rather than in the renderer so the "attention
 					// only" rule (custom notifications never light a pane) has one
 					// implementation.
-					unreadAttentionByPane: unreadAttentionByPane(
-						input.unreadOnly ? notifications : listNotifications(),
-					),
+					unreadAttentionByPane: unreadAttentionByPane(unreadRows),
 				};
 			}),
 

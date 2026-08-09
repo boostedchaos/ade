@@ -12,14 +12,13 @@ interface StubSpec {
 	phase: string;
 }
 
-const STUBS: StubSpec[] = [
-	{
-		name: "cli",
-		group: "Not yet implemented",
-		summary: "Manage the ade bin itself (cli install — put `ade` on PATH)",
-		phase: "Phase 5 — parity extras",
-	},
-];
+/**
+ * Empty since `cli` shipped (Phase 5 — parity extras). Kept, rather than
+ * deleted, because the dispatch/help/exit-code machinery around stubs is what
+ * makes the next unbuilt command declarable in one line — and run.test.ts
+ * derives its coverage from this list rather than a hand-kept copy.
+ */
+const STUBS: StubSpec[] = [];
 
 export const stubCommands: Command[] = STUBS.map((stub) => ({
 	name: stub.name,

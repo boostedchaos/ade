@@ -1,5 +1,6 @@
 import type { Command } from "../command";
 import { browserCommands } from "./browser";
+import { cliBinCommands } from "./cli-install";
 import { eventCommands } from "./events";
 import { notificationCommands } from "./notifications";
 import { paneCommands } from "./panes";
@@ -24,6 +25,7 @@ export const COMMANDS: Command[] = [
 	...eventCommands,
 	...teamsCommands,
 	...tmuxCompatCommands,
+	...cliBinCommands,
 	...stubCommands,
 ];
 
@@ -38,6 +40,7 @@ export const GROUP_ORDER = [
 	"Notifications",
 	"Events",
 	"Teams",
+	"Parity extras",
 	"Not yet implemented",
 ];
 

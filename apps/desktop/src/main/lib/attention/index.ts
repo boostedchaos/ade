@@ -99,7 +99,11 @@ function emitChanged(): void {
 function refreshDockBadge(): void {
 	if (!deps) return;
 	try {
-		deps.setDockBadge(dockBadgeText(unreadCount(listNotifications())));
+		// unreadOnly, or the badge silently stops counting anything older than
+		// the newest 200 rows — and rows are never deleted.
+		deps.setDockBadge(
+			dockBadgeText(unreadCount(listNotifications({ unreadOnly: true }))),
+		);
 	} catch (error) {
 		console.error("[attention] Failed to update dock badge:", error);
 	}
@@ -107,7 +111,7 @@ function refreshDockBadge(): void {
 
 /** Total unread, both kinds. This is the number on the Dock and the rail. */
 export function unreadNotificationCount(): number {
-	return unreadCount(listNotifications());
+	return unreadCount(listNotifications({ unreadOnly: true }));
 }
 
 /**

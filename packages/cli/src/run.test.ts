@@ -77,7 +77,8 @@ describe("usage failures exit 2", () => {
 	it("reports every registered stub as not yet implemented", async () => {
 		const { COMMANDS } = await import("./commands");
 		const stubs = COMMANDS.filter((c) => c.kind === "stub");
-		expect(stubs.length).toBeGreaterThan(0);
+		// May legitimately be empty — every stub has shipped. The point is that
+		// any stub that IS registered behaves, not that one must exist.
 		for (const stub of stubs) {
 			const capture = captureIo();
 			expect(await run([stub.name, "whatever"], capture)).toBe(EXIT.USAGE);
@@ -87,14 +88,15 @@ describe("usage failures exit 2", () => {
 	});
 
 	it("registers a stub for every command SPEC.md lists but has not built yet", async () => {
-		const { findCommand } = await import("./commands");
+		const { COMMANDS, findCommand } = await import("./commands");
 		// hooks / agent-event / agent-sessions left this list in Phase 2; the four
 		// notification verbs left it in Phase 3; claude-teams / tmux-compat left
 		// it in Phase 4; todo / browser / set-status / set-progress left it in
 		// Phase 5b, which is why they are asserted as BUILT below.
-		for (const name of ["cli"]) {
-			expect(findCommand(name)?.kind).toBe("stub");
-		}
+		// `cli` left this list in Phase 5 — parity extras; nothing SPEC.md lists
+		// is still unbuilt, so the stub list is empty.
+		expect(COMMANDS.filter((c) => c.kind === "stub")).toEqual([]);
+		expect(findCommand("cli")?.kind).toBe("local");
 		for (const name of ["todo", "browser", "set-status", "set-progress"]) {
 			expect(findCommand(name)?.kind).toBe("request");
 		}
@@ -268,5 +270,51 @@ describe.skipIf(skipWin)("against a mock control server", () => {
 		const lines = capture.out.map((line) => JSON.parse(line));
 		expect(lines.map((l) => l.event)).toEqual(["pane-created", "pane-closed"]);
 		await server.close();
+	});
+
+	it("--once exits 0 on the first drop instead of reconnecting", async () => {
+		const server = await startMockServer();
+		const controller = new AbortController();
+		const capture = captureIo();
+		const io: RunIo = {
+			stdout: capture.stdout,
+			stderr: capture.stderr,
+			clientOptions: {
+				socketPath: server.socketPath,
+				tokenPath: server.tokenPath,
+			},
+			createClient: (options) => new ControlClient(options),
+			signal: controller.signal,
+			backoff: { initial: 5, max: 10 },
+		};
+		const running = run(["events", "--once"], io);
+
+		await Bun.sleep(50);
+		const connectionsBefore = server.connections.length;
+		server.connections.at(-1)?.emit("pane-created", { paneId: "p1" });
+		await Bun.sleep(30);
+		server.connections.at(-1)?.drop();
+
+		// No abort: without --once this promise would never settle, and the
+		// reconnect loop would open another connection.
+		expect(await running).toBe(EXIT.OK);
+		expect(server.connections.length).toBe(connectionsBefore);
+		expect(capture.out.map((l) => JSON.parse(l).event)).toEqual([
+			"pane-created",
+		]);
+		controller.abort();
+		await server.close();
+	});
+
+	it("--once still reports 3 when the app was never running", async () => {
+		const capture = captureIo();
+		const missing = join(tmpdir(), "ade-cli-absent", "control.sock");
+		const code = await run(["events", "--once"], {
+			stdout: capture.stdout,
+			stderr: capture.stderr,
+			clientOptions: { socketPath: missing, tokenPath: missing },
+			backoff: { initial: 5, max: 10 },
+		});
+		expect(code).toBe(EXIT.NOT_RUNNING);
 	});
 });

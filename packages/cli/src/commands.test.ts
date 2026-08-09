@@ -293,3 +293,57 @@ describe("events", () => {
 		).toEqual({ kinds: ["pane-created", "notification"] });
 	});
 });
+
+describe("list command output", () => {
+	function render(name: string, result: unknown): string {
+		const command = findCommand(name);
+		if (!command?.format) throw new Error(`${name} has no format()`);
+		return command.format(result, {
+			positionals: [],
+			options: {},
+		} as unknown as Parameters<NonNullable<typeof command.format>>[1]);
+	}
+
+	// Ship-gate 3 has a human run these from an external terminal. Before this,
+	// every one of them printed the whole array as a single JSON blob on a
+	// `panes:` line, because formatResult only unwraps a SINGLE-key wrapper and
+	// each of these results carries a context key alongside the list.
+	it("list-panes prints a table, not a JSON blob", () => {
+		const out = render("list-panes", {
+			tabId: "tab-1",
+			panes: [
+				{ index: 1, id: "p1", type: "terminal", name: "zsh", focused: true },
+				{ index: 2, id: "p2", type: "browser", name: "docs", focused: false },
+			],
+		});
+		expect(out).not.toContain('[{"');
+		const lines = out.split("\n");
+		expect(lines[0]).toBe("Tab: tab-1");
+		expect(lines[1]).toContain("INDEX");
+		expect(lines[1]).toContain("FOCUSED");
+		expect(lines[2]).toContain("terminal");
+		expect(lines).toHaveLength(4);
+	});
+
+	it("list-tabs and list-workspaces table the same way", () => {
+		const tabs = render("list-tabs", {
+			workspaceId: "ws-1",
+			tabs: [{ index: 1, id: "tab-1", name: "main", active: true }],
+		});
+		expect(tabs.split("\n")[0]).toBe("Workspace: ws-1");
+		expect(tabs).toContain("ACTIVE");
+
+		const workspaces = render("list-workspaces", {
+			focusedWorkspaceId: "ws-1",
+			workspaces: [{ index: 1, id: "ws-1", name: "ade", branch: "main" }],
+		});
+		expect(workspaces.split("\n")[0]).toBe("Focused: ws-1");
+		expect(workspaces).toContain("BRANCH");
+	});
+
+	it("says (none) rather than printing an empty array", () => {
+		expect(render("list-panes", { tabId: "tab-1", panes: [] })).toBe(
+			"Tab: tab-1\n(none)",
+		);
+	});
+});

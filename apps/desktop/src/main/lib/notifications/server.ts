@@ -110,6 +110,7 @@ app.get("/hook/complete", (req, res) => {
 		transcriptPath,
 		agentKind,
 		eventType,
+		message,
 		env: clientEnv,
 		version,
 	} = req.query;
@@ -131,8 +132,17 @@ app.get("/hook/complete", (req, res) => {
 		);
 	}
 
-	const mappedEventType = mapEventType(eventType as string | undefined);
-	const sessionState = mapAgentSessionState(eventType as string | undefined);
+	// `message` qualifies Claude's `Notification`, which is both a permission
+	// ask and a ~60s idle nudge; only the former is an attention signal.
+	const hookMessage = (message as string | undefined) || undefined;
+	const mappedEventType = mapEventType(
+		eventType as string | undefined,
+		hookMessage,
+	);
+	const sessionState = mapAgentSessionState(
+		eventType as string | undefined,
+		hookMessage,
+	);
 
 	// Unknown or missing eventType: return success but don't process
 	// This ensures forward compatibility and doesn't block the agent

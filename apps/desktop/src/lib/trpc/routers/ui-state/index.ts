@@ -1,6 +1,7 @@
 import { observable } from "@trpc/server/observable";
 import { appState, getDeviceId } from "main/lib/app-state";
 import type { TabsState, ThemeState } from "main/lib/app-state/schemas";
+import { publishPaneEvents } from "main/lib/control-plane/pane-events";
 import { hotkeysEmitter } from "main/lib/hotkeys-events";
 import { getCanonicalForLocalWorkspaceId } from "main/lib/sync/workspace-identity";
 import { HistoryReader } from "main/lib/terminal-history";
@@ -343,6 +344,11 @@ export const createUiStateRouter = () => {
 			set: publicProcedure
 				.input(tabsStateSchema)
 				.mutation(async ({ input }) => {
+					// Before the overwrite: the stored value is still the previous
+					// mirror, which is the only moment a diff is possible. This is
+					// the choke point EVERY layout change passes through, CLI- and
+					// user-initiated alike — see pane-events.ts.
+					publishPaneEvents(appState.data.tabsState, input);
 					appState.data.tabsState = input;
 					await stampSyncEnvelopeForTabs(input);
 					await appState.write();

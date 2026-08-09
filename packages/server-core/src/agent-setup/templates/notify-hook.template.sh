@@ -16,6 +16,11 @@ SESSION_ID=$(echo "$INPUT" | grep -oE '"session_id"[[:space:]]*:[[:space:]]*"[^"
 # when a pane has been "working" with no event for too long.
 TRANSCRIPT_PATH=$(echo "$INPUT" | grep -oE '"transcript_path"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -oE '"[^"]*"$' | tr -d '"')
 
+# Claude's Notification payload carries a human-readable reason. The server
+# needs it because Notification fires both for a permission ask and for a
+# "waiting for your input" idle nudge, and only the first is an attention signal.
+MESSAGE=$(echo "$INPUT" | grep -oE '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -oE '"[^"]*"$' | tr -d '"')
+
 # Skip if this isn't a Superset terminal hook and no Mastra session context exists
 [ -z "$SUPERSET_TAB_ID" ] && [ -z "$SESSION_ID" ] && exit 0
 
@@ -70,6 +75,7 @@ if [ "$DEBUG_HOOKS_ENABLED" = "1" ]; then
     --data-urlencode "sessionId=$SESSION_ID" \
     --data-urlencode "transcriptPath=$TRANSCRIPT_PATH" \
     --data-urlencode "eventType=$EVENT_TYPE" \
+    --data-urlencode "message=$MESSAGE" \
     --data-urlencode "env=$SUPERSET_ENV" \
     --data-urlencode "version=$SUPERSET_HOOK_VERSION" \
     -o /dev/null -w "%{http_code}" 2>/dev/null)
@@ -83,6 +89,7 @@ else
     --data-urlencode "sessionId=$SESSION_ID" \
     --data-urlencode "transcriptPath=$TRANSCRIPT_PATH" \
     --data-urlencode "eventType=$EVENT_TYPE" \
+    --data-urlencode "message=$MESSAGE" \
     --data-urlencode "env=$SUPERSET_ENV" \
     --data-urlencode "version=$SUPERSET_HOOK_VERSION" \
     > /dev/null 2>&1

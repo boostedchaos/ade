@@ -5,10 +5,12 @@ export type ControlEventListener = (event: ControlEvent) => void;
 /**
  * Fan-out for subscribed connections.
  *
- * Phase 1 emits pane-created / pane-closed / pane-focused. Phase 2's
- * agent-state-changed and Phase 3's notification plug in by calling emit()
- * with their kind — no change here and no wire change, which is the point of
- * keeping the kind set open in protocol.ts.
+ * Every kind reaches this bus by someone calling emit() with it — no change
+ * here and no wire change per producer, which is the point of keeping the kind
+ * set open in protocol.ts. Current producers, all in the desktop app:
+ * pane-created / pane-closed / pane-focused from the tabs-mirror diff
+ * (main/lib/control-plane/pane-events.ts), agent-state-changed from the agent
+ * session registry, notification from the attention store.
  */
 export class ControlEventBus {
 	private listeners = new Set<{

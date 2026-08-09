@@ -61,7 +61,16 @@ function toRecord(row: {
 	};
 }
 
-/** Newest first. `unreadOnly` filters to rows with no readAt. */
+/**
+ * Newest first. `unreadOnly` filters to rows with no readAt.
+ *
+ * The default limit of 200 is a display cap, and rows are never deleted — so
+ * any caller deriving an UNREAD count or the set of panes needing attention
+ * must pass `unreadOnly: true`, or it silently stops seeing unread rows older
+ * than the newest 200 notifications while the pane ring (driven by PaneStatus)
+ * keeps showing them. Residual, and much smaller: 200 also caps the unreadOnly
+ * query, so a backlog of more than 200 UNREAD rows would still undercount.
+ */
 export function listNotifications(
 	options: { unreadOnly?: boolean; limit?: number } = {},
 ): NotificationRecord[] {

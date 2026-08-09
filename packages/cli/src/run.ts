@@ -151,7 +151,10 @@ async function runCommand(
 	const request = command.build(input);
 
 	if (command.kind === "stream") {
-		return await runStream(request.args, io);
+		// `once` is a CLI-side flag read from the parsed input, not from
+		// request.args — it controls this process's reconnect loop and has no
+		// meaning to the server, so it must not travel on the wire.
+		return await runStream(request.args, io, input.options.once === true);
 	}
 
 	const client = (io.createClient ?? ((o) => new DefaultClient(o)))(
@@ -183,6 +186,7 @@ async function runCommand(
 async function runStream(
 	args: Record<string, unknown>,
 	io: RunIo,
+	once = false,
 ): Promise<ExitCode> {
 	const initial = io.backoff?.initial ?? 250;
 	const max = io.backoff?.max ?? 5000;
@@ -232,6 +236,10 @@ async function runStream(
 		}
 
 		if (io.signal?.aborted) break;
+		// --once: the caller wants one connection's worth of events, so a drop
+		// ends the command instead of starting the backoff. Reported as a
+		// failure only if it never got a connection at all.
+		if (once) return everConnected ? EXIT.OK : EXIT.NOT_RUNNING;
 		await sleep(delay, io.signal);
 		delay = Math.min(max, delay * 2);
 	}

@@ -48,6 +48,11 @@ async function main() {
 		"\\",
 	);
 
+	// Claude's Notification payload carries a human-readable reason. The server
+	// needs it because Notification fires both for a permission ask and for a
+	// "waiting for your input" idle nudge, and only the first is an attention signal.
+	const hookMessage = extractString(input, "message");
+
 	// Skip if this isn't a Superset terminal hook and there's no Mastra session.
 	if (!process.env.SUPERSET_TAB_ID && !sessionId) return;
 
@@ -87,6 +92,7 @@ async function main() {
 		sessionId: sessionId ?? "",
 		transcriptPath: transcriptPath ?? "",
 		eventType,
+		message: hookMessage ?? "",
 		env: process.env.SUPERSET_ENV ?? "",
 		version: process.env.SUPERSET_HOOK_VERSION ?? "",
 	});

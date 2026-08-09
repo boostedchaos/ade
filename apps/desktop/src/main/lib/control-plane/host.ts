@@ -409,8 +409,10 @@ export function createControlPlaneHost(params: {
 			},
 			markRead: (id) => markRead(id),
 			markAllRead: () => markAllRead(),
+			// unreadOnly: an unread row outside the newest 200 must still light
+			// its pane, or `ade jump-to-unread` disagrees with the pane ring.
 			panesWithUnreadAttention: () =>
-				panesWithUnreadAttention(listNotifications()),
+				panesWithUnreadAttention(listNotifications({ unreadOnly: true })),
 		},
 
 		/**

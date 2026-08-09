@@ -162,8 +162,44 @@ export const terminalCommands: CommandRegistry = {
 		// `--enter` appends a carriage return, which is what almost every caller
 		// wants and is easy to forget; default false keeps `send` literal.
 		const data = optionalBoolean(args, "enter", false) ? `${text}\r` : text;
-		session.host.terminal.write(paneId, data);
+		try {
+			session.host.terminal.write(paneId, data);
+		} catch (error) {
+			// A pane whose layout row exists but whose PTY has not spawned yet (or
+			// has died) is a retryable condition, not a server fault. Reported as
+			// NOT_FOUND so a caller can back off and retry instead of treating an
+			// INTERNAL as fatal — see `pane-ready` below.
+			if (!session.host.terminal.getSession(paneId)?.isAlive) {
+				throw new ControlError(
+					"NOT_FOUND",
+					`Pane ${paneId} has no live terminal session`,
+				);
+			}
+			throw error;
+		}
 		return { paneId, bytes: Buffer.byteLength(data, "utf8") };
+	},
+
+	/**
+	 * Is this pane's PTY actually spawned and alive?
+	 *
+	 * A pane is created in two stages: the renderer's layout store gains the
+	 * pane row (which is when a `new-pane`/`new-tab` reply returns), and only
+	 * then does the renderer's terminal lifecycle effect ask the daemon to spawn
+	 * the PTY. `list-panes` and the layout snapshot see stage one; a `send`
+	 * needs stage two. Nothing else on the wire distinguishes them, which is
+	 * how a freshly rebuilt pane could be written to before it could accept
+	 * writes.
+	 *
+	 * Backed by the same session map `terminal.write` checks, so a `true` here
+	 * is the condition `write` requires and not a proxy for it.
+	 */
+	"pane-ready": (session, args) => {
+		const { paneId } = resolvePaneAndWorkspace(session, args);
+		return {
+			paneId,
+			ready: session.host.terminal.getSession(paneId)?.isAlive === true,
+		};
 	},
 
 	/**

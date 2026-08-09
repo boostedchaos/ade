@@ -365,3 +365,69 @@ describe.skipIf(IS_WIN)("read-screen / capture-pane source selection", () => {
 		});
 	});
 });
+
+describe.skipIf(IS_WIN)("pane-ready / send liveness", () => {
+	it("reports a pane whose PTY has not spawned as not ready", async () => {
+		// The layout row exists (snapshotFixture has p1) but the daemon holds no
+		// session — exactly the window between `new-pane` returning and the
+		// renderer's lifecycle effect spawning the PTY.
+		const host = makeHost({ getSession: () => null });
+		await withServer(host, async (send) => {
+			const frame = await send("pane-ready", { pane: "p1" });
+			expect(frame.ok).toBe(true);
+			expect(frame.result).toEqual({ paneId: "p1", ready: false });
+		});
+	});
+
+	it("reports a live pane as ready", async () => {
+		const host = makeHost({
+			getSession: () => ({ isAlive: true, cwd: "/x", lastActive: 1 }),
+		});
+		await withServer(host, async (send) => {
+			const frame = await send("pane-ready", { pane: "p1" });
+			expect(frame.result).toEqual({ paneId: "p1", ready: true });
+		});
+	});
+
+	it("a dead-but-known session is not ready", async () => {
+		const host = makeHost({
+			getSession: () => ({ isAlive: false, cwd: "/x", lastActive: 1 }),
+		});
+		await withServer(host, async (send) => {
+			expect((await send("pane-ready", { pane: "p1" })).result).toEqual({
+				paneId: "p1",
+				ready: false,
+			});
+		});
+	});
+
+	it("send returns NOT_FOUND, not INTERNAL, when the PTY is missing", async () => {
+		// A retryable race must be distinguishable from a server fault, or the
+		// tmux shim cannot tell "wait and try again" from "give up".
+		const host = makeHost({
+			getSession: () => null,
+			write: () => {
+				throw new Error("Terminal session p1 not found or not alive");
+			},
+		});
+		await withServer(host, async (send) => {
+			const frame = await send("send", { pane: "p1", text: "hi" });
+			expect(frame.ok).toBe(false);
+			expect((frame.error as { code: string }).code).toBe("NOT_FOUND");
+		});
+	});
+
+	it("a genuine write fault on a LIVE pane stays INTERNAL", async () => {
+		const host = makeHost({
+			getSession: () => ({ isAlive: true, cwd: "/x", lastActive: 1 }),
+			write: () => {
+				throw new Error("daemon socket exploded");
+			},
+		});
+		await withServer(host, async (send) => {
+			const frame = await send("send", { pane: "p1", text: "hi" });
+			expect(frame.ok).toBe(false);
+			expect((frame.error as { code: string }).code).toBe("INTERNAL");
+		});
+	});
+});

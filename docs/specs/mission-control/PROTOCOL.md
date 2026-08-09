@@ -55,6 +55,15 @@ Every command taking a target accepts one of:
   changes; documented as such in CLI help)
 - `focused` — the currently focused entity of that kind
 
+**Ref scope.** A ref always counts within the FOCUSED context, never within a
+context the same command named elsewhere: `workspace:<n>` indexes the rail,
+`tab:<n>` indexes the tabs of the focused WORKSPACE, and `pane:<n>` indexes the
+panes of the focused TAB. This matters when reading indices off one command and
+using them in another — `ade list-tabs --workspace workspace:2` prints indices
+for that workspace, but a later `--to-tab tab:2` resolves against the focused
+one. Address a tab outside the focused workspace by its id, which `list-tabs`
+prints alongside the index.
+
 Resolution happens in main; the CLI never resolves.
 
 ## Events
@@ -82,6 +91,15 @@ dispatcher `renderer/stores/tabs/control-plane-bridge.ts`, which calls the
 existing store actions and answers `{requestId, result|error}`. 10 s
 timeout → `TIMEOUT`. Terminal I/O (`send`, `send-key`, `read-screen`,
 `capture-pane`) goes main→terminal-host daemon directly, no renderer hop.
+
+`pane-ready {pane}` → `{paneId, ready}` reports whether that pane's PTY is
+spawned and alive. A pane is created in two stages — the renderer's layout
+store gains the row (which is when a `new-pane`/`new-tab` reply returns), and
+the PTY spawns afterwards — and `list-panes` and the layout snapshot both see
+only the first. `send` therefore returns `NOT_FOUND` (not `INTERNAL`) when the
+session is missing, so a caller can poll `pane-ready` and retry rather than
+treating a race as a fault. The tmux shim does exactly that before writing an
+exec line into a freshly respawned pane.
 
 ## Deliberate divergences from the terminal-host daemon (recon 2026-08-09)
 

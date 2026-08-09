@@ -21,10 +21,12 @@ export const eventCommands: Command[] = [
 			},
 		],
 		notes:
-			"Prints one JSON object per line and never exits on its own. Reconnects\n" +
-			"with backoff if the app restarts. Kinds in v1: pane-created, pane-closed,\n" +
-			"pane-focused, agent-state-changed, notification. Unknown kinds are passed\n" +
-			"through unchanged.",
+			"Prints one JSON object per line. Without --once it never exits on its\n" +
+			"own, reconnecting with backoff if the app restarts; with --once it exits\n" +
+			"0 the first time the connection drops (3 if it never connected). Kinds\n" +
+			"in v1: pane-created, pane-closed, pane-focused, agent-state-changed,\n" +
+			"notification. Pane events cover BOTH CLI-initiated and user-initiated\n" +
+			"layout changes. Unknown kinds are passed through unchanged.",
 		build: (input) => {
 			const raw = input.options.kinds;
 			const kinds =
