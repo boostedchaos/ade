@@ -10,6 +10,7 @@ import { movePaneToNewTab, movePaneToTab } from "./actions/move-pane";
 import type {
 	AddFileViewerPaneOptions,
 	AddTabWithMultiplePanesOptions,
+	Pane,
 	TabsState,
 	TabsStore,
 } from "./types";
@@ -1172,6 +1173,110 @@ export const useTabsStore = create<TabsStore>()(
 						workspace_id: tab.workspaceId,
 						pane_id: newPane.id,
 					});
+				},
+
+				/**
+				 * Split a pane and put a NON-terminal pane in the new half.
+				 *
+				 * Closes the Phase-1 divergence where `ade new-pane --type browser`
+				 * had to open a new TAB: `splitPaneVertical`/`Horizontal` hardcode
+				 * `createPane(tabId, "terminal")`, and `addBrowserTab` was the only
+				 * existing way to make a browser pane, so a browser could never land
+				 * beside the pane the caller named.
+				 *
+				 * Everything else follows the split idiom above exactly, including
+				 * the `path.length > 0` / root-fallback branch — a pane nested in the
+				 * mosaic tree must split at its OWN node, or the new pane lands at
+				 * the far edge of the whole tab (the Phase-1 bug).
+				 *
+				 * The new pane always goes in `second` (right/below), matching the
+				 * terminal splits; `--direction left|up` is produced by the caller
+				 * swapping that node's branches afterwards, which is the one place
+				 * that logic lives.
+				 *
+				 * Returns the new pane's id, or null when the source pane or tab is
+				 * gone — callers need to distinguish "created" from "no-op", which
+				 * the void-returning terminal splits cannot express.
+				 */
+				splitPaneWithType: (tabId, sourcePaneId, options) => {
+					const state = get();
+					const tab = state.tabs.find((t) => t.id === tabId);
+					if (!tab) return null;
+
+					const sourcePane = state.panes[sourcePaneId];
+					if (!sourcePane || sourcePane.tabId !== tabId) return null;
+
+					let newPane: Pane;
+					switch (options.paneType) {
+						case "webview":
+							newPane = createBrowserPane(
+								tabId,
+								options.url ? { url: options.url } : undefined,
+							);
+							break;
+						case "file-viewer":
+							if (!options.filePath) return null;
+							newPane = createFileViewerPane(tabId, {
+								filePath: options.filePath,
+								isPinned: true,
+							});
+							break;
+						case "devtools":
+							newPane = createDevToolsPane(tabId, sourcePaneId);
+							break;
+					}
+
+					const path = options.path;
+					const direction = options.orientation === "column" ? "column" : "row";
+					const newLayout: MosaicNode<string> =
+						path && path.length > 0
+							? updateTree(tab.layout, [
+									{
+										path,
+										spec: {
+											$set: {
+												direction,
+												first: sourcePaneId,
+												second: newPane.id,
+												splitPercentage: 50,
+											},
+										},
+									},
+								])
+							: {
+									direction,
+									first: tab.layout,
+									second: newPane.id,
+									splitPercentage: 50,
+								};
+
+					const newPanes = { ...state.panes, [newPane.id]: newPane };
+
+					set({
+						tabs: state.tabs.map((t) =>
+							t.id === tabId
+								? {
+										...t,
+										layout: newLayout,
+										name: deriveTabName(newPanes, tabId),
+									}
+								: t,
+						),
+						panes: newPanes,
+						// Focused unconditionally, like every other split action. The
+						// control-plane bridge restores the previous focus for
+						// `--focus false`; doing it there keeps ONE implementation of
+						// "don't steal focus" rather than one per action.
+						focusedPaneIds: { ...state.focusedPaneIds, [tabId]: newPane.id },
+					});
+
+					posthog.capture("panel_opened", {
+						panel_type: options.paneType,
+						workspace_id: tab.workspaceId,
+						pane_id: newPane.id,
+					});
+
+					return newPane.id;
 				},
 
 				splitPaneAuto: (tabId, sourcePaneId, dimensions, path, options) => {

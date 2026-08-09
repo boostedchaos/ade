@@ -1,6 +1,7 @@
 import { useContext, useRef } from "react";
 import type { MosaicBranch } from "react-mosaic-component";
 import { MosaicWindow, MosaicWindowContext } from "react-mosaic-component";
+import { useAgentProgress } from "renderer/stores/agent-sessions/useAgentProgress";
 import { useDragPaneStore } from "renderer/stores/drag-pane-store";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import type { SplitOrientation } from "../../hooks";
@@ -65,6 +66,13 @@ export function BasePaneWindow({
 	const needsAttention = useTabsStore(
 		(s) => s.panes[paneId]?.status === "permission",
 	);
+	/**
+	 * Mission Control Feature 5's progress strip. Null — not 0 — when the agent
+	 * is not reporting, which is what keeps every idle pane in the window from
+	 * growing an empty bar. Lives next to the attention ring because both are
+	 * "what is this pane's agent doing", and both must work for any pane type.
+	 */
+	const progress = useAgentProgress(paneId);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const splitOrientation = useSplitOrientation(containerRef);
 	const isDragging = useDragPaneStore((s) => s.draggingPaneId !== null);
@@ -118,6 +126,32 @@ export function BasePaneWindow({
 			onDragStart={() => setDragging(paneId, tabId)}
 			onDragEnd={() => clearDragging()}
 		>
+			{/*
+			 * A 2px strip along the bottom of the pane, omitted entirely when
+			 * nothing is reporting.
+			 *
+			 * Absolutely positioned rather than in the flow, for the same reason
+			 * the attention ring is an inset shadow rather than a thicker border
+			 * (see mosaic-theme.css): `.mosaic-window-body` is not a flex column,
+			 * so an in-flow strip would push the terminal down by two pixels and
+			 * reflow it every time an agent reported a number. Overlaying costs
+			 * nothing and cannot resize a PTY.
+			 */}
+			{progress !== null && (
+				<div
+					className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-0.5 bg-border"
+					role="progressbar"
+					aria-valuenow={progress}
+					aria-valuemin={0}
+					aria-valuemax={100}
+					aria-label="Agent progress"
+				>
+					<div
+						className="h-full bg-primary transition-[width] duration-300 ease-out"
+						style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+					/>
+				</div>
+			)}
 			{/* biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: Focus handler for pane */}
 			<div
 				ref={containerRef}

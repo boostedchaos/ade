@@ -151,6 +151,7 @@ describe("AgentSessionRegistry", () => {
 					transcriptPath: null,
 					state: "working",
 					pid: null,
+					progress: null,
 					lastActivityAt: 1,
 				},
 				{
@@ -161,6 +162,7 @@ describe("AgentSessionRegistry", () => {
 					transcriptPath: null,
 					state: "needsInput",
 					pid: null,
+					progress: null,
 					lastActivityAt: 2,
 				},
 			]);
@@ -188,6 +190,7 @@ describe("AgentSessionRegistry", () => {
 					transcriptPath: null,
 					state: "working",
 					pid: null,
+					progress: null,
 					lastActivityAt: 1,
 				},
 			]);
@@ -222,5 +225,66 @@ describe("AgentSessionRegistry", () => {
 			registry.applyEvent({ surfaceId: "p", state: "working" }),
 		).not.toThrow();
 		expect(seen).toHaveLength(1);
+	});
+});
+
+describe("progress", () => {
+	it("refuses to create a session — it annotates an existing one", () => {
+		const registry = new AgentSessionRegistry();
+		expect(registry.setProgress("nobody", 50)).toBeNull();
+		expect(registry.get("nobody")).toBeUndefined();
+	});
+
+	it("attaches a reading to a live session and clears it on request", () => {
+		const registry = new AgentSessionRegistry();
+		registry.applyEvent({ surfaceId: "p", state: "working" });
+		expect(registry.setProgress("p", 60)?.progress).toBe(60);
+		expect(registry.setProgress("p", null)?.progress).toBeNull();
+	});
+
+	it("keeps 0 distinct from null", () => {
+		const registry = new AgentSessionRegistry();
+		registry.applyEvent({ surfaceId: "p", state: "working" });
+		expect(registry.setProgress("p", 0)?.progress).toBe(0);
+	});
+
+	it("emits no transition — progress is not a state change", () => {
+		const registry = new AgentSessionRegistry();
+		registry.applyEvent({ surfaceId: "p", state: "working" });
+		const seen = collect(registry);
+		registry.setProgress("p", 40);
+		expect(seen).toHaveLength(0);
+	});
+
+	it("survives working -> needsInput, because the run is still going", () => {
+		const registry = new AgentSessionRegistry();
+		registry.applyEvent({ surfaceId: "p", state: "working" });
+		registry.setProgress("p", 40);
+		registry.applyEvent({ surfaceId: "p", state: "needsInput" });
+		expect(registry.get("p")?.progress).toBe(40);
+	});
+
+	it("clears when the run reaches idle", () => {
+		const registry = new AgentSessionRegistry();
+		registry.applyEvent({ surfaceId: "p", state: "working" });
+		registry.setProgress("p", 40);
+		registry.applyEvent({ surfaceId: "p", state: "idle" });
+		expect(registry.get("p")?.progress).toBeNull();
+	});
+
+	it("clears when the PTY exits", () => {
+		const registry = new AgentSessionRegistry();
+		registry.applyEvent({ surfaceId: "p", state: "working" });
+		registry.setProgress("p", 90);
+		registry.markEnded("p");
+		expect(registry.get("p")?.progress).toBeNull();
+	});
+
+	it("clears when the transcript corrector unsticks a session", () => {
+		const registry = new AgentSessionRegistry();
+		registry.applyEvent({ surfaceId: "p", state: "working" });
+		registry.setProgress("p", 90);
+		registry.correctStuck("p", "idle");
+		expect(registry.get("p")?.progress).toBeNull();
 	});
 });

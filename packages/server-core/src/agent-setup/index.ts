@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { BINARY_INSTALL } from "@superset/shared/agent-binaries";
 import { createAdeCliBin } from "./ade-cli-bin";
+import { createAdeWorkspaceSkill } from "./ade-workspace-skill";
 import {
 	cleanupGlobalOpenCodePlugin,
 	createClaudeWrapper,
@@ -33,6 +34,7 @@ import {
 	HOOKS_DIR,
 	OPENCODE_CONFIG_DIR,
 	OPENCODE_PLUGIN_DIR,
+	SKILLS_DIR,
 	ZSH_DIR,
 } from "./paths";
 import {
@@ -86,6 +88,7 @@ export function setupAgentHooks(): void {
 	fs.mkdirSync(ZSH_DIR, { recursive: true });
 	fs.mkdirSync(BASH_DIR, { recursive: true });
 	fs.mkdirSync(OPENCODE_PLUGIN_DIR, { recursive: true });
+	fs.mkdirSync(SKILLS_DIR, { recursive: true });
 
 	cleanupGlobalOpenCodePlugin();
 
@@ -113,6 +116,12 @@ export function setupAgentHooks(): void {
 	// binary, and BIN_DIR is already on every agent's PATH, so writing the
 	// file here is the entire integration. See ade-cli-bin.ts.
 	createAdeCliBin();
+
+	// The bundled `ade-workspace` skill teaching agents the CLI patterns. Written
+	// from the repo's skills/ade-workspace/SKILL.md rather than from a constant,
+	// so there is one copy of the document. See ade-workspace-skill.ts for what
+	// discovery does and does not reach.
+	createAdeWorkspaceSkill();
 
 	// POSIX intercepts `claude`/`codex`/etc. via shell functions sourced from rc
 	// files. Windows has no rc files: BIN_DIR is prepended to PATH in getShellEnv

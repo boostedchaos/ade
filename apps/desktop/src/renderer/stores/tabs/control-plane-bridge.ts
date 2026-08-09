@@ -98,6 +98,21 @@ export type StoreCall =
 	 * children and leaves every unrelated subtree alone.
 	 */
 	| { action: "swapBranchesAtPath"; tabId: string; path: MosaicPath }
+	/**
+	 * Split at `path` and put a non-terminal pane in the new half. `orientation`
+	 * is mosaic's own (row = side by side); left/up is this call followed by
+	 * `swapBranchesAtPath` at the SAME path, exactly as terminal splits do.
+	 */
+	| {
+			action: "splitPaneWithType";
+			tabId: string;
+			sourcePaneId: string;
+			path: MosaicPath;
+			paneType: "webview" | "file-viewer" | "devtools";
+			orientation: "row" | "column";
+			url?: string;
+			filePath?: string;
+	  }
 	| { action: "addBrowserTab"; workspaceId: string; url?: string }
 	| {
 			action: "addFileViewerPane";
@@ -211,6 +226,39 @@ function splitCall(
 }
 
 /**
+ * Split plan for a NON-terminal pane. Same two-step shape as `splitPlan`
+ * below — split at the source pane's own node, then swap that node's branches
+ * for left/up — so all four directions behave identically whatever the pane
+ * type, and a nested split still leaves its siblings alone.
+ */
+function typedSplitPlan(
+	direction: BridgeDirection,
+	tabId: string,
+	sourcePaneId: string,
+	layout: unknown,
+	paneType: "webview" | "file-viewer" | "devtools",
+	extra: { url?: string; filePath?: string } = {},
+): StoreCall[] {
+	const path = findPaneMosaicPath(layout, sourcePaneId) ?? [];
+	const calls: StoreCall[] = [
+		{
+			action: "splitPaneWithType",
+			tabId,
+			sourcePaneId,
+			path,
+			paneType,
+			orientation:
+				direction === "left" || direction === "right" ? "row" : "column",
+			...extra,
+		},
+	];
+	if (needsSwap(direction)) {
+		calls.push({ action: "swapBranchesAtPath", tabId, path });
+	}
+	return calls;
+}
+
+/**
  * Split plan shared by `new-pane --type terminal` and `new-split`: split at
  * the source pane's own node, then, for left/up, swap that node's branches.
  * Both operations address the SAME path, which is what keeps a nested split
@@ -279,18 +327,21 @@ export function planBridgeOp(
 							"--url is required for a browser pane",
 						);
 					}
-					// DIVERGENCE, deliberate: a browser pane opens as a new TAB.
-					// `addBrowserTab` is the only existing action that creates one,
-					// and `openInBrowserPane` reuses an existing browser pane rather
-					// than creating one. Adding a split-a-browser-pane-in action
-					// would mean editing store.ts, which this lane does not own.
-					return [
-						{
-							action: "addBrowserTab",
-							workspaceId: op.workspaceId,
-							url: op.url,
-						},
-					];
+					// Phase-1 DIVERGENCE NOW CLOSED. This used to plan
+					// `addBrowserTab`, opening a new tab instead of a split, because
+					// the store's split actions hardcoded a terminal pane and no
+					// action could put a browser beside a named pane. Phase 5 added
+					// `splitPaneWithType`, so the spec's flagship example —
+					// `--type browser --direction right --focus false` — now does
+					// literally what it says.
+					return typedSplitPlan(
+						op.direction,
+						op.tabId,
+						op.sourcePaneId,
+						context.layout,
+						"webview",
+						{ url: op.url },
+					);
 				}
 				case "file-viewer": {
 					if (!op.path) {
@@ -299,23 +350,25 @@ export function planBridgeOp(
 							"--path is required for a file-viewer pane",
 						);
 					}
-					return [
-						{
-							action: "addFileViewerPane",
-							workspaceId: op.workspaceId,
-							filePath: op.path,
-							openInNewTab: false,
-						},
-					];
+					return typedSplitPlan(
+						op.direction,
+						op.tabId,
+						op.sourcePaneId,
+						context.layout,
+						"file-viewer",
+						{ filePath: op.path },
+					);
 				}
 				case "devtools": {
-					return [
-						{
-							action: "openDevToolsPane",
-							tabId: op.tabId,
-							browserPaneId: op.sourcePaneId,
-						},
-					];
+					// DevTools targets the pane it is opened from, so the source pane
+					// is both the split point and the inspected pane.
+					return typedSplitPlan(
+						op.direction,
+						op.tabId,
+						op.sourcePaneId,
+						context.layout,
+						"devtools",
+					);
 				}
 			}
 			break;
@@ -461,6 +514,15 @@ async function applyPlan(plan: StoreCall[]): Promise<Record<string, unknown>> {
 				}
 				break;
 			}
+			case "splitPaneWithType":
+				store.splitPaneWithType(call.tabId, call.sourcePaneId, {
+					paneType: call.paneType,
+					orientation: call.orientation,
+					path: call.path,
+					url: call.url,
+					filePath: call.filePath,
+				});
+				break;
 			case "addBrowserTab":
 				store.addBrowserTab(call.workspaceId, call.url);
 				break;

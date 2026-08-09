@@ -53,6 +53,27 @@ export interface AddTabWithMultiplePanesOptions {
 }
 
 /**
+ * Options for `splitPaneWithType` — creating a non-terminal pane as a split of
+ * an existing one.
+ *
+ * `orientation` is mosaic's own vocabulary (row = side by side, column =
+ * stacked) rather than left/right/up/down, because the store has no notion of
+ * "left": the new pane always goes in `second`, and the caller swaps branches
+ * to get the other side. Encoding four directions here would imply the store
+ * can do something it cannot.
+ */
+export interface SplitPaneWithTypeOptions {
+	paneType: Exclude<PaneType, "terminal">;
+	orientation: "row" | "column";
+	/** Mosaic path of the SOURCE pane. Empty/omitted splits at the root. */
+	path?: MosaicBranch[];
+	/** Required for `browser`; ignored otherwise. Defaults to about:blank. */
+	url?: string;
+	/** Required for `file-viewer`; the action returns null without it. */
+	filePath?: string;
+}
+
+/**
  * Options for opening a file in a file-viewer pane
  */
 export interface AddFileViewerPaneOptions {
@@ -154,6 +175,18 @@ export interface TabsStore extends TabsState {
 		path?: MosaicBranch[],
 		options?: AddTabOptions,
 	) => void;
+	/**
+	 * Split a pane and place a NON-terminal pane in the new half. Returns the
+	 * new pane's id, or null when the source pane/tab is gone or the options are
+	 * incomplete (a file-viewer with no path). The terminal splits hardcode
+	 * `createPane(…, "terminal")`, which is why this is a separate action rather
+	 * than an option on them.
+	 */
+	splitPaneWithType: (
+		tabId: string,
+		sourcePaneId: string,
+		options: SplitPaneWithTypeOptions,
+	) => string | null;
 
 	// Move operations
 	movePaneToTab: (paneId: string, targetTabId: string) => void;

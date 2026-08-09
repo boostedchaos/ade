@@ -295,6 +295,13 @@
       "when": 1786281983660,
       "tag": "0041_add_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1786283265094,
+      "tag": "0042_add_workspace_todos",
+      "breakpoints": true
     }
   ]
 }

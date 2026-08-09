@@ -1,8 +1,12 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join } from "node:path";
 import {
 	getClaudeSettingsPath,
 	readClaudeHookCoverage,
 	writeClaudeSettings,
 } from "@ade/server-core/agent-setup/agent-wrappers";
+import { SUPERSET_DIR_NAME } from "@ade/server-core/constants";
 import { HistoryReader } from "@ade/server-core/terminal-history";
 import { getWorkspaceRuntimeRegistry } from "@ade/server-core/workspace-runtime";
 import { projects, workspaces, worktrees } from "@superset/local-db";
@@ -17,7 +21,11 @@ import {
 	type SnapshotPane,
 	type SnapshotTab,
 } from "../../../../../../packages/control-plane/src/index";
-import { ingestAgentEvent, listAgentSessions } from "../agent-sessions";
+import {
+	ingestAgentEvent,
+	listAgentSessions,
+	setAgentProgress,
+} from "../agent-sessions";
 import { appState } from "../app-state";
 import {
 	createNotification,
@@ -27,12 +35,14 @@ import {
 	type NotificationRecord,
 	panesWithUnreadAttention,
 } from "../attention";
+import { browserManager } from "../browser/browser-manager";
 import { localDb } from "../local-db";
 import { mapAgentSessionState } from "../notifications/map-event-type";
 import { extractWorkspaceIdFromUrl } from "../notifications/utils";
 // Through the desktop shim, not @ade/server-core directly: importing it
 // registers the Electron daemon-script path resolver as a side effect.
 import { getTerminalHostClient } from "../terminal-host/client";
+import { createTodo, deleteTodo, listTodos, setTodoState } from "../todos";
 import type { RendererBridge } from "./renderer-bridge";
 
 /**
@@ -141,6 +151,55 @@ function toNotificationSnapshot(
 		createdAt: record.createdAt,
 		readAt: record.readAt,
 	};
+}
+
+/**
+ * Where `browser-screenshot` writes when the caller names no path:
+ * ~/.ade[-<ws>]/screenshots/. Inside the app's own home dir rather than a temp
+ * dir so the files survive a reboot and sit beside the socket and token — an
+ * agent that takes a screenshot usually wants to hand the path to a human.
+ */
+function defaultScreenshotPath(paneId: string): string {
+	const stamp = new Date().toISOString().replace(/[:.]/g, "-").replace("Z", "");
+	// Short pane suffix: enough to tell two panes' captures apart in a listing
+	// without putting a full UUID in every filename.
+	return join(
+		homedir(),
+		SUPERSET_DIR_NAME,
+		"screenshots",
+		`pane-${paneId.slice(0, 8)}-${stamp}.png`,
+	);
+}
+
+/**
+ * Capture a browser pane to a PNG file and return where it landed.
+ *
+ * Deliberately NOT `browserManager.screenshot()`, which exists for the UI's
+ * "copy screenshot" affordance and writes the image to the system clipboard as
+ * a side effect. A scripted capture must not silently replace whatever the user
+ * had copied.
+ *
+ * A relative `--path` resolves against the screenshots dir rather than against
+ * the app's cwd, which for a packaged Electron app is somewhere no one intends
+ * to write.
+ */
+async function captureBrowserPane(
+	paneId: string,
+	requestedPath?: string,
+): Promise<{ path: string }> {
+	const wc = browserManager.getWebContents(paneId);
+	if (!wc) throw new Error(`No web contents for pane ${paneId}`);
+
+	const target = requestedPath
+		? isAbsolute(requestedPath)
+			? requestedPath
+			: join(homedir(), SUPERSET_DIR_NAME, "screenshots", requestedPath)
+		: defaultScreenshotPath(paneId);
+
+	const image = await wc.capturePage();
+	mkdirSync(dirname(target), { recursive: true });
+	writeFileSync(target, image.toPNG());
+	return { path: target };
 }
 
 export function createControlPlaneHost(params: {
@@ -258,6 +317,7 @@ export function createControlPlaneHost(params: {
 					state: record.state,
 					pid: record.pid,
 					lastActivityAt: record.lastActivityAt,
+					progress: record.progress,
 				})),
 
 			ingestEvent: (input) => {
@@ -278,6 +338,24 @@ export function createControlPlaneHost(params: {
 				});
 				return transition ? { from: transition.from, to: transition.to } : null;
 			},
+
+			/**
+			 * Explicit `ade set-status`. Lands in the SAME `ingestAgentEvent` the
+			 * hooks use — the state is carried directly instead of being derived
+			 * from a hook event name, which is the only difference between the two
+			 * doors. Everything downstream (attention row, ring, badges) therefore
+			 * cannot tell them apart, which is the point.
+			 */
+			setState: (input) => {
+				const transition = ingestAgentEvent({
+					surfaceId: input.surfaceId,
+					state: input.state,
+					workspaceId: input.workspaceId ?? null,
+				});
+				return transition ? { from: transition.from, to: transition.to } : null;
+			},
+
+			setProgress: (surfaceId, value) => setAgentProgress(surfaceId, value),
 
 			setupHooks: (agent) => {
 				const written = writeClaudeSettings();
@@ -331,6 +409,45 @@ export function createControlPlaneHost(params: {
 			markAllRead: () => markAllRead(),
 			panesWithUnreadAttention: () =>
 				panesWithUnreadAttention(listNotifications()),
+		},
+
+		/**
+		 * Todos. A pass-through, unlike `agents` and `notifications`: there is no
+		 * in-memory layer to route around, so the store IS the feature.
+		 */
+		todos: {
+			list: (options) =>
+				listTodos({ workspaceId: options.workspaceId, state: options.state }),
+			create: (input) => createTodo(input),
+			setState: (id, state) => setTodoState(id, state),
+			remove: (id) => deleteTodo(id),
+		},
+
+		/**
+		 * Browser-pane scripting, served by the EXISTING `browserManager` — the
+		 * registry the renderer's `usePersistentWebview` hook already populates
+		 * (`browser.register({paneId, webContentsId})`) on every attach and
+		 * re-attach. That is the pane→WebContents mapping this feature needed, and
+		 * it was already there; scanning `webContents.getAllWebContents()` for
+		 * webviews would have been a second, worse answer with no pane identity in
+		 * it.
+		 */
+		browser: {
+			isAttached: (paneId) => browserManager.getWebContents(paneId) !== null,
+			navigate: async (paneId, url) => {
+				browserManager.navigate(paneId, url);
+			},
+			evaluate: (paneId, code) => browserManager.evaluateJS(paneId, code),
+			screenshot: (paneId, path) => captureBrowserPane(paneId, path),
+			pageInfo: (paneId) => {
+				const wc = browserManager.getWebContents(paneId);
+				if (!wc) return null;
+				return {
+					url: wc.getURL(),
+					title: wc.getTitle(),
+					isLoading: wc.isLoading(),
+				};
+			},
 		},
 
 		log: (level, message) => {

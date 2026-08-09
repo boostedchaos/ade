@@ -30,6 +30,15 @@ export interface AgentSessionRecord {
 	pid: number | null;
 	/** Epoch ms of the last hook event or liveness signal. */
 	lastActivityAt: number;
+	/**
+	 * Self-reported completion 0–100, or null for "not reporting".
+	 *
+	 * Null and 0 are different: null draws no progress strip at all, 0 draws an
+	 * empty one. Only `ade set-progress` writes this — no hook carries it — and
+	 * it is cleared automatically when the session reaches idle or ended, so a
+	 * finished run cannot leave a stale "73 %" on the pane forever.
+	 */
+	progress: number | null;
 }
 
 export interface AgentSessionTransition {
@@ -51,6 +60,14 @@ export interface AgentEventInput {
 	transcriptPath?: string | null;
 	pid?: number | null;
 	at?: number;
+}
+
+/**
+ * States a progress reading survives. `idle` and `ended` both mean the run is
+ * over, and a percentage left behind by a finished run reads as a live one.
+ */
+function isProgressBearing(state: AgentSessionState): boolean {
+	return state === "working" || state === "needsInput";
 }
 
 /**
@@ -108,6 +125,13 @@ export class AgentSessionRegistry {
 			state: input.state,
 			pid: input.pid ?? existing?.pid ?? null,
 			lastActivityAt: at,
+			// A run that reached idle or ended is over, so whatever it last
+			// reported is no longer a live reading. Clearing here rather than in
+			// the caller means every door into the registry gets it — including a
+			// PTY exit and boot reconciliation.
+			progress: isProgressBearing(input.state)
+				? (existing?.progress ?? null)
+				: null,
 		};
 		this.records.set(input.surfaceId, record);
 
@@ -140,6 +164,7 @@ export class AgentSessionRegistry {
 			...existing,
 			state: "ended",
 			lastActivityAt: at,
+			progress: null,
 		});
 		return this.emit({
 			surfaceId,
@@ -165,7 +190,12 @@ export class AgentSessionRegistry {
 		if (!existing || existing.state !== "working" || to === "working") {
 			return null;
 		}
-		this.records.set(surfaceId, { ...existing, state: to, lastActivityAt: at });
+		this.records.set(surfaceId, {
+			...existing,
+			state: to,
+			lastActivityAt: at,
+			progress: isProgressBearing(to) ? existing.progress : null,
+		});
 		return this.emit({
 			surfaceId,
 			workspaceId: existing.workspaceId,
@@ -193,6 +223,35 @@ export class AgentSessionRegistry {
 			if (transition) transitions.push(transition);
 		}
 		return transitions;
+	}
+
+	/**
+	 * Attach or clear a progress reading. Returns the updated record, or null
+	 * when the pane has no session.
+	 *
+	 * Progress ANNOTATES an existing session and can never create one — the same
+	 * "correct, never invent" rule the transcript corrector follows, for the same
+	 * reason: a pane with a progress bar and no agent would be a UI claim that
+	 * nothing in the registry supports.
+	 *
+	 * This does NOT emit a transition. The state has not changed, and pushing a
+	 * fake `agent-state-changed` through the bus would make Feature 3 recompute
+	 * attention on a purely cosmetic update.
+	 */
+	setProgress(
+		surfaceId: string,
+		value: number | null,
+		at = Date.now(),
+	): AgentSessionRecord | null {
+		const existing = this.records.get(surfaceId);
+		if (!existing) return null;
+		const record: AgentSessionRecord = {
+			...existing,
+			progress: value,
+			lastActivityAt: at,
+		};
+		this.records.set(surfaceId, record);
+		return record;
 	}
 
 	/** Sessions in `working` with no activity for `staleMs`. */

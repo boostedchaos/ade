@@ -431,6 +431,13 @@ export const agentSessions = sqliteTable(
 		// working | needsInput | idle | ended
 		state: text("state").notNull().default("idle"),
 		pid: integer("pid"),
+		/**
+		 * 0–100 self-reported completion, or null for "not reporting". Null and 0
+		 * are different states: 0 % is a task that has started and shows an empty
+		 * bar, null shows no bar at all. Cleared automatically when the session
+		 * goes idle/ended (Feature 1 `set-progress`).
+		 */
+		progress: integer("progress"),
 		lastActivityAt: integer("last_activity_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
@@ -485,3 +492,46 @@ export const notifications = sqliteTable(
 
 export type InsertNotification = typeof notifications.$inferInsert;
 export type SelectNotification = typeof notifications.$inferSelect;
+
+/**
+ * Mission Control Feature 1 (Todos): a per-workspace task list agents drive
+ * through `ade todo …`.
+ *
+ * Scoped to a workspace rather than to a pane or a tab because a todo outlives
+ * both — an agent that finishes and exits should not take its remaining work
+ * with it, and a human reading the list wants "what is left in this workspace",
+ * not "what is left in the pane that happened to file it".
+ *
+ * `sortOrder` is an explicit column rather than an implicit createdAt ordering
+ * so a future reorder is a write to one row instead of a re-timestamping of the
+ * whole list. It is assigned as max+1 on insert; ties break on createdAt.
+ */
+export const workspaceTodos = sqliteTable(
+	"workspace_todos",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => uuidv4()),
+		workspaceId: text("workspace_id").notNull(),
+		title: text("title").notNull(),
+		// pending | in-progress | completed
+		state: text("state").notNull().default("pending"),
+		sortOrder: integer("sort_order").notNull().default(0),
+		createdAt: integer("created_at")
+			.notNull()
+			.$defaultFn(() => Date.now()),
+		updatedAt: integer("updated_at")
+			.notNull()
+			.$defaultFn(() => Date.now()),
+		// Set when state becomes `completed`, cleared if it moves back.
+		completedAt: integer("completed_at"),
+	},
+	(table) => [
+		index("workspace_todos_workspace_id_idx").on(table.workspaceId),
+		index("workspace_todos_state_idx").on(table.state),
+		index("workspace_todos_sort_order_idx").on(table.sortOrder),
+	],
+);
+
+export type InsertWorkspaceTodo = typeof workspaceTodos.$inferInsert;
+export type SelectWorkspaceTodo = typeof workspaceTodos.$inferSelect;

@@ -13,6 +13,7 @@ import {
 	getAgentMemoryDir,
 	getAgentWorktreePath,
 } from "./agent-home";
+import { readAdeWorkspaceSkill } from "./agent-setup/ade-workspace-skill";
 import { getSupersetHomeDir } from "./app-environment";
 
 /**
@@ -74,6 +75,27 @@ function sub(
 function writeIfEmpty(path: string, content: string): void {
 	if (existsSync(path) && readFileSync(path, "utf8").trim().length > 0) return;
 	writeFileSync(path, content, "utf8");
+}
+
+
+/**
+ * Seed the bundled `ade-workspace` skill into an agent's own skills dir.
+ *
+ * Read from the repo/resources copy rather than held as a template constant
+ * here: the skill is a user-facing document that will be edited, and a second
+ * copy in TypeScript would silently go stale. No {{var}} substitution — it
+ * documents a CLI, not this agent.
+ *
+ * Silent when the source is missing. agent-setup already warns loudly once per
+ * boot; repeating it per agent would be noise, and an agent without the
+ * reference still works.
+ */
+function seedAdeWorkspaceSkill(skillsDir: string): void {
+	const contents = readAdeWorkspaceSkill();
+	if (contents === null) return;
+	const dir = join(skillsDir, "ade-workspace");
+	mkdirSync(dir, { recursive: true });
+	writeIfEmpty(join(dir, "SKILL.md"), contents);
 }
 
 // AGENT.md is the ADE analog of Hermes' SOUL.md: a short identity that leads the
@@ -534,6 +556,7 @@ export function scaffoldAgentMemory({
 	const askAgentDir = join(skillsDir, "ask-agent");
 	mkdirSync(askAgentDir, { recursive: true });
 	writeIfEmpty(join(askAgentDir, "SKILL.md"), sub(ASK_AGENT_SKILL, vars));
+	seedAdeWorkspaceSkill(skillsDir);
 
 	// Per-runtime bridge files in the worktree (point each CLI at canonical
 	// memory). Idempotent so we never clobber a bridge the user customized.
@@ -661,6 +684,7 @@ export function scaffoldAgentSkills(
 	const askAgentDir = join(skillsDir, "ask-agent");
 	mkdirSync(askAgentDir, { recursive: true });
 	writeIfEmpty(join(askAgentDir, "SKILL.md"), sub(ASK_AGENT_SKILL, vars));
+	seedAdeWorkspaceSkill(skillsDir);
 
 	if (worktreePath) {
 		const claudeDir = join(worktreePath, ".claude");

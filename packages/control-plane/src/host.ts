@@ -149,7 +149,75 @@ export interface ControlPlaneHost {
 	 */
 	notifications?: NotificationsHost;
 
+	/**
+	 * Per-workspace todo lists (Feature 1, Todos group). Optional for the same
+	 * reason `agents` and `notifications` are.
+	 */
+	todos?: TodosHost;
+
+	/**
+	 * Browser-pane scripting (Feature 1, Browser group). Optional for the same
+	 * reason as the others; absent on any host without a webview surface.
+	 */
+	browser?: BrowserPaneHost;
+
 	log(level: "info" | "warn" | "error", message: string): void;
+}
+
+export type TodoStateName = "pending" | "in-progress" | "completed";
+
+export interface TodoSnapshot {
+	id: string;
+	workspaceId: string;
+	title: string;
+	state: TodoStateName;
+	sortOrder: number;
+	createdAt: number;
+	updatedAt: number;
+	completedAt: number | null;
+}
+
+export interface TodosHost {
+	/** Oldest first within the workspace. */
+	list(options: { workspaceId: string; state?: TodoStateName }): TodoSnapshot[];
+	create(input: { workspaceId: string; title: string }): TodoSnapshot;
+	/** Null when no todo has that id. */
+	setState(id: string, state: TodoStateName): TodoSnapshot | null;
+	/** False when no todo had that id. */
+	remove(id: string): boolean;
+}
+
+/**
+ * The browser-pane primitives, deliberately kept to four.
+ *
+ * Everything that makes `browser-click` / `-type` / `-fill` work — locating an
+ * element by CSS selector, reporting a miss as a meaningful error rather than a
+ * silent no-op, escaping the selector and the text — is expressed as JavaScript
+ * built by commands/browser.ts and handed to `evaluate`. That is what keeps the
+ * interesting half unit-testable in this package: the host adapter is then a
+ * two-line call into Electron with nothing to get wrong.
+ *
+ * NOT SUPPORTED, and not planned (SPEC "Out of scope"): CDP attachment, cookie
+ * or profile import, and running a command across every pane at once. The last
+ * one is a SECURITY constraint, not an omission — these commands execute
+ * arbitrary JS in a page, so they act only on the single pane the caller named.
+ */
+export interface BrowserPaneHost {
+	/** True when this pane has a live, registered webContents. */
+	isAttached(paneId: string): boolean;
+	navigate(paneId: string, url: string): Promise<void>;
+	/** Result of the expression, structured-cloned out of the page. */
+	evaluate(paneId: string, code: string): Promise<unknown>;
+	/**
+	 * Capture the pane to a PNG. `path` is honoured when given; otherwise the
+	 * host picks a timestamped file under ~/.ade/screenshots/. Returns the file
+	 * actually written.
+	 */
+	screenshot(paneId: string, path?: string): Promise<{ path: string }>;
+	/** Null when the pane has no live webContents. */
+	pageInfo(
+		paneId: string,
+	): { url: string; title: string; isLoading: boolean } | null;
 }
 
 export type AgentSessionStateName = "working" | "needsInput" | "idle" | "ended";
@@ -163,6 +231,8 @@ export interface AgentSessionSnapshot {
 	state: AgentSessionStateName;
 	pid: number | null;
 	lastActivityAt: number;
+	/** 0–100, or null for "not reporting". See `setProgress`. */
+	progress?: number | null;
 }
 
 export interface HooksSetupResult {
@@ -232,6 +302,30 @@ export interface AgentSessionsHost {
 		transcriptPath?: string;
 		agentKind?: string;
 	}): { from: AgentSessionStateName; to: AgentSessionStateName } | null;
+	/**
+	 * Set a pane's agent state EXPLICITLY (`ade set-status`), bypassing the hook
+	 * event vocabulary but landing in the same registry through the same ingest
+	 * function. That is the point: the registry stays the single authority, so
+	 * Feature-3 side effects (attention row, ring, badges, native toast) fire
+	 * identically whether the state came from a Claude hook or from an agent
+	 * that has no hooks and reports for itself.
+	 *
+	 * Optional so a host predating Feature 5 answers UNSUPPORTED.
+	 */
+	setState?(input: {
+		surfaceId: string;
+		state: AgentSessionStateName;
+		workspaceId?: string | null;
+	}): { from: AgentSessionStateName; to: AgentSessionStateName } | null;
+
+	/**
+	 * Attach or clear a 0–100 progress reading on a pane's session record.
+	 * Returns false when the pane has no session — progress is an annotation on
+	 * an existing agent, never a way to conjure one (the same "correct, never
+	 * invent" rule the transcript corrector follows).
+	 */
+	setProgress?(surfaceId: string, value: number | null): boolean;
+
 	/** Rewrites ADE's own hooks file. Throws UNSUPPORTED for non-claude agents. */
 	setupHooks(agent: string): HooksSetupResult;
 	hooksStatus(agent: string): HooksStatusResult;

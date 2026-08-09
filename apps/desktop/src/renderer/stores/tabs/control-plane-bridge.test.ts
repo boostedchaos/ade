@@ -218,20 +218,113 @@ describe("new-split uses the same path-targeted plan", () => {
 });
 
 describe("planBridgeOp — non-terminal pane types", () => {
-	it("opens a browser pane as a new tab (documented divergence)", () => {
+	/**
+	 * THE FLAGSHIP EXAMPLE, verbatim from SPEC.md and from the bundled
+	 * ade-workspace skill:
+	 *
+	 *   ade new-pane --type browser --direction right --url … --focus false
+	 *
+	 * Through Phase 4 this planned `addBrowserTab` — a new TAB, not a split —
+	 * because no store action could put a browser beside a named pane. Phase 5
+	 * added `splitPaneWithType`, so the documented divergence is closed and this
+	 * test is what keeps it closed.
+	 */
+	it("splits a browser pane in beside the source pane", () => {
 		const plan = planBridgeOp({
 			...baseNewPane,
 			paneType: "browser",
 			direction: "right",
 			url: "https://example.com",
+			focus: false,
 		});
 		expect(plan).toEqual([
 			{
-				action: "addBrowserTab",
-				workspaceId: "ws1",
+				action: "splitPaneWithType",
+				tabId: "t1",
+				sourcePaneId: "p1",
+				path: [],
+				paneType: "webview",
+				orientation: "row",
 				url: "https://example.com",
 			},
 		]);
+	});
+
+	/**
+	 * `--focus false` is NOT part of the plan: every split action focuses its new
+	 * pane, and the restore happens in runBridgeOp after the plan runs. Asserted
+	 * here so a future "add a focus flag to the store action" change has to
+	 * confront the fact that there is one implementation of not-stealing-focus.
+	 */
+	it("leaves focus handling out of the plan entirely", () => {
+		const focused = planBridgeOp({
+			...baseNewPane,
+			paneType: "browser",
+			direction: "right",
+			url: "https://example.com",
+			focus: true,
+		});
+		const unfocused = planBridgeOp({
+			...baseNewPane,
+			paneType: "browser",
+			direction: "right",
+			url: "https://example.com",
+			focus: false,
+		});
+		expect(unfocused).toEqual(focused);
+	});
+
+	it("splits at the SOURCE pane's own node when it is nested", () => {
+		const plan = planBridgeOp(
+			{
+				...baseNewPane,
+				sourcePaneId: "p2",
+				paneType: "browser",
+				direction: "right",
+				url: "https://example.com",
+			},
+			{ layout: NESTED_LAYOUT },
+		);
+		expect(plan[0]).toMatchObject({
+			action: "splitPaneWithType",
+			sourcePaneId: "p2",
+			path: ["first", "second"],
+		});
+	});
+
+	it("swaps branches at the SAME path for left/up", () => {
+		const plan = planBridgeOp(
+			{
+				...baseNewPane,
+				sourcePaneId: "p2",
+				paneType: "browser",
+				direction: "left",
+				url: "https://example.com",
+			},
+			{ layout: NESTED_LAYOUT },
+		);
+		expect(plan).toEqual([
+			{
+				action: "splitPaneWithType",
+				tabId: "t1",
+				sourcePaneId: "p2",
+				path: ["first", "second"],
+				paneType: "webview",
+				orientation: "row",
+				url: "https://example.com",
+			},
+			{ action: "swapBranchesAtPath", tabId: "t1", path: ["first", "second"] },
+		]);
+	});
+
+	it("uses a column split for up/down", () => {
+		const plan = planBridgeOp({
+			...baseNewPane,
+			paneType: "browser",
+			direction: "down",
+			url: "https://example.com",
+		});
+		expect(plan[0]).toMatchObject({ orientation: "column" });
 	});
 
 	it("requires a url for a browser pane", () => {
@@ -240,7 +333,7 @@ describe("planBridgeOp — non-terminal pane types", () => {
 		).toThrow(BridgeOpError);
 	});
 
-	it("opens a file-viewer pane in the current tab", () => {
+	it("splits a file-viewer pane in at the source pane", () => {
 		const plan = planBridgeOp({
 			...baseNewPane,
 			paneType: "file-viewer",
@@ -249,10 +342,13 @@ describe("planBridgeOp — non-terminal pane types", () => {
 		});
 		expect(plan).toEqual([
 			{
-				action: "addFileViewerPane",
-				workspaceId: "ws1",
+				action: "splitPaneWithType",
+				tabId: "t1",
+				sourcePaneId: "p1",
+				path: [],
+				paneType: "file-viewer",
+				orientation: "row",
 				filePath: "src/index.ts",
-				openInNewTab: false,
 			},
 		]);
 	});
@@ -274,7 +370,14 @@ describe("planBridgeOp — non-terminal pane types", () => {
 			direction: "right",
 		});
 		expect(plan).toEqual([
-			{ action: "openDevToolsPane", tabId: "t1", browserPaneId: "p1" },
+			{
+				action: "splitPaneWithType",
+				tabId: "t1",
+				sourcePaneId: "p1",
+				path: [],
+				paneType: "devtools",
+				orientation: "row",
+			},
 		]);
 	});
 });

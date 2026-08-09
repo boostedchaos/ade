@@ -8,6 +8,7 @@ import { dragDropManager } from "renderer/lib/dnd";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { InitGitDialog } from "renderer/react-query/projects/InitGitDialog";
 import { WorkspaceInitEffects } from "renderer/screens/main/components/WorkspaceInitEffects";
+import { useAgentSessionsSync } from "renderer/stores/agent-sessions/useAgentProgress";
 import { useAttentionSync } from "renderer/stores/attention/useAttention";
 import { useHotkeysSync } from "renderer/stores/hotkeys";
 import { useAgentHookListener } from "renderer/stores/tabs/useAgentHookListener";
@@ -35,6 +36,7 @@ function AuthenticatedLayout() {
 	useHotkeysSync();
 	useTabsSyncSubscription();
 	useAttentionSync();
+	useAgentSessionsSync();
 
 	// Workspace initialization progress subscription
 	const updateInitProgress = useWorkspaceInitStore((s) => s.updateProgress);

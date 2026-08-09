@@ -33,6 +33,7 @@ export function loadAgentSessions(): AgentSessionRecord[] {
 				state: toState(row.state),
 				pid: row.pid ?? null,
 				lastActivityAt: row.lastActivityAt,
+				progress: row.progress ?? null,
 			}));
 	} catch (error) {
 		console.error("[agent-sessions] Failed to load snapshots:", error);
@@ -53,6 +54,7 @@ export function saveAgentSession(record: AgentSessionRecord): void {
 				transcriptPath: record.transcriptPath,
 				state: record.state,
 				pid: record.pid,
+				progress: record.progress,
 				lastActivityAt: record.lastActivityAt,
 				updatedAt: now,
 			})
@@ -65,6 +67,7 @@ export function saveAgentSession(record: AgentSessionRecord): void {
 					transcriptPath: record.transcriptPath,
 					state: record.state,
 					pid: record.pid,
+					progress: record.progress,
 					lastActivityAt: record.lastActivityAt,
 					updatedAt: now,
 				},

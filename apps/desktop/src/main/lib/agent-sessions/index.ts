@@ -35,6 +35,35 @@ const registry = new AgentSessionRegistry();
 let sweepTimer: ReturnType<typeof setInterval> | null = null;
 let sweepInFlight = false;
 
+type ChangeListener = () => void;
+const changeListeners = new Set<ChangeListener>();
+
+/**
+ * Renderer sync for the pane progress strip (Feature 5).
+ *
+ * Same idiom as `onAttentionChanged`: main says "something moved", the renderer
+ * invalidates its query and refetches. Pushing the records themselves over the
+ * subscription would make the socket the source of truth for state that lives
+ * in the registry, and a dropped message would leave a stale bar on a pane with
+ * nothing to reconcile against.
+ */
+export function onAgentSessionsChanged(fn: ChangeListener): () => void {
+	changeListeners.add(fn);
+	return () => {
+		changeListeners.delete(fn);
+	};
+}
+
+function emitChanged(): void {
+	for (const fn of changeListeners) {
+		try {
+			fn();
+		} catch (error) {
+			console.error("[agent-sessions] change listener threw:", error);
+		}
+	}
+}
+
 export function getAgentSessionRegistry(): AgentSessionRegistry {
 	return registry;
 }
@@ -56,6 +85,26 @@ function publish(transition: AgentSessionTransition | null): void {
 		from: transition.from,
 		to: transition.to,
 	});
+
+	// A transition can clear a progress reading (idle/ended), so the strip has to
+	// be told even though nothing called setAgentProgress.
+	emitChanged();
+}
+
+/**
+ * `ade set-progress`. Returns false when the pane has no session — see
+ * `AgentSessionRegistry.setProgress` for why that is a refusal rather than an
+ * implicit create.
+ */
+export function setAgentProgress(
+	surfaceId: string,
+	value: number | null,
+): boolean {
+	const record = registry.setProgress(surfaceId, value);
+	if (!record) return false;
+	saveAgentSession(record);
+	emitChanged();
+	return true;
 }
 
 /** The one ingest point. Returns the transition, or null if nothing changed. */

@@ -52,6 +52,9 @@ export const sessionCommands: CommandRegistry = {
 				state: record.state,
 				pid: record.pid,
 				lastActivityAt: record.lastActivityAt,
+				// null rather than absent when nothing is reporting, so a consumer
+				// can distinguish "no progress" from "this build has no progress".
+				progress: record.progress ?? null,
 			})),
 		};
 	},
