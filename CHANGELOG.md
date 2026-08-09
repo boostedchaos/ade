@@ -3,7 +3,7 @@
 Notable changes to ADE. Releases before 0.4.0 were recorded only as GitHub
 release notes — see the [releases page](https://github.com/boostedchaos/ade/releases).
 
-## 0.4.0 — unreleased
+## 0.4.0 — 2026-08-09 ([mac-v0.4.0](https://github.com/boostedchaos/ade/releases/tag/mac-v0.4.0))
 
 ### Added
 
