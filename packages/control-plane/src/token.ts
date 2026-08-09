@@ -35,8 +35,16 @@ export type HardenResult = { applied: boolean; reason?: string };
  * environments can inject extra ACEs — e.g. this box carries an inherited
  * `CodexSandboxUsers:(RX)` ACE on ~/.ade, which would let that group READ
  * control.token and drive the whole app. `/inheritance:r` strips every
- * inherited ACE and `/grant:r "<user>:F"` leaves exactly one explicit grant,
- * so even a read-widening ACE on the directory does not reach the token.
+ * INHERITED ACE and `/grant:r "<user>:F"` leaves the one explicit user grant.
+ *
+ * But `/inheritance:r` does NOT touch EXPLICIT (non-inherited) ACEs, and some
+ * environments (notably GitHub-hosted windows runners) stamp explicit
+ * SYSTEM + BUILTIN\Administrators ACEs onto temp files. Those survive
+ * `/inheritance:r`, leaving 3 ACEs — so we also `/remove:g` them by well-known
+ * SID (`*S-1-5-18` SYSTEM, `*S-1-5-32-544` Administrators; SIDs are
+ * locale-independent, unlike display names). On a normal box those principals
+ * are only inherited, so the removes are harmless no-ops there. Net: exactly
+ * one explicit user ACE in every environment.
  *
  * Ceiling: this hardens the FILE only. The listener pipe keeps its default
  * DACL (Everyone read-only, no write — see socket-path.ts / the listen sites),
@@ -65,7 +73,17 @@ export function hardenTokenFileAcl(tokenPath: string): HardenResult {
 	// username with spaces is passed intact as a single argv element.
 	const result = spawnSync(
 		"icacls",
-		[tokenPath, "/inheritance:r", "/grant:r", `${user}:F`],
+		[
+			tokenPath,
+			"/inheritance:r",
+			// Drop explicit SYSTEM + Administrators ACEs that /inheritance:r
+			// leaves untouched (GH runners stamp these non-inherited).
+			"/remove:g",
+			"*S-1-5-18",
+			"*S-1-5-32-544",
+			"/grant:r",
+			`${user}:F`,
+		],
 		{ shell: false, encoding: "utf-8", windowsHide: true },
 	);
 	if (result.status !== 0) {

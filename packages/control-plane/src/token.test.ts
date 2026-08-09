@@ -51,10 +51,19 @@ describe.skipIf(!IS_WIN)("writeControlToken — Windows ACL hardening", () => {
 				.split(/\r?\n/)
 				.filter((l) => l.includes(":("));
 
-			// /inheritance:r stripped every inherited ACE; only the user grant
-			// remains — SYSTEM and Administrators must be absent.
-			expect(aceLines.length).toBe(1);
+			// Only the explicit user grant remains: /inheritance:r stripped
+			// inherited ACEs and /remove:g dropped explicit SYSTEM/Administrators.
 			const user = currentWindowsUser();
+			if (aceLines.length !== 1) {
+				// Carry the evidence into CI so a surprising DACL is diagnosable
+				// from the log rather than needing another run.
+				throw new Error(
+					`expected exactly 1 ACE, got ${aceLines.length}. ` +
+						`resolvedUser=${JSON.stringify(user)} harden=${JSON.stringify(harden)}\n` +
+						`icacls stdout:\n${out.stdout}`,
+				);
+			}
+			expect(aceLines.length).toBe(1);
 			expect(user).not.toBeNull();
 			// icacls prints "DOMAIN\user"; assert the bare account name appears.
 			expect(aceLines[0]).toContain(user as string);
