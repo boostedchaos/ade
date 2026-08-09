@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { userInfo } from "node:os";
 import { SUPERSET_DIR_NAME } from "../constants";
 import {
 	buildSafeEnv,
@@ -675,6 +676,7 @@ describe("env", () => {
 			"DATABASE_URL",
 			"CLERK_SECRET_KEY",
 			"SSL_CERT_FILE",
+			"USERNAME",
 		];
 
 		beforeEach(() => {
@@ -837,6 +839,29 @@ describe("env", () => {
 			const result = buildTerminalEnv(baseParams);
 			expect(result.SUPERSET_HOOK_VERSION).toBeDefined();
 			expect(result.SUPERSET_HOOK_VERSION).toBe(HOOK_PROTOCOL_VERSION);
+		});
+
+		describe("USERNAME — the ade CLI's pipe name", () => {
+			// THE BUG (0.4.0, Windows): agent shells carried no USERNAME at all
+			// (Windows never sets USER, and USERNAME was not allowlisted), and
+			// bun's os.userInfo() answers the literal "unknown" in that case — so
+			// `ade` in an agent pane dialled a pipe nobody listens on and reported
+			// the running app as not running.
+			it("injects the app's own user name when the environment has none", () => {
+				delete process.env.USERNAME;
+				const result = buildTerminalEnv(baseParams);
+				expect(result.USERNAME).toBe(userInfo().username);
+			});
+
+			it("never clobbers a USERNAME the app already carries", () => {
+				process.env.USERNAME = "from-app-env";
+				const result = buildTerminalEnv(baseParams);
+				expect(result.USERNAME).toBe("from-app-env");
+			});
+
+			it("survives the terminal-host's buildSafeEnv re-filter", () => {
+				expect(buildSafeEnv({ USERNAME: "kylew" }).USERNAME).toBe("kylew");
+			});
 		});
 
 		describe("SSL_CERT_FILE fallback on macOS", () => {
