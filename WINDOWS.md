@@ -77,6 +77,12 @@ ade: bun is required to run the ADE CLI and is not on PATH
 and exits with code 2. Install `bun` and reopen your terminal. Agent terminals
 ADE launches inherit whatever `bun` is on your system PATH.
 
+The launcher runs the CLI bundle from `~/.ade\cli\index.mjs`, a copy the app
+refreshes on every boot from the one inside its install directory. The copy is
+not an optimisation: `bun` refuses to execute a script that lives in a directory
+you cannot write to (`error: EPERM reading …`), which is exactly what
+`C:\Program Files\ADE` is. Set `ADE_CLI_ENTRY` to run a different entry.
+
 ## Platform gaps
 
 - **`ade claude-teams` is macOS-only.** On Windows it exits with code 2. Agent

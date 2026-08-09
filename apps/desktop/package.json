@@ -2,7 +2,7 @@
 	"name": "@ade/desktop",
 	"productName": "ADE",
 	"description": "The last developer tool you'll ever need",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"main": "./dist/main/index.js",
 	"resources": "src/resources",
 	"repository": {

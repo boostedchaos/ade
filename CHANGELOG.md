@@ -3,6 +3,30 @@
 Notable changes to ADE. Releases before 0.4.0 were recorded only as GitHub
 release notes — see the [releases page](https://github.com/boostedchaos/ade/releases).
 
+## 0.4.1 — 2026-08-09 (Windows)
+
+Two field bugs found running the packaged 0.4.0 on Windows. Both made `ade`
+unusable, and both were invisible to CI, which ran the CLI straight out of a
+writable checkout with `USERNAME` set — the two conditions a real install does
+not have. The named-pipe smoke now reproduces both: it invokes the generated
+`~/.ade\bin\ade.cmd` launcher and strips `USERNAME`/`USER` first.
+
+### Fixed
+
+- **`ade` from an installed build died with `EPERM`.** The launcher pointed at
+  the CLI bundle inside `C:\Program Files\ADE`, and `bun` refuses to execute a
+  script from a directory the user cannot write to — `error: EPERM reading …`,
+  even though the file reads fine. The app now copies the bundle to
+  `~/.ade\cli\index.mjs` on every boot (so upgrades refresh it) and points the
+  launcher there. `ADE_CLI_ENTRY` still overrides it.
+- **`ade` inside ADE's own agent panes reported "app is not running" (exit 3).**
+  Agent terminals carried no `USERNAME` and no `USER`, and under `bun`
+  `os.userInfo().username` answers the literal `"unknown"` instead of throwing —
+  so the CLI dialled `\\.\pipe\ade-control-unknown` while the app listened on
+  the pipe named for the real user. The app now injects its own user name into
+  every agent terminal, and the CLI rejects `"unknown"` and falls back through
+  the environment, `whoami`, and the `USERPROFILE` basename.
+
 ## 0.4.0 — 2026-08-09 ([mac-v0.4.0](https://github.com/boostedchaos/ade/releases/tag/mac-v0.4.0) · [windows-v0.4.0](https://github.com/boostedchaos/ade/releases/tag/windows-v0.4.0))
 
 Both channels ship the same Mission Control feature set from one `main`. The
