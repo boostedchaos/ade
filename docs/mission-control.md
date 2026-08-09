@@ -18,8 +18,10 @@ For your own shell, run this once:
 ade cli install
 ```
 
-It puts a link to `ade` in `/usr/local/bin` (or `~/.local/bin` if that is not
-writable). Safe to re-run. Windows is not supported yet.
+On macOS/Linux it puts a link to `ade` in `/usr/local/bin` (or `~/.local/bin`
+if that is not writable). On Windows it adds `~/.ade\bin` to your user `PATH`
+(`HKCU\Environment`); **restart your shell** afterwards for it to take effect.
+Safe to re-run. See [`../WINDOWS.md`](../WINDOWS.md) for the Windows specifics.
 
 If a command prints `ADE app is not running (no control socket)`, open the ADE
 app and try again. `ade` never launches the app for you.
@@ -37,8 +39,10 @@ ADE_DATA_DIR_NAME=.ade-default ade list-workspaces
 ### 1. See which agent needs you
 
 When an agent asks permission, its pane gets a glowing ring, and the count goes
-up on the tab, the workspace rail, and the Dock icon. Click the ring, or jump
-there from anywhere:
+up on the tab and the workspace rail. On macOS the count also shows on the Dock
+icon; on Windows it shows as a red taskbar overlay badge, and the taskbar button
+flashes when a new one arrives while the window is unfocused. Click the ring, or
+jump there from anywhere:
 
 ```sh
 ade jump-to-unread
@@ -148,7 +152,7 @@ raw result instead of a table.
 **Panes and layout**
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `new-pane` | Create a pane next to an existing one |
 | `new-split` | Split a pane, putting the new one in the freed space |
 | `split-off` | Move a pane out of its split into its own tab |
@@ -160,7 +164,7 @@ raw result instead of a table.
 **Tabs and workspaces**
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `new-tab` | Create a tab |
 | `list-tabs` | List tabs |
 | `new-workspace` | Create a workspace for a project |
@@ -170,7 +174,7 @@ raw result instead of a table.
 **Terminal input and output**
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `send` | Type text into a terminal pane |
 | `send-key` | Send a named key (`Enter`, `C-c`, `Up`, …) |
 | `read-screen` | Read what is visible in a terminal pane |
@@ -179,7 +183,7 @@ raw result instead of a table.
 **Agent status**
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `agent-sessions` | List tracked agent sessions, one per terminal pane |
 | `set-status` | Report a pane as `working`, `needsInput`, or `idle` |
 | `set-progress` | Set or clear a pane's progress bar |
@@ -201,7 +205,7 @@ raw result instead of a table.
 **Notifications**
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `notify` | Raise a notification, optionally about a pane |
 | `list-notifications` | List notifications, newest first |
 | `mark-notification-read` | Mark one read, or `--all` |
@@ -216,7 +220,7 @@ raw result instead of a table.
 **Other**
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `cli` | Manage the `ade` bin itself (`cli install`) |
 | `claude-teams` | EXPERIMENTAL: launch Claude Code with agent teams as ADE panes |
 | `tmux-compat` | Internal — the shim `claude-teams` points a fake `tmux` at |
