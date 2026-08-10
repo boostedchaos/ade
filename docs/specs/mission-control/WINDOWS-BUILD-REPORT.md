@@ -310,7 +310,24 @@ fallbacks never fired; the CLI therefore dialled
   suite, which is gated by the "ADE CI" workflow rather than "Windows CI (ground
   truth)". Verifier observation #5, recorded rather than fixed.
 
-### TODO slots — orchestrator fills before ship
+### Ship record (filled at release, 2026-08-09)
 
-- **Final CI run IDs/URLs:** TODO
-- **Release URL + checksums:** TODO
+- **Adversarial verifier:** SHIP, zero blocking findings (fresh Opus at xhigh
+  over the full diff at `8dead41`); its four cheap observations were applied in
+  the polish commits `616484d`/`8513915` (atomic staging + keep-staged
+  fallback, "unknown" sentinel at the env steps, real `userInfoUser` test seam,
+  POSIX doc correction); observation #5 recorded above as an accepted gap.
+- **Final CI run IDs/URLs:** branch head `8513915`: windows-ci **31343897359**,
+  ADE CI **31343897370** — green, no iterations. Merge commit on `main`
+  `41a455c001cd086eb703f0ffbd3b3e4dd3fdf97c` (PR #9): windows-ci
+  **31344559103** (all steps incl. the installed-launcher pipe smoke and
+  artifact upload), ADE CI **31344559101** — both green. The release artifact
+  was taken from run 31344559103.
+- **Release URL + checksums:**
+  <https://github.com/boostedchaos/ade/releases/tag/windows-v0.4.1> —
+  `ADE-0.4.1-x64.exe` (sha256
+  `d38ad2182c7c5a9540e15641394f431520a39fdf489b667eb4b9c567a8677e1b`),
+  `ADE-0.4.1-x64.zip` (sha256
+  `7511035c1ca227cd7cf1930464368a84e72ad2916ee7d0d84bde17587cdfc1f9`),
+  `SHA256SUMS.txt`. `latest.yml` deliberately NOT published. Published assets
+  re-downloaded and hash-verified (all match). Tag targets the full merge SHA.
