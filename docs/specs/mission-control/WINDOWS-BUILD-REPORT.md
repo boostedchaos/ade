@@ -254,8 +254,11 @@ packaged bundle to `<home>/<adeDir>/cli/index.mjs` — unconditionally, so an
 upgrade refreshes it — and bakes THAT path into the launcher. Only the packaged
 entry is staged; a dev checkout's TypeScript entry imports siblings and its tree
 is writable anyway. `ADE_CLI_ENTRY` and the exit-127 missing-entry guard are
-unchanged. POSIX was checked and deliberately left alone: bun-on-posix has no
-such restriction and `/Applications` is normally user-writable.
+unchanged. Staging is **cross-platform**, not Windows-only: `stageBundledCliEntry`
+has no platform guard and electron-builder ships `resources/cli/index.mjs` on mac
+too, so mac launchers also bake the staged data-dir copy. Deliberate — bun-on-posix
+has no such execute restriction, so staging there is merely harmless (and mildly
+beneficial: the launcher keeps working while the app bundle is being replaced).
 
 ### Bug B — `ade` in ADE's own agent panes reported "app is not running" (3)
 
@@ -298,6 +301,14 @@ fallbacks never fired; the CLI therefore dialled
   `<profile>\.ade\bin\ade.cmd` (exercising the staged copy) with `USERNAME` and
   `USER` stripped (exercising the whoami path), and asserts the staged bundle
   exists. It fails against 0.4.0 behavior.
+
+### Known gaps (accepted for 0.4.1)
+
+- The app-side `USERNAME` injection has **no end-to-end CI gate** — the named-pipe
+  smoke exercises the CLI's own resolution, not `buildTerminalEnv`'s injection into
+  a real agent pane. The unit coverage that does exist lives in the server-core
+  suite, which is gated by the "ADE CI" workflow rather than "Windows CI (ground
+  truth)". Verifier observation #5, recorded rather than fixed.
 
 ### TODO slots — orchestrator fills before ship
 
