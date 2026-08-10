@@ -515,6 +515,8 @@ export function buildTerminalEnv(params: {
 	rootPath?: string;
 	themeType?: "dark" | "light";
 	runtime?: AgentRuntime | null;
+	/** Test seam for the USERNAME injection below. Defaults to os.userInfo(). */
+	userInfoUser?: () => string;
 }): Record<string, string> {
 	const {
 		shell,
@@ -577,9 +579,17 @@ export function buildTerminalEnv(params: {
 	// the control pipe after the user and, without this, resolved "unknown"
 	// under bun and reported the running app as not running. Never clobbers a
 	// value that came through the allowlist (posix already carries USER).
+	// bun answers the literal "unknown" instead of throwing when it cannot read
+	// the account, so injecting it unchecked would hand the CLI the very sentinel
+	// its fallback chain rejects. Skipping leaves the CLI to its whoami step.
 	if (!terminalEnv.USERNAME) {
 		try {
-			terminalEnv.USERNAME = os.userInfo().username;
+			const name = (
+				params.userInfoUser ?? (() => os.userInfo().username)
+			)().trim();
+			if (name && name.toLowerCase() !== "unknown") {
+				terminalEnv.USERNAME = name;
+			}
 		} catch {
 			// No account info — the CLI's own fallback chain still answers.
 		}

@@ -132,10 +132,23 @@ function whoamiUser(): string | undefined {
  * never fired and every `ade` call in an agent pane dialled
  * `\\.\pipe\ade-control-unknown` while the app listened on `…-control-<user>`.
  *
- * "unknown" is rejected only where bun produces it (the userInfo step); a real
- * account literally named "unknown" is still answered by the env/whoami steps.
+ * "unknown" is rejected at every step that can carry the sentinel forward: any
+ * bun-hosted process that injects its own resolved name into a child's
+ * USERNAME/USER would otherwise re-create the bug AND suppress the whoami
+ * fallback. `whoami` is authoritative, so a real account named "unknown" is
+ * still answered there.
  * Steps are thunks so `whoami` is spawned only when the cheap ones came up empty.
  */
+const SENTINEL_USER = "unknown";
+
+/** Drops bun's "unknown" sentinel and blank values. */
+function rejectSentinel(name: string | undefined): string | undefined {
+	const trimmed = name?.trim();
+	return !trimmed || trimmed.toLowerCase() === SENTINEL_USER
+		? undefined
+		: trimmed;
+}
+
 export function getUserName(deps?: {
 	userInfoUser?: () => string;
 	env?: NodeJS.ProcessEnv;
@@ -145,12 +158,9 @@ export function getUserName(deps?: {
 	const readUserInfo = deps?.userInfoUser ?? (() => userInfo().username);
 	const whoami = deps?.whoami ?? whoamiUser;
 	const steps: Array<() => string | undefined> = [
-		() => {
-			const name = readUserInfo();
-			return name.toLowerCase() === "unknown" ? undefined : name;
-		},
-		() => env.USERNAME,
-		() => env.USER,
+		() => rejectSentinel(readUserInfo()),
+		() => rejectSentinel(env.USERNAME),
+		() => rejectSentinel(env.USER),
 		// `DOMAIN\user` → `user`; a bare name is unchanged.
 		() => whoami()?.split("\\").pop(),
 		() => (env.USERPROFILE ? basename(env.USERPROFILE) : undefined),

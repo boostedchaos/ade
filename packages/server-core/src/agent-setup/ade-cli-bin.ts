@@ -148,18 +148,33 @@ export function stageBundledCliEntry(
 	if (!appResourcesDir) return entryPath;
 	const resourcesPrefix = path.resolve(appResourcesDir) + path.sep;
 	if (!path.resolve(entryPath).startsWith(resourcesPrefix)) return entryPath;
+	const staged = path.join(targetDir, path.basename(entryPath));
 	try {
 		fs.mkdirSync(targetDir, { recursive: true });
-		const staged = path.join(targetDir, path.basename(entryPath));
-		fs.copyFileSync(entryPath, staged);
+		// Copy to a sibling temp name and rename over the target: a plain
+		// copyFileSync truncates first, so a crash (or a concurrent `ade` call
+		// reading it) mid-copy would leave a half-written entry that bun cannot
+		// run. rename within the same dir is atomic.
+		const tmp = `${staged}.${process.pid}.tmp`;
+		fs.copyFileSync(entryPath, tmp);
+		fs.renameSync(tmp, staged);
 		return staged;
 	} catch (error) {
-		// Falling back to the read-only path reproduces the 0.4.0 bug, so say why
-		// rather than degrading silently.
+		// A previously staged copy is still executable; the packaged path is not
+		// (that IS the 0.4.0 bug), so a failed refresh keeps the stale-but-working
+		// copy. Either way say why rather than degrading silently.
+		let stagedExists = false;
+		try {
+			stagedExists = fs.existsSync(staged);
+		} catch {
+			// unreadable target counts as absent
+		}
 		console.warn(
-			`[agent-setup] Could not stage the ade CLI into ${targetDir}; the launcher will point at the packaged copy, which bun cannot execute on Windows: ${error}`,
+			stagedExists
+				? `[agent-setup] Could not refresh the ade CLI in ${targetDir}; keeping the previously staged copy at ${staged}: ${error}`
+				: `[agent-setup] Could not stage the ade CLI into ${targetDir}; the launcher will point at the packaged copy, which bun cannot execute on Windows: ${error}`,
 		);
-		return entryPath;
+		return stagedExists ? staged : entryPath;
 	}
 }
 

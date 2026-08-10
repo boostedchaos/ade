@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SUPERSET_DIR_NAME } from "../constants";
@@ -115,6 +121,27 @@ describe("stageBundledCliEntry — the installed-CLI EPERM fix", () => {
 		writeFileSync(f.entry, "bundle-v2");
 		expect(stageBundledCliEntry(f.entry, f.resources, f.dataDir)).toBe(staged);
 		expect(readFileSync(staged, "utf8")).toBe("bundle-v2");
+	});
+
+	it("keeps using an already-staged copy when a refresh fails", () => {
+		// An upgrade that cannot re-copy (locked file, gone bundle) must NOT send
+		// the launcher back to the read-only packaged path — the stale staged copy
+		// is the only one bun can execute.
+		const f = packagedFixture();
+		const staged = stageBundledCliEntry(f.entry, f.resources, f.dataDir);
+		rmSync(f.entry); // source vanishes → copy throws, staged copy survives
+		expect(stageBundledCliEntry(f.entry, f.resources, f.dataDir)).toBe(staged);
+		expect(readFileSync(staged, "utf8")).toBe("bundle-v1");
+	});
+
+	it("falls back to the packaged entry when staging fails with nothing staged", () => {
+		const f = packagedFixture();
+		// A file where the target dir should be: mkdir/copy cannot succeed.
+		const blocker = join(f.root, "blocker");
+		writeFileSync(blocker, "");
+		expect(
+			stageBundledCliEntry(f.entry, f.resources, join(blocker, "cli")),
+		).toBe(f.entry);
 	});
 
 	it("leaves a dev-checkout entry where it is", () => {

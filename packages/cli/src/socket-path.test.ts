@@ -183,6 +183,18 @@ describe("getUserName — the pipe-name half of the agent-shell bug", () => {
 		).toBe("kylew");
 	});
 
+	it('rejects an "unknown" USERNAME injected by a bun-hosted parent', () => {
+		// A bun process that resolved "unknown" itself and exported it would both
+		// re-create the bug and hide it from the whoami fallback.
+		expect(
+			getUserName({
+				userInfoUser: () => "unknown",
+				env: { USERNAME: "unknown", USER: "  " },
+				whoami: () => "KEWBEE\\kylew",
+			}),
+		).toBe("kylew");
+	});
+
 	it("falls back to whoami, taking the part after the domain", () => {
 		expect(
 			getUserName({

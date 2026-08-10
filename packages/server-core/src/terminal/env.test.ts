@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { userInfo } from "node:os";
 import { SUPERSET_DIR_NAME } from "../constants";
 import {
 	buildSafeEnv,
@@ -849,8 +848,23 @@ describe("env", () => {
 			// the running app as not running.
 			it("injects the app's own user name when the environment has none", () => {
 				delete process.env.USERNAME;
-				const result = buildTerminalEnv(baseParams);
-				expect(result.USERNAME).toBe(userInfo().username);
+				// Pinned rather than compared to userInfo(): under bun-on-Windows both
+				// sides would read "unknown" and the assertion would pass on the bug.
+				const result = buildTerminalEnv({
+					...baseParams,
+					userInfoUser: () => "kylew",
+				});
+				expect(result.USERNAME).toBe("kylew");
+			});
+
+			it('never propagates bun\'s "unknown" sentinel', () => {
+				delete process.env.USERNAME;
+				const result = buildTerminalEnv({
+					...baseParams,
+					userInfoUser: () => "unknown",
+				});
+				// Unset beats wrong: the CLI's whoami fallback then answers.
+				expect(result.USERNAME).toBeUndefined();
 			});
 
 			it("never clobbers a USERNAME the app already carries", () => {
