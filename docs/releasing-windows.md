@@ -35,8 +35,9 @@ every push to `main`, and uploads `ade-windows-x64` (the `.exe`, the portable
    package verify step, a packaged-resource guard (the `ade` CLI, the bundled
    `skills/`, and the agent hook templates are all present in the bundle), and
    three smokes (native modules under packaged Electron; the app boots and
-   initializes `~/.ade`; and the bundled `ade` CLI reaches the control server
-   over the named pipe).
+   initializes `~/.ade`; and the generated `~/.ade\bin\ade.cmd` launcher reaches
+   the control server over the named pipe with `USERNAME`/`USER` stripped, the
+   way an ADE agent terminal runs it).
 3. Download the artifact and generate checksums:
 
    ```bash

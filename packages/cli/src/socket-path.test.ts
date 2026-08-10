@@ -3,6 +3,7 @@ import {
 	getAdeDirName,
 	getControlSocketPathFor,
 	getControlTokenPathFor,
+	getUserName,
 	getWorkspaceSuffix,
 	isNamedPipePath,
 } from "./socket-path";
@@ -145,5 +146,102 @@ describe("control endpoint paths", () => {
 
 	it("does not treat a unix path as a named pipe", () => {
 		expect(isNamedPipePath("/home/k/.ade/control.sock")).toBe(false);
+	});
+});
+
+describe("getUserName — the pipe-name half of the agent-shell bug", () => {
+	// THE BUG: ADE's agent terminals carry no USERNAME/USER, and bun's
+	// os.userInfo() answers the literal "unknown" instead of throwing — so the
+	// CLI dialled \\.\pipe\ade-control-unknown and reported "app is not running".
+	const never = () => {
+		throw new Error("whoami must not be spawned when a cheap step answers");
+	};
+
+	it("uses userInfo when it is a real name", () => {
+		expect(
+			getUserName({ userInfoUser: () => "kylew", env: {}, whoami: never }),
+		).toBe("kylew");
+	});
+
+	it('treats bun\'s "unknown" as invalid and falls through to the env', () => {
+		expect(
+			getUserName({
+				userInfoUser: () => "unknown",
+				env: { USERNAME: "kylew" },
+				whoami: never,
+			}),
+		).toBe("kylew");
+	});
+
+	it("falls through an empty userInfo and an empty USERNAME to USER", () => {
+		expect(
+			getUserName({
+				userInfoUser: () => "",
+				env: { USERNAME: "", USER: "kylew" },
+				whoami: never,
+			}),
+		).toBe("kylew");
+	});
+
+	it('rejects an "unknown" USERNAME injected by a bun-hosted parent', () => {
+		// A bun process that resolved "unknown" itself and exported it would both
+		// re-create the bug and hide it from the whoami fallback.
+		expect(
+			getUserName({
+				userInfoUser: () => "unknown",
+				env: { USERNAME: "unknown", USER: "  " },
+				whoami: () => "KEWBEE\\kylew",
+			}),
+		).toBe("kylew");
+	});
+
+	it("falls back to whoami, taking the part after the domain", () => {
+		expect(
+			getUserName({
+				userInfoUser: () => "unknown",
+				env: {},
+				whoami: () => "KEWBEE\\kylew",
+			}),
+		).toBe("kylew");
+	});
+
+	it("falls back to the USERPROFILE basename after whoami", () => {
+		expect(
+			getUserName({
+				userInfoUser: () => "unknown",
+				env: { USERPROFILE: "C:\\Users\\kylew" },
+				whoami: () => undefined,
+			}),
+		).toBe("kylew");
+	});
+
+	it('returns "user" when every step fails', () => {
+		expect(
+			getUserName({
+				userInfoUser: () => {
+					throw new Error("no user");
+				},
+				env: {},
+				whoami: () => undefined,
+			}),
+		).toBe("user");
+	});
+
+	it("sanitises exactly as the app does before naming the pipe", () => {
+		expect(
+			getUserName({
+				userInfoUser: () => "Kyle W.",
+				env: {},
+				whoami: never,
+			}),
+		).toBe("Kyle-W-");
+	});
+
+	it.skipIf(!skipWin)("resolves a real name from the real whoami", () => {
+		// The live path this release exists for: no USERNAME, no USER, bun's
+		// "unknown" — the CLI must still find the user the app named the pipe for.
+		const resolved = getUserName({ userInfoUser: () => "unknown", env: {} });
+		expect(resolved).not.toBe("user");
+		expect(resolved).not.toBe("unknown");
 	});
 });

@@ -10,8 +10,9 @@
  *
  * posix: ~/.ade[-<ws>]/control.sock   win32: \\.\pipe\ade[-<ws>]-control-<user>
  */
+import { spawnSync } from "node:child_process";
 import { homedir, userInfo } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
 	ADE_DATA_DIR_NAME_ENV,
 	ADE_DATA_DIR_NAME_PATTERN,
@@ -92,19 +93,97 @@ export function isNamedPipePath(socketPath: string): boolean {
 	return socketPath.startsWith("\\\\.\\pipe\\");
 }
 
+/**
+ * Same sanitisation the app applies before it names the pipe
+ * (packages/control-plane/src/socket-path.ts). Both sides must agree
+ * character-for-character or the CLI dials a pipe nobody listens on.
+ */
+function sanitizeUser(raw: string | undefined): string | undefined {
+	return raw?.trim().replace(/[^A-Za-z0-9-]/g, "-") || undefined;
+}
+
+let cachedWhoami: string | null | undefined;
+
+/**
+ * Raw first line of `whoami` — `DOMAIN\user` on Windows, `user` on posix. Cached
+ * for the process: the answer cannot change, and the CLI must stay fast.
+ */
+function whoamiUser(): string | undefined {
+	if (cachedWhoami === undefined) {
+		cachedWhoami = null;
+		try {
+			const result = spawnSync("whoami", {
+				encoding: "utf8",
+				shell: false,
+				windowsHide: true,
+			});
+			cachedWhoami = (result.stdout ?? "").trim().split(/\r?\n/)[0] || null;
+		} catch {
+			// no whoami on PATH — the next fallback answers
+		}
+	}
+	return cachedWhoami ?? undefined;
+}
+
+/**
+ * THE BUG this chain exists for: ADE's own agent terminals carry neither
+ * USERNAME nor USER, and under **bun** `os.userInfo().username` then returns the
+ * literal string "unknown" instead of throwing — so the old try/catch fallbacks
+ * never fired and every `ade` call in an agent pane dialled
+ * `\\.\pipe\ade-control-unknown` while the app listened on `…-control-<user>`.
+ *
+ * "unknown" is rejected at every step that can carry the sentinel forward: any
+ * bun-hosted process that injects its own resolved name into a child's
+ * USERNAME/USER would otherwise re-create the bug AND suppress the whoami
+ * fallback. `whoami` is authoritative, so a real account named "unknown" is
+ * still answered there.
+ * Steps are thunks so `whoami` is spawned only when the cheap ones came up empty.
+ */
+const SENTINEL_USER = "unknown";
+
+/** Drops bun's "unknown" sentinel and blank values. */
+function rejectSentinel(name: string | undefined): string | undefined {
+	const trimmed = name?.trim();
+	return !trimmed || trimmed.toLowerCase() === SENTINEL_USER
+		? undefined
+		: trimmed;
+}
+
+export function getUserName(deps?: {
+	userInfoUser?: () => string;
+	env?: NodeJS.ProcessEnv;
+	whoami?: () => string | undefined;
+}): string {
+	const env = deps?.env ?? process.env;
+	const readUserInfo = deps?.userInfoUser ?? (() => userInfo().username);
+	const whoami = deps?.whoami ?? whoamiUser;
+	const steps: Array<() => string | undefined> = [
+		() => rejectSentinel(readUserInfo()),
+		() => rejectSentinel(env.USERNAME),
+		() => rejectSentinel(env.USER),
+		// `DOMAIN\user` → `user`; a bare name is unchanged.
+		() => whoami()?.split("\\").pop(),
+		() => (env.USERPROFILE ? basename(env.USERPROFILE) : undefined),
+	];
+	for (const step of steps) {
+		let value: string | undefined;
+		try {
+			value = sanitizeUser(step());
+		} catch {
+			value = undefined;
+		}
+		if (value) return value;
+	}
+	return "user";
+}
+
 export function getControlSocketPathFor(
 	dirName: string,
 	home = homedir(),
 	platform: NodeJS.Platform = process.platform,
 ): string {
 	if (platform === "win32") {
-		let rawUser = "";
-		try {
-			rawUser = userInfo().username;
-		} catch {
-			rawUser = process.env.USERNAME || process.env.USER || "user";
-		}
-		const user = rawUser.replace(/[^A-Za-z0-9-]/g, "-") || "user";
+		const user = getUserName();
 		const base = dirName.replace(/^\./, "");
 		return `\\\\.\\pipe\\${base}-control-${user}`;
 	}

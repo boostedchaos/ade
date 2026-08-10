@@ -2,6 +2,8 @@ import path from "node:path";
 import { SUPERSET_HOME_DIR } from "../app-environment";
 
 export const BIN_DIR = path.join(SUPERSET_HOME_DIR, "bin");
+/** Where the packaged `ade` CLI bundle is staged. See ade-cli-bin.ts. */
+export const CLI_DIR = path.join(SUPERSET_HOME_DIR, "cli");
 export const HOOKS_DIR = path.join(SUPERSET_HOME_DIR, "hooks");
 /** Bundled agent skills, installed by agent-setup. See ade-workspace-skill.ts. */
 export const SKILLS_DIR = path.join(SUPERSET_HOME_DIR, "skills");

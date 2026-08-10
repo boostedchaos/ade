@@ -230,3 +230,87 @@ observed the temp bin dir appended, `KIND_PRESERVED=true`, then restored —
 - **Issue #8** — pipe DACL read-only-observation residual risk.
 - Kyle's UAT (install replaces the running ADE): visual ring/overlay-badge/flash;
   `ade cli install` from a fresh terminal → `ade list-workspaces` answers.
+
+## Addendum — 0.4.1 (2026-08-09): two field bugs from live in-app UAT
+
+Branch `windows-0.4.1` off `main` @ `afe170c`. Both bugs were found running the
+**installed** 0.4.0 (`C:\Program Files\ADE`) from inside an ADE agent pane — the
+first real use of `ade` outside CI. Each made the CLI unusable in its context,
+and each was invisible to the 0.4.0 CI gate for the same reason: the named-pipe
+smoke ran the CLI straight out of a writable checkout with `USERNAME` set.
+
+### Bug A — installed `ade` died with `EPERM`
+
+`~/.ade/bin/ade.cmd` baked
+`C:\Program Files\ADE\resources\cli\index.mjs`, and every invocation printed
+`error: EPERM reading <path>` and failed. **Root cause:** bun 1.3.x refuses to
+EXECUTE an entry script from a directory the user cannot write to. Proven: the
+same file reads fine with `readFileSync`, and copying it to a temp dir makes it
+run.
+
+**Fix** (`packages/server-core/src/agent-setup/ade-cli-bin.ts`, new
+`stageBundledCliEntry` + `CLI_DIR` in `paths.ts`): bin injection copies the
+packaged bundle to `<home>/<adeDir>/cli/index.mjs` — unconditionally, so an
+upgrade refreshes it — and bakes THAT path into the launcher. Only the packaged
+entry is staged; a dev checkout's TypeScript entry imports siblings and its tree
+is writable anyway. `ADE_CLI_ENTRY` and the exit-127 missing-entry guard are
+unchanged. Staging is **cross-platform**, not Windows-only: `stageBundledCliEntry`
+has no platform guard and electron-builder ships `resources/cli/index.mjs` on mac
+too, so mac launchers also bake the staged data-dir copy. Deliberate — bun-on-posix
+has no such execute restriction, so staging there is merely harmless (and mildly
+beneficial: the launcher keeps working while the app bundle is being replaced).
+
+### Bug B — `ade` in ADE's own agent panes reported "app is not running" (3)
+
+**Cause chain, all verified:** ADE agent shells carry neither `USERNAME` nor
+`USER` (Windows never sets `USER`, and `USERNAME` was not on the terminal env
+allowlist); under **bun** `os.userInfo().username` then returns the literal
+string `"unknown"` and does NOT throw, so the CLI's existing try/catch env
+fallbacks never fired; the CLI therefore dialled
+`\\.\pipe\ade-control-unknown` while the app listened on
+`\\.\pipe\ade-control-kylew`. Proven by re-running the same command with
+`USERNAME=kylew` set — it returned the real workspace table.
+
+**Fix, both halves:**
+
+- CLI (`packages/cli/src/socket-path.ts`): `getUserName()` walks lazy steps —
+  `userInfo()` (rejecting `"unknown"`), `$USERNAME`, `$USER`, `whoami`
+  (`DOMAIN\user` → `user`, spawned only if the cheap steps came up empty, cached
+  per process), `basename($USERPROFILE)`, then the `"user"` literal — and
+  sanitises through the same `[^A-Za-z0-9-]` rule the app uses, so both sides
+  always name the same pipe.
+- App (`packages/server-core/src/terminal/env.ts`): `buildTerminalEnv` injects
+  the app's own `os.userInfo().username` as `USERNAME` when the environment has
+  none, and `USERNAME` was added to `ALLOWED_ENV_VARS` so it survives the
+  terminal-host's `buildSafeEnv` re-filter. Fixes every user-name consumer in an
+  agent shell, not just `ade`.
+
+### Evidence
+
+- Canary (new tests against 0.4.0 code): `env.test.ts` USERNAME block 3 fail
+  (`Expected "unknown", Received undefined` — bun's sentinel, live);
+  `socket-path.test.ts` and `ade-cli-bin.test.ts` fail to import
+  (`getUserName` / `stageBundledCliEntry` do not exist).
+- Live, against the RUNNING installed 0.4.0 app on Kyle's machine, with
+  `USERNAME` and `USER` removed from the environment: patched CLI →
+  `list-workspaces` exit 0 and the real table (workspace `Mabel`); 0.4.0 CLI,
+  same command and env → `ADE app is not running (no control socket)`, exit 3.
+- Suites (each from its package cwd): server-core 482 pass / 20 skip / 0 fail
+  (was 475/20/0), cli 205 pass / 91 skip / 0 fail. Pinned tsc exit 0 for both.
+- CI regression gate: the named-pipe smoke now invokes
+  `<profile>\.ade\bin\ade.cmd` (exercising the staged copy) with `USERNAME` and
+  `USER` stripped (exercising the whoami path), and asserts the staged bundle
+  exists. It fails against 0.4.0 behavior.
+
+### Known gaps (accepted for 0.4.1)
+
+- The app-side `USERNAME` injection has **no end-to-end CI gate** — the named-pipe
+  smoke exercises the CLI's own resolution, not `buildTerminalEnv`'s injection into
+  a real agent pane. The unit coverage that does exist lives in the server-core
+  suite, which is gated by the "ADE CI" workflow rather than "Windows CI (ground
+  truth)". Verifier observation #5, recorded rather than fixed.
+
+### TODO slots — orchestrator fills before ship
+
+- **Final CI run IDs/URLs:** TODO
+- **Release URL + checksums:** TODO

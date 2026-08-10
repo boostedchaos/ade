@@ -199,18 +199,29 @@ jobs:
           Stop-Process -Id $p.Id -Force
           exit 0
 
-      - name: "Smoke: bundled CLI reaches control server over named pipe"
+      - name: "Smoke: installed CLI launcher reaches control server over named pipe"
         working-directory: apps/desktop
         shell: pwsh
         # Self-contained (separate from the boot smoke so a failure attributes
         # cleanly): boot the packaged app under a redirected USERPROFILE, wait for
-        # the control server to publish its token, then drive the BUNDLED cli over
-        # the named pipe. The app and cli must resolve the same data dir + pipe:
-        # the pipe name derives from os.userInfo().username (the CI user, not
-        # USERPROFILE), while the token path follows homedir()==USERPROFILE — so
-        # both processes share the redirected profile and neither may see a
-        # workspace/data-dir override (scrubbed below). Success = exit 0 + a
-        # listing, NOT the exit-3 "not running (no control socket)" error.
+        # the control server to publish its token, then drive the cli THE WAY A
+        # USER DOES — through the generated <profile>\.ade\bin\ade.cmd launcher.
+        # The app and cli must resolve the same data dir + pipe: the pipe name
+        # derives from the user name, while the token path follows
+        # homedir()==USERPROFILE — so both processes share the redirected profile
+        # and neither may see a workspace/data-dir override (scrubbed below).
+        # Success = exit 0 + a listing, NOT the exit-3 "not running (no control
+        # socket)" error.
+        #
+        # BOTH 0.4.0 FIELD BUGS ARE REPRODUCED HERE, and neither was visible to
+        # the old version of this step, which ran the resources copy directly from
+        # a writable checkout with USERNAME set:
+        #   1. going through ade.cmd exercises the staged CLI copy under
+        #      <profile>\.ade\cli — bun cannot execute the entry from the
+        #      read-only install dir ("error: EPERM reading …");
+        #   2. USERNAME/USER are stripped below, exactly as ADE's own agent
+        #      terminals were, which makes bun's os.userInfo() answer "unknown"
+        #      and forces the CLI's whoami fallback to name the pipe correctly.
         run: |
           $smokeProfile = Join-Path $env:RUNNER_TEMP "ade-cli-smoke-profile"
           New-Item -ItemType Directory -Force $smokeProfile | Out-Null
@@ -238,12 +249,35 @@ jobs:
             exit 1
           }
 
-          $cli = "release/win-unpacked/resources/cli/index.mjs"
+          # agent-setup writes the launcher and stages the CLI bundle during boot;
+          # both land a beat after the token, so poll for the launcher too.
+          $cli = Join-Path $smokeProfile ".ade\bin\ade.cmd"
+          $staged = Join-Path $smokeProfile ".ade\cli\index.mjs"
+          for ($i = 0; $i -lt 30; $i++) {
+            if ((Test-Path $cli) -and (Test-Path $staged)) { break }
+            Start-Sleep -Seconds 1
+          }
+          if (!(Test-Path $cli)) {
+            Write-Error "ade launcher missing at $cli — bin injection did not run"
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            exit 1
+          }
+          if (!(Test-Path $staged)) {
+            Write-Error "CLI bundle was not staged into $staged — the launcher would point into the read-only install dir, which bun cannot execute"
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            exit 1
+          }
+
+          # As in an ADE agent terminal: no USERNAME, no USER.
+          Remove-Item Env:\USERNAME -ErrorAction SilentlyContinue
+          Remove-Item Env:\USER -ErrorAction SilentlyContinue
+
           function Invoke-AdeList {
-            # bun is a console binary (on PATH via setup-bun) and spawns no PTY for
-            # this command, so $LASTEXITCODE is reliable here — no marker needed for
-            # the call itself; the marker below records the judged pass/fail.
-            $out = & bun $cli list-workspaces 2>&1 | Out-String
+            # ade.cmd runs bun (a console binary, on PATH via setup-bun) and spawns
+            # no PTY for this command, so $LASTEXITCODE is reliable here — no marker
+            # needed for the call itself; the marker below records the judged
+            # pass/fail.
+            $out = & $cli list-workspaces 2>&1 | Out-String
             return @{ Code = $LASTEXITCODE; Out = $out }
           }
           $r = Invoke-AdeList

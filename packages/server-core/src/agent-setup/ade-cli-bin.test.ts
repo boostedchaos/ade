@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SUPERSET_DIR_NAME } from "../constants";
@@ -9,8 +15,10 @@ import {
 	adeCliEntryCandidates,
 	buildAdeBinCmd,
 	buildAdeBinScript,
+	createAdeCliBin,
 	findRepoRoot,
 	resolveAdeCliEntry,
+	stageBundledCliEntry,
 } from "./ade-cli-bin";
 
 const ENTRY = { entryPath: "/repo/packages/cli/src/index.ts" };
@@ -84,6 +92,87 @@ describe("findRepoRoot", () => {
 		expect(entry?.endsWith(join("packages", "cli", "src", "index.ts"))).toBe(
 			true,
 		);
+	});
+});
+
+describe("stageBundledCliEntry — the installed-CLI EPERM fix", () => {
+	// THE BUG (0.4.0): the launcher baked
+	// C:\Program Files\ADE\resources\cli\index.mjs and bun refused to execute it
+	// ("error: EPERM reading …") because the directory is not user-writable.
+	function packagedFixture(bundle = "bundle-v1") {
+		const root = mkdtempSync(join(tmpdir(), "ade-stage-"));
+		const resources = join(root, "resources");
+		mkdirSync(join(resources, "cli"), { recursive: true });
+		const entry = join(resources, "cli", "index.mjs");
+		writeFileSync(entry, bundle);
+		return { root, resources, entry, dataDir: join(root, ".ade", "cli") };
+	}
+
+	it("copies a packaged entry into the writable data dir", () => {
+		const f = packagedFixture();
+		const staged = stageBundledCliEntry(f.entry, f.resources, f.dataDir);
+		expect(staged).toBe(join(f.dataDir, "index.mjs"));
+		expect(readFileSync(staged, "utf8")).toBe("bundle-v1");
+	});
+
+	it("overwrites the staged copy on every injection, so upgrades refresh it", () => {
+		const f = packagedFixture();
+		const staged = stageBundledCliEntry(f.entry, f.resources, f.dataDir);
+		writeFileSync(f.entry, "bundle-v2");
+		expect(stageBundledCliEntry(f.entry, f.resources, f.dataDir)).toBe(staged);
+		expect(readFileSync(staged, "utf8")).toBe("bundle-v2");
+	});
+
+	it("keeps using an already-staged copy when a refresh fails", () => {
+		// An upgrade that cannot re-copy (locked file, gone bundle) must NOT send
+		// the launcher back to the read-only packaged path — the stale staged copy
+		// is the only one bun can execute.
+		const f = packagedFixture();
+		const staged = stageBundledCliEntry(f.entry, f.resources, f.dataDir);
+		rmSync(f.entry); // source vanishes → copy throws, staged copy survives
+		expect(stageBundledCliEntry(f.entry, f.resources, f.dataDir)).toBe(staged);
+		expect(readFileSync(staged, "utf8")).toBe("bundle-v1");
+	});
+
+	it("falls back to the packaged entry when staging fails with nothing staged", () => {
+		const f = packagedFixture();
+		// A file where the target dir should be: mkdir/copy cannot succeed.
+		const blocker = join(f.root, "blocker");
+		writeFileSync(blocker, "");
+		expect(
+			stageBundledCliEntry(f.entry, f.resources, join(blocker, "cli")),
+		).toBe(f.entry);
+	});
+
+	it("leaves a dev-checkout entry where it is", () => {
+		// The repo entry is TypeScript source that imports siblings — copying it
+		// would break it, and its tree is writable anyway.
+		const f = packagedFixture();
+		const repoEntry = join(f.root, "packages", "cli", "src", "index.ts");
+		expect(stageBundledCliEntry(repoEntry, f.resources, f.dataDir)).toBe(
+			repoEntry,
+		);
+	});
+});
+
+describe("createAdeCliBin — launcher points at the staged copy", () => {
+	it("stages the packaged bundle and bakes the staged path", () => {
+		const root = mkdtempSync(join(tmpdir(), "ade-inject-"));
+		const resources = join(root, "resources");
+		mkdirSync(join(resources, "cli"), { recursive: true });
+		writeFileSync(join(resources, "cli", "index.mjs"), "bundle-v1");
+		const cliDir = join(root, ".ade", "cli");
+		const binDir = join(root, ".ade", "bin");
+		mkdirSync(binDir, { recursive: true }); // agent-setup creates BIN_DIR itself
+		const binPath = join(binDir, "ade");
+
+		createAdeCliBin({ appResourcesDir: resources, cliDir, binPath });
+
+		const staged = join(cliDir, "index.mjs");
+		expect(readFileSync(staged, "utf8")).toBe("bundle-v1");
+		const launcher = readFileSync(binPath, "utf8");
+		expect(launcher).toContain(staged);
+		expect(launcher).not.toContain(join(resources, "cli", "index.mjs"));
 	});
 });
 

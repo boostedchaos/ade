@@ -3,7 +3,7 @@ import path from "node:path";
 import { ADE_DATA_DIR_NAME_ENV } from "@superset/shared/constants";
 import { SUPERSET_DIR_NAME } from "../constants";
 import { IS_WINDOWS, writeFileIfChanged } from "./agent-wrappers-common";
-import { BIN_DIR } from "./paths";
+import { BIN_DIR, CLI_DIR } from "./paths";
 
 /**
  * Puts the `ade` CLI on every agent terminal's PATH.
@@ -33,6 +33,10 @@ export const ADE_BIN_MARKER_CMD = "REM ADE CLI launcher";
  *     runs under node once compiled. Nothing may IMPORT it — importing runs
  *     the CLI; the library surface is `packages/cli/src/lib.ts`.
  *   - `$ADE_CLI_ENTRY` overrides the baked path, for dev and for tests.
+ *   - The baked path is the STAGED copy under `<home>/<adeDir>/cli/` when the
+ *     resolved entry came from the packaged (read-only) resources dir — bun
+ *     cannot execute a script from a directory the user cannot write to. See
+ *     stageBundledCliEntry.
  *   - The launcher defaults `$ADE_DATA_DIR_NAME` to the generating app's data
  *     dir before exec'ing, so the CLI finds the right control socket even
  *     from a plain external shell. An already-set value is never overwritten.
@@ -122,6 +126,58 @@ export function findRepoRoot(startDir = __dirname): string | undefined {
 	return undefined;
 }
 
+/**
+ * THE FIELD BUG (0.4.0, Windows): the launcher baked
+ * `C:\Program Files\ADE\resources\cli\index.mjs` and every installed `ade` call
+ * died with `error: EPERM reading <path>`. bun 1.3.x refuses to EXECUTE an entry
+ * script that lives in a directory the user cannot write to — the file is
+ * perfectly readable (readFileSync works, and the same bytes run fine from a
+ * temp dir). So the packaged bundle is copied into the app's own data dir and
+ * the launcher points there instead.
+ *
+ * Only the PACKAGED entry is staged: a dev checkout's entry is TypeScript source
+ * that imports siblings (uncopyable) and already sits in a writable tree.
+ * Copied unconditionally on every injection, so an upgrade refreshes the staged
+ * copy — agent-setup runs on each app boot.
+ */
+export function stageBundledCliEntry(
+	entryPath: string,
+	appResourcesDir?: string,
+	targetDir: string = CLI_DIR,
+): string {
+	if (!appResourcesDir) return entryPath;
+	const resourcesPrefix = path.resolve(appResourcesDir) + path.sep;
+	if (!path.resolve(entryPath).startsWith(resourcesPrefix)) return entryPath;
+	const staged = path.join(targetDir, path.basename(entryPath));
+	try {
+		fs.mkdirSync(targetDir, { recursive: true });
+		// Copy to a sibling temp name and rename over the target: a plain
+		// copyFileSync truncates first, so a crash (or a concurrent `ade` call
+		// reading it) mid-copy would leave a half-written entry that bun cannot
+		// run. rename within the same dir is atomic.
+		const tmp = `${staged}.${process.pid}.tmp`;
+		fs.copyFileSync(entryPath, tmp);
+		fs.renameSync(tmp, staged);
+		return staged;
+	} catch (error) {
+		// A previously staged copy is still executable; the packaged path is not
+		// (that IS the 0.4.0 bug), so a failed refresh keeps the stale-but-working
+		// copy. Either way say why rather than degrading silently.
+		let stagedExists = false;
+		try {
+			stagedExists = fs.existsSync(staged);
+		} catch {
+			// unreadable target counts as absent
+		}
+		console.warn(
+			stagedExists
+				? `[agent-setup] Could not refresh the ade CLI in ${targetDir}; keeping the previously staged copy at ${staged}: ${error}`
+				: `[agent-setup] Could not stage the ade CLI into ${targetDir}; the launcher will point at the packaged copy, which bun cannot execute on Windows: ${error}`,
+		);
+		return stagedExists ? staged : entryPath;
+	}
+}
+
 export function getAdeBinPath(): string {
 	return path.join(BIN_DIR, IS_WINDOWS ? `${ADE_BIN_NAME}.cmd` : ADE_BIN_NAME);
 }
@@ -184,6 +240,9 @@ export function buildAdeBinCmd(entry: AdeCliEntry): string {
 export function createAdeCliBin(params?: {
 	appResourcesDir?: string;
 	repoRoot?: string;
+	/** Test seams. Default to the real ~/.ade locations. */
+	binPath?: string;
+	cliDir?: string;
 }): void {
 	const resolved = {
 		// Electron sets process.resourcesPath at runtime; it is absent from the
@@ -194,8 +253,8 @@ export function createAdeCliBin(params?: {
 			(process as NodeJS.Process & { resourcesPath?: string }).resourcesPath,
 		repoRoot: params?.repoRoot ?? findRepoRoot(),
 	};
-	const entryPath = resolveAdeCliEntry(adeCliEntryCandidates(resolved));
-	if (!entryPath) {
+	const resolvedEntry = resolveAdeCliEntry(adeCliEntryCandidates(resolved));
+	if (!resolvedEntry) {
 		// A missing CLI must not fail agent setup — the rest of the hooks are
 		// still valuable. Logged loudly because a silent skip here is exactly
 		// the "graceful degradation nobody reads" failure mode.
@@ -205,9 +264,14 @@ export function createAdeCliBin(params?: {
 		return;
 	}
 
+	const entryPath = stageBundledCliEntry(
+		resolvedEntry,
+		resolved.appResourcesDir,
+		params?.cliDir,
+	);
 	const entry: AdeCliEntry = { entryPath };
 	const changed = writeFileIfChanged(
-		getAdeBinPath(),
+		params?.binPath ?? getAdeBinPath(),
 		IS_WINDOWS ? buildAdeBinCmd(entry) : buildAdeBinScript(entry),
 		0o755,
 	);

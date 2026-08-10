@@ -351,6 +351,13 @@ const ALLOWED_ENV_VARS = new Set([
 	"ADE_WORKSPACE_ID",
 	ADE_DATA_DIR_NAME_ENV,
 
+	// Windows' spelling of USER (which is listed above but never set by Windows).
+	// Without it agent shells had NO user name at all, and bun's os.userInfo()
+	// answers the literal "unknown" in that case — so the `ade` CLI derived
+	// \\.\pipe\ade-control-unknown and could not reach the app. buildTerminalEnv
+	// injects it below; this entry is what lets it survive the re-filter.
+	"USERNAME",
+
 	// Provider API key that buildTerminalEnv injects from the encrypted key store
 	// (see provider-keys.ts). Like CODEX_HOME, it must survive the terminal-host's
 	// buildSafeEnv re-filter to reach the OpenRouter-routed CLI (kimi/minimax/glm).
@@ -508,6 +515,8 @@ export function buildTerminalEnv(params: {
 	rootPath?: string;
 	themeType?: "dark" | "light";
 	runtime?: AgentRuntime | null;
+	/** Test seam for the USERNAME injection below. Defaults to os.userInfo(). */
+	userInfoUser?: () => string;
 }): Record<string, string> {
 	const {
 		shell,
@@ -564,6 +573,27 @@ export function buildTerminalEnv(params: {
 		// Hook protocol version for forward compatibility
 		SUPERSET_HOOK_VERSION: HOOK_PROTOCOL_VERSION,
 	};
+
+	// The user the app itself runs as. Every consumer in an agent shell that
+	// needs a user name gets it from here — notably the `ade` CLI, which names
+	// the control pipe after the user and, without this, resolved "unknown"
+	// under bun and reported the running app as not running. Never clobbers a
+	// value that came through the allowlist (posix already carries USER).
+	// bun answers the literal "unknown" instead of throwing when it cannot read
+	// the account, so injecting it unchecked would hand the CLI the very sentinel
+	// its fallback chain rejects. Skipping leaves the CLI to its whoami step.
+	if (!terminalEnv.USERNAME) {
+		try {
+			const name = (
+				params.userInfoUser ?? (() => os.userInfo().username)
+			)().trim();
+			if (name && name.toLowerCase() !== "unknown") {
+				terminalEnv.USERNAME = name;
+			}
+		} catch {
+			// No account info — the CLI's own fallback chain still answers.
+		}
+	}
 
 	delete terminalEnv.GOOGLE_API_KEY;
 	delete terminalEnv.OPENROUTER_API_KEY;
