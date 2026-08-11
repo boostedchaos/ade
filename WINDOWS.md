@@ -53,8 +53,8 @@ run once:
 ade cli install
 ```
 
-On Windows this adds `~/.ade\bin` (where the app writes `ade.cmd` on every boot)
-to your **user** `PATH` in the registry (`HKCU\Environment`). It never uses
+On Windows this adds `~/.ade\bin` (where the app writes the launchers on every
+boot) to your **user** `PATH` in the registry (`HKCU\Environment`). It never uses
 `setx` (which truncates PATH at 1024 characters) and it preserves any
 unexpanded `%VAR%` entries and the value's `REG_EXPAND_SZ` kind. Safe to re-run.
 
@@ -65,9 +65,19 @@ shell does not see the new PATH.
 `Path` under **Settings → System → About → Advanced system settings →
 Environment Variables → User variables**.
 
+### Two launchers: `ade.cmd` and `ade`
+
+`~/.ade\bin` holds both, written on every boot and pointing at the same entry:
+
+- `ade.cmd` — for `cmd.exe` and PowerShell.
+- `ade` — an extensionless `#!/bin/sh` script for Git Bash. **As of 0.4.2** a
+  bash pane (ADE's default terminal on Windows) runs plain `ade`; before that
+  bash only resolved `ade.cmd`, because it does not append `.cmd` to a bare
+  name, and typing `ade` exited 127.
+
 ### The `ade` launcher requires `bun`
 
-The generated `ade.cmd` launcher runs the CLI with [`bun`](https://bun.sh). If
+Both launchers run the CLI with [`bun`](https://bun.sh). If
 `bun` is not on your PATH, every `ade` command prints:
 
 ```

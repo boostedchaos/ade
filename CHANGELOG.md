@@ -3,6 +3,16 @@
 Notable changes to ADE. Releases before 0.4.0 were recorded only as GitHub
 release notes — see the [releases page](https://github.com/boostedchaos/ade/releases).
 
+## 0.4.2 — 2026-08-11 (Windows)
+
+### Fixed
+
+- **Bare `ade` did not work in Windows agent panes.** ADE's panes default to Git
+  Bash, and bash does not resolve `.cmd` files from a bare name — typing `ade`
+  exited 127 while `ade.cmd` worked. The app now writes an extensionless
+  `#!/bin/sh` launcher next to `ade.cmd` in `~/.ade\bin`, same contract and same
+  staged entry, so bash panes and external Git Bash shells run plain `ade`.
+
 ## 0.4.1 — 2026-08-09 (Windows)
 
 Two field bugs found running the packaged 0.4.0 on Windows. Both made `ade`

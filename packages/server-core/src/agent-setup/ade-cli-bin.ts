@@ -182,6 +182,16 @@ export function getAdeBinPath(): string {
 	return path.join(BIN_DIR, IS_WINDOWS ? `${ADE_BIN_NAME}.cmd` : ADE_BIN_NAME);
 }
 
+/**
+ * Escape a path for a double-quoted sh string. A no-op for ordinary POSIX
+ * paths; it exists because the Windows shim bakes `C:\…`, where a segment
+ * starting with `$` or a backtick would otherwise be expanded by sh. Backslash
+ * doubling is harmless — sh collapses it back to the literal path.
+ */
+function escapeForShDoubleQuotes(value: string): string {
+	return value.replace(/[\\$`"]/g, (ch) => `\\${ch}`);
+}
+
 /** POSIX launcher, exactly the ruled shape. Pure so it can be asserted. */
 export function buildAdeBinScript(entry: AdeCliEntry): string {
 	const dataDirName = entry.dataDirName ?? SUPERSET_DIR_NAME;
@@ -191,7 +201,7 @@ ${ADE_BIN_MARKER}
 
 : "\${${ADE_DATA_DIR_NAME_ENV}:=${dataDirName}}"
 export ${ADE_DATA_DIR_NAME_ENV}
-ADE_ENTRY="\${ADE_CLI_ENTRY:-${entry.entryPath}}"
+ADE_ENTRY="\${ADE_CLI_ENTRY:-${escapeForShDoubleQuotes(entry.entryPath)}}"
 if [ ! -f "$ADE_ENTRY" ]; then
   echo "ade: CLI entry not found at $ADE_ENTRY" >&2
   exit 127
@@ -270,12 +280,31 @@ export function createAdeCliBin(params?: {
 		params?.cliDir,
 	);
 	const entry: AdeCliEntry = { entryPath };
+	const binPath = params?.binPath ?? getAdeBinPath();
 	const changed = writeFileIfChanged(
-		params?.binPath ?? getAdeBinPath(),
+		binPath,
 		IS_WINDOWS ? buildAdeBinCmd(entry) : buildAdeBinScript(entry),
 		0o755,
 	);
 	console.log(
 		`[agent-setup] ${changed ? "Updated" : "Verified"} ade CLI launcher → ${entryPath}`,
 	);
+
+	// THE 0.4.1 GAP: Windows agent panes default to Git Bash, and bash does NOT
+	// resolve `.cmd` files bare from PATH — `ade` exited 127 while `ade.cmd`
+	// worked. So win32 gets BOTH: cmd.exe reads ade.cmd, sh reads this
+	// extensionless sibling. Same contract, same baked entry (a `C:\…` path in
+	// double quotes survives sh and bun accepts it); the POSIX builder already
+	// produces LF-only, BOM-free content, which a shebang script requires.
+	if (IS_WINDOWS) {
+		const shimPath = path.join(path.dirname(binPath), ADE_BIN_NAME);
+		const shimChanged = writeFileIfChanged(
+			shimPath,
+			buildAdeBinScript(entry),
+			0o755,
+		);
+		console.log(
+			`[agent-setup] ${shimChanged ? "Updated" : "Verified"} ade CLI sh shim (bash panes) → ${shimPath}`,
+		);
+	}
 }

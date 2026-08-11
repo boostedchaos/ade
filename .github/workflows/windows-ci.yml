@@ -222,6 +222,11 @@ jobs:
         #   2. USERNAME/USER are stripped below, exactly as ADE's own agent
         #      terminals were, which makes bun's os.userInfo() answer "unknown"
         #      and forces the CLI's whoami fallback to name the pipe correctly.
+        #
+        # AND THE 0.4.1 GAP: Windows agent panes default to Git Bash, which does
+        # not resolve `ade.cmd` from a bare `ade` (exit 127). So the step drives
+        # the launcher twice — once through cmd.exe, once through Git Bash's
+        # extensionless sibling — and both must reach the control server.
         run: |
           $smokeProfile = Join-Path $env:RUNNER_TEMP "ade-cli-smoke-profile"
           New-Item -ItemType Directory -Force $smokeProfile | Out-Null
@@ -229,6 +234,7 @@ jobs:
           Remove-Item Env:\SUPERSET_WORKSPACE_NAME -ErrorAction SilentlyContinue
           Remove-Item Env:\ADE_DATA_DIR_NAME -ErrorAction SilentlyContinue
           Remove-Item -Force -ErrorAction SilentlyContinue cli-smoke-result.txt
+          Remove-Item -Force -ErrorAction SilentlyContinue cli-smoke-bash-result.txt
 
           $app = Start-Process -FilePath "release/win-unpacked/ADE.exe" -PassThru
           # The control server writes control.token once .ade is initialized; poll
@@ -251,14 +257,21 @@ jobs:
 
           # agent-setup writes the launcher and stages the CLI bundle during boot;
           # both land a beat after the token, so poll for the launcher too.
-          $cli = Join-Path $smokeProfile ".ade\bin\ade.cmd"
+          $binDir = Join-Path $smokeProfile ".ade\bin"
+          $cli = Join-Path $binDir "ade.cmd"
+          $shim = Join-Path $binDir "ade"
           $staged = Join-Path $smokeProfile ".ade\cli\index.mjs"
           for ($i = 0; $i -lt 30; $i++) {
-            if ((Test-Path $cli) -and (Test-Path $staged)) { break }
+            if ((Test-Path $cli) -and (Test-Path $shim) -and (Test-Path $staged)) { break }
             Start-Sleep -Seconds 1
           }
           if (!(Test-Path $cli)) {
             Write-Error "ade launcher missing at $cli — bin injection did not run"
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            exit 1
+          }
+          if (!(Test-Path $shim)) {
+            Write-Error "extensionless sh shim missing at $shim — bash panes cannot run bare 'ade'"
             Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
             exit 1
           }
@@ -294,9 +307,32 @@ jobs:
             Set-Content cli-smoke-result.txt "OK"
           }
 
+          # Leg 2: a Git Bash pane, which is what ADE opens on Windows. Bare
+          # `ade` — no extension — resolved from the same bin dir on PATH.
+          $bash = "C:\Program Files\Git\bin\bash.exe"
+          if (!(Test-Path $bash)) {
+            Write-Error "Git Bash not found at $bash — cannot smoke the bash pane leg"
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            exit 1
+          }
+          $env:PATH = "$binDir;$env:PATH"
+          $bashOut = & $bash -c "ade list-workspaces" 2>&1 | Out-String
+          $bashCode = $LASTEXITCODE
+          Write-Output "bash: bare 'ade list-workspaces' exit=$bashCode"
+          Write-Output "----- output -----"
+          Write-Output $bashOut
+          Write-Output "------------------"
+          if ($bashCode -eq 0 -and $bashOut -notmatch "not running") {
+            Set-Content cli-smoke-bash-result.txt "OK"
+          }
+
           Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
           if (!(Test-Path cli-smoke-result.txt) -or (Get-Content cli-smoke-result.txt) -ne 'OK') {
             Write-Error "CLI pipe smoke failed — 'ade list-workspaces' did not reach the control server"
+            exit 1
+          }
+          if (!(Test-Path cli-smoke-bash-result.txt) -or (Get-Content cli-smoke-bash-result.txt) -ne 'OK') {
+            Write-Error "CLI pipe smoke failed under Git Bash — bare 'ade' did not reach the control server"
             exit 1
           }
           Write-Output "CLI_PIPE_SMOKE_PASS"
