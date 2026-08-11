@@ -365,3 +365,18 @@ a shim.
   `C:\Program Files\Git\bin\bash.exe` — bare `ade`, profile bin on PATH,
   `USERNAME`/`USER` still stripped — and polls for the shim like it polls for
   `ade.cmd`. Both legs must set their marker file or the step fails.
+
+**Ship record (2026-08-11).** Gate: orchestrator diff review (micro-release —
+no full verifier ceremony; reviewed clean, no scope creep). Branch head
+`fe0a56a`: windows-ci **31516111560** / ADE CI **31516111544**, green first
+attempt, bash leg proven in the job log. Merge commit on `main`
+`9b90ef7dea868b02926108ebb9b73dae1a44af44` (PR #10): windows-ci
+**31517422870** / ADE CI **31517422851**, both green; release artifact taken
+from run 31517422870. Release:
+<https://github.com/boostedchaos/ade/releases/tag/windows-v0.4.2> —
+`ADE-0.4.2-x64.exe` (sha256
+`b8fc1ef2a6c52c247419e1c7b7765890746e80b24725886b605fb508fa5096fe`),
+`ADE-0.4.2-x64.zip` (sha256
+`ee688a550479fde8f0da6db3bc261b78bcdcf734502b8fa3372fd0c6420c7389`),
+`SHA256SUMS.txt`; `latest.yml` deliberately NOT published; published assets
+re-downloaded and hash-verified (all match); tag targets the full merge SHA.
