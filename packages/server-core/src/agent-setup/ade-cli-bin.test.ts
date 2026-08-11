@@ -156,7 +156,9 @@ describe("stageBundledCliEntry — the installed-CLI EPERM fix", () => {
 });
 
 describe("createAdeCliBin — launcher points at the staged copy", () => {
-	it("stages the packaged bundle and bakes the staged path", () => {
+	const IS_WIN = process.platform === "win32";
+
+	function inject() {
 		const root = mkdtempSync(join(tmpdir(), "ade-inject-"));
 		const resources = join(root, "resources");
 		mkdirSync(join(resources, "cli"), { recursive: true });
@@ -164,15 +166,55 @@ describe("createAdeCliBin — launcher points at the staged copy", () => {
 		const cliDir = join(root, ".ade", "cli");
 		const binDir = join(root, ".ade", "bin");
 		mkdirSync(binDir, { recursive: true }); // agent-setup creates BIN_DIR itself
-		const binPath = join(binDir, "ade");
+		const binPath = join(binDir, IS_WIN ? "ade.cmd" : "ade");
 
 		createAdeCliBin({ appResourcesDir: resources, cliDir, binPath });
 
-		const staged = join(cliDir, "index.mjs");
-		expect(readFileSync(staged, "utf8")).toBe("bundle-v1");
-		const launcher = readFileSync(binPath, "utf8");
-		expect(launcher).toContain(staged);
-		expect(launcher).not.toContain(join(resources, "cli", "index.mjs"));
+		return {
+			resources,
+			binPath,
+			shimPath: join(binDir, "ade"),
+			staged: join(cliDir, "index.mjs"),
+		};
+	}
+
+	it("stages the packaged bundle and bakes the staged path", () => {
+		const f = inject();
+		expect(readFileSync(f.staged, "utf8")).toBe("bundle-v1");
+		const launcher = readFileSync(f.binPath, "utf8");
+		expect(launcher).toContain(f.staged);
+		expect(launcher).not.toContain(join(f.resources, "cli", "index.mjs"));
+	});
+
+	// THE 0.4.1 GAP: Windows agent panes default to Git Bash, which will not
+	// resolve `ade.cmd` from a bare `ade` — the extensionless sibling is what
+	// makes `ade` work there.
+	it.skipIf(!IS_WIN)("writes an extensionless sh shim beside ade.cmd", () => {
+		const f = inject();
+		const shim = readFileSync(f.shimPath, "utf8");
+		expect(shim.startsWith("#!/bin/sh\n")).toBe(true);
+		// Backslashes are doubled for sh's double-quoted context; sh hands bun
+		// back the literal C:\… path.
+		expect(shim).toContain(f.staged.replaceAll("\\", "\\\\"));
+		expect(shim).toContain('exec bun "$ADE_ENTRY" "$@"');
+		// A CRLF shebang line makes bash fail with a bogus interpreter name, and
+		// a BOM breaks the shebang outright.
+		expect(shim).not.toContain("\r");
+		expect(readFileSync(f.shimPath)[0]).not.toBe(0xef);
+		// The .cmd launcher is untouched by the shim write.
+		expect(readFileSync(f.binPath, "utf8")).toContain("@echo off");
+	});
+
+	it.skipIf(!IS_WIN)("rewrites the shim on every injection", () => {
+		const f = inject();
+		const before = readFileSync(f.shimPath, "utf8");
+		writeFileSync(f.shimPath, "tampered\n");
+		createAdeCliBin({
+			appResourcesDir: f.resources,
+			cliDir: join(f.staged, ".."),
+			binPath: f.binPath,
+		});
+		expect(readFileSync(f.shimPath, "utf8")).toBe(before);
 	});
 });
 
@@ -240,6 +282,26 @@ describe("buildAdeBinScript — the ruled contract", () => {
 
 	it("bakes SUPERSET_DIR_NAME when no dir name is supplied", () => {
 		expect(script).toContain(`:=${SUPERSET_DIR_NAME}}"`);
+	});
+
+	it("is LF-only and BOM-free — this is also the Windows bash shim", () => {
+		// bash reads the shebang literally: a trailing \r turns the interpreter
+		// into "/bin/sh\r" and a BOM hides the "#!" entirely.
+		expect(script).not.toContain("\r");
+		expect(script.charCodeAt(0)).toBe(0x23); // '#'
+	});
+
+	it("bakes a Windows path so sh hands bun the literal C:\\… back", () => {
+		// The shim runs under Git Bash but execs the native bun.exe, which wants a
+		// Windows path. Backslashes are doubled for sh's double-quoted context;
+		// sh collapses them, and `$`/backtick in a path stay literal.
+		const win = buildAdeBinScript({
+			entryPath: "C:\\Users\\k$e`\\.ade\\cli\\index.mjs",
+		});
+		expect(win).toContain(
+			// biome-ignore lint/suspicious/noTemplateCurlyInString: asserting sh syntax
+			'ADE_ENTRY="${ADE_CLI_ENTRY:-C:\\\\Users\\\\k\\$e\\`\\\\.ade\\\\cli\\\\index.mjs}"',
+		);
 	});
 });
 
