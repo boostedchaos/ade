@@ -43,12 +43,12 @@ export function WorkspaceLayout() {
 				(isMobile ? (
 					<div className="fixed inset-0 z-50">
 						<div
-							className="absolute inset-0 bg-black/50"
+							className="absolute inset-0 bg-[var(--argus-scrim)]"
 							onClick={() => setSidebarOpen(false)}
 							aria-hidden="true"
 						/>
 						<div
-							className="absolute inset-x-0 bottom-0 top-[15%] flex flex-col overflow-hidden rounded-t-xl border-t border-border bg-background shadow-xl"
+							className="absolute inset-x-0 bottom-0 top-[15%] flex flex-col overflow-hidden rounded-t-xl border-t border-border bg-background"
 							style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
 							role="dialog"
 							aria-label="Files"

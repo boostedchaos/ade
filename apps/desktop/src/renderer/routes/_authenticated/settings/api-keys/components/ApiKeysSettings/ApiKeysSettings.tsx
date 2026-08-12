@@ -120,7 +120,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 		<div className="flex-1 flex flex-col min-h-0">
 			<div className="p-8">
 				<div className="max-w-5xl">
-					<h2 className="text-2xl font-semibold">API Keys</h2>
+					<h2 className="text-2xl font-medium">API Keys</h2>
 					<p className="text-sm text-muted-foreground mt-1">
 						Manage API keys for MCP server access and external integrations.{" "}
 						<a
@@ -151,10 +151,10 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 					)}
 
 					<div className="max-w-5xl space-y-4">
-						<h3 className="text-lg font-semibold">Your API Keys</h3>
+						<h3 className="text-lg font-medium">Your API Keys</h3>
 						<p className="text-sm text-muted-foreground">
 							API keys allow external applications like Claude Desktop or Claude
-							Code to interact with ADE on your behalf.
+							Code to interact with Argus on your behalf.
 						</p>
 
 						{showApiKeysList &&
@@ -299,10 +299,12 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 							</Button>
 						</div>
 						{copied && (
-							<p className="text-sm text-green-600">Copied to clipboard!</p>
+							<p className="text-sm text-[var(--argus-pass)]">
+								Copied to clipboard!
+							</p>
 						)}
-						<div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded-md p-3">
-							<p className="text-sm text-amber-800 dark:text-amber-200">
+						<div className="bg-[var(--argus-iris-waiting)] dark:bg-[var(--argus-iris-waiting)]/50 border border-[var(--argus-iris-waiting)] dark:border-[var(--argus-iris-waiting)] rounded-md p-3">
+							<p className="text-sm text-[var(--argus-iris-waiting)] dark:text-[var(--argus-iris-waiting)]">
 								Make sure to copy this key now. For security reasons, it will
 								not be displayed again.
 							</p>

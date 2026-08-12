@@ -24,9 +24,9 @@ function initials(name: string): string {
 }
 
 const CHECKS_DOT: Record<ChecksStatus, string> = {
-	success: "bg-emerald-500",
+	success: "bg-[var(--argus-pass)]",
 	failure: "bg-destructive",
-	pending: "bg-amber-500",
+	pending: "bg-[var(--argus-iris-waiting)]",
 	none: "bg-muted-foreground/40",
 };
 
@@ -34,7 +34,8 @@ function sessionLine(session: RosterEntry["session"]): string | null {
 	if (!session) return null;
 	const parts: string[] = [];
 	if (session.model) parts.push(shortModelName(session.model));
-	if (session.contextTokens != null) parts.push(formatTokens(session.contextTokens));
+	if (session.contextTokens != null)
+		parts.push(formatTokens(session.contextTokens));
 	return parts.length > 0 ? parts.join(" · ") : null;
 }
 
@@ -61,7 +62,9 @@ export function AgentCard({ entry, prPending }: AgentCardProps) {
 		>
 			<div className="flex items-start gap-2.5">
 				<Avatar className="size-8">
-					{entry.iconUrl && <AvatarImage src={entry.iconUrl} alt={entry.name} />}
+					{entry.iconUrl && (
+						<AvatarImage src={entry.iconUrl} alt={entry.name} />
+					)}
 					<AvatarFallback className="text-xs font-medium">
 						{initials(entry.name)}
 					</AvatarFallback>

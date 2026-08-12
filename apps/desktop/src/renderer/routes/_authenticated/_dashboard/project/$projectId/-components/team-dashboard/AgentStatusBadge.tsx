@@ -26,7 +26,7 @@ export function AgentStatusBadge({ status }: AgentStatusBadgeProps) {
 
 	if (status === "waiting") {
 		return (
-			<Badge className="border-transparent bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400">
+			<Badge className="border-transparent bg-[var(--argus-iris-waiting)]/15 text-[var(--argus-iris-waiting)] dark:bg-[var(--argus-iris-waiting)]/15 dark:text-[var(--argus-iris-waiting)]">
 				Waiting on you
 			</Badge>
 		);
@@ -35,7 +35,7 @@ export function AgentStatusBadge({ status }: AgentStatusBadgeProps) {
 	if (status === "working") {
 		return (
 			<span className="inline-flex items-center gap-1.5">
-				<StatusIndicator status="working" />
+				<StatusIndicator status="working" size={12} />
 				<span className="text-xs text-muted-foreground">Working</span>
 			</span>
 		);

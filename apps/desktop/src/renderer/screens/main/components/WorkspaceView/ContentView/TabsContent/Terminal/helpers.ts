@@ -28,6 +28,15 @@ import { suppressQueryResponses } from "./suppressQueryResponses";
 import { scrollToBottom } from "./utils";
 
 /**
+ * Last-resort terminal colors, used only if the default theme is somehow not
+ * registered. Ink's background/foreground (DESIGN-BRIEF.md "Ink").
+ */
+const ARGUS_TERMINAL_FALLBACK = {
+	background: "#0B0E14",
+	foreground: "#B6C1D2",
+} as const;
+
+/**
  * Get the default terminal theme from localStorage cache.
  * This reads cached terminal colors before store hydration to prevent flash.
  * Supports both built-in and custom themes via direct color cache.
@@ -52,7 +61,7 @@ export function getDefaultTerminalTheme(): ITheme {
 	const defaultTheme = builtInThemes.find((t) => t.id === DEFAULT_THEME_ID);
 	return defaultTheme
 		? toXtermTheme(getTerminalColors(defaultTheme))
-		: { background: "#151110", foreground: "#eae8e6" };
+		: ARGUS_TERMINAL_FALLBACK;
 }
 
 /**
@@ -60,7 +69,9 @@ export function getDefaultTerminalTheme(): ITheme {
  * This reads from localStorage before store hydration to prevent flash.
  */
 export function getDefaultTerminalBg(): string {
-	return getDefaultTerminalTheme().background ?? "#151110";
+	return (
+		getDefaultTerminalTheme().background ?? ARGUS_TERMINAL_FALLBACK.background
+	);
 }
 
 /**

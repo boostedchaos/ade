@@ -25,22 +25,22 @@ export function WorkspaceStatusBadge({
 		open: {
 			icon: (
 				<LuGitPullRequest
-					className={cn(iconClass, "text-emerald-500")}
+					className={cn(iconClass, "text-[var(--argus-pass)]")}
 					strokeWidth={STROKE_WIDTH}
 				/>
 			),
-			bgColor: "bg-emerald-500/10",
-			hoverBgColor: "hover:bg-emerald-500/30",
+			bgColor: "bg-[var(--argus-pass)]/10",
+			hoverBgColor: "hover:bg-[var(--argus-pass)]/30",
 		},
 		merged: {
 			icon: (
 				<LuGitMerge
-					className={cn(iconClass, "text-purple-500")}
+					className={cn(iconClass, "text-[var(--chart-4)]")}
 					strokeWidth={STROKE_WIDTH}
 				/>
 			),
-			bgColor: "bg-purple-500/10",
-			hoverBgColor: "hover:bg-purple-500/30",
+			bgColor: "bg-[var(--chart-4)]/10",
+			hoverBgColor: "hover:bg-[var(--chart-4)]/30",
 		},
 		closed: {
 			icon: (

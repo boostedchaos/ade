@@ -1,5 +1,7 @@
 import { Button } from "@superset/ui/button";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { ArgusStateIcon } from "renderer/screens/main/components/ArgusState/ArgusState";
+import { Iris } from "renderer/screens/main/components/Iris";
 
 interface DaemonStatusToastProps {
 	status: "reconnecting" | "failed";
@@ -17,9 +19,9 @@ export function DaemonStatusToast({ status }: DaemonStatusToastProps) {
 
 	const body = isFailed
 		? restart.isError
-			? "The terminal service didn't restart. Try again."
-			: "Restart the terminal service to reconnect your existing terminal sessions."
-		: "ADE is restoring the connection; your terminals will resume automatically.";
+			? "The terminal service didn't restart. Your sessions are still in the daemon — nothing was lost. Try again."
+			: "Your sessions are still running in the daemon — nothing was lost. Restart the terminal service to reconnect them."
+		: "Sessions are still running in the daemon — nothing was lost. Argus reconnects on its own the moment the server answers.";
 
 	return (
 		<div
@@ -28,21 +30,20 @@ export function DaemonStatusToast({ status }: DaemonStatusToastProps) {
 			aria-atomic="true"
 			className={
 				isFailed
-					? "pointer-events-auto flex min-w-[340px] max-w-[420px] items-start gap-3 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg"
-					: "pointer-events-auto flex min-w-[340px] max-w-[420px] items-start gap-3 rounded-lg border border-border bg-popover px-4 py-3 text-popover-foreground shadow-lg"
+					? "pointer-events-auto flex min-w-[340px] max-w-[420px] items-start gap-3 rounded-lg border border-border bg-popover p-4 text-popover-foreground"
+					: "pointer-events-auto flex min-w-[340px] max-w-[420px] items-start gap-3 rounded-lg border border-border bg-popover px-4 py-3 text-popover-foreground"
 			}
 		>
-			{isFailed ? (
-				<span
-					aria-hidden="true"
-					className="mt-1 size-2 shrink-0 rounded-full bg-destructive"
-				/>
-			) : (
-				<span aria-hidden="true" className="relative mt-1 size-2 shrink-0">
-					<span className="absolute inset-0 size-2 rounded-full bg-amber-500/40 motion-safe:animate-ping motion-reduce:hidden" />
-					<span className="relative size-2 rounded-full bg-amber-500 dark:bg-amber-400" />
-				</span>
-			)}
+			{/* The iris carries this too: a failed daemon reads as the app not
+			    working, and an unfamiliar dot would make it read as a foreign
+			    error. Reconnecting is a "waiting" ring; failed is red. */}
+			<span aria-hidden="true" className="mt-0.5 shrink-0">
+				{isFailed ? (
+					<ArgusStateIcon tone="error" glyph="bang" size={16} />
+				) : (
+					<Iris state="waiting" size={16} pulse decorative />
+				)}
+			</span>
 
 			<div className="flex min-w-0 flex-1 flex-col gap-3">
 				<div className="min-w-0 flex-1">

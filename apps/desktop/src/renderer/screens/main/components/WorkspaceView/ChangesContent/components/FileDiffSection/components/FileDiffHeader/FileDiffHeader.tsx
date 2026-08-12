@@ -105,7 +105,7 @@ export function FileDiffHeader({
 						className="shrink-0 rounded p-1 text-muted-foreground/60 transition-colors hover:text-muted-foreground hover:bg-accent"
 					>
 						{isCopied ? (
-							<LuCheck className="size-3.5 text-green-500" />
+							<LuCheck className="size-3.5 text-[var(--argus-pass)]" />
 						) : (
 							<LuCopy className="size-3.5" />
 						)}
@@ -146,12 +146,12 @@ export function FileDiffHeader({
 			{showStats && (
 				<span className="flex items-center gap-1 text-xs font-mono shrink-0">
 					{file.additions > 0 && (
-						<span className="text-green-600 dark:text-green-500">
+						<span className="text-[var(--argus-pass)] dark:text-[var(--argus-pass)]">
 							+{file.additions}
 						</span>
 					)}
 					{file.deletions > 0 && (
-						<span className="text-red-600 dark:text-red-400">
+						<span className="text-[var(--destructive)] dark:text-[var(--destructive)]">
 							-{file.deletions}
 						</span>
 					)}

@@ -101,7 +101,7 @@ export function AccountSettings({ visibleItems }: AccountSettingsProps) {
 	return (
 		<div className="p-6 max-w-4xl w-full">
 			<div className="mb-8">
-				<h2 className="text-xl font-semibold">Account</h2>
+				<h2 className="text-xl font-medium">Account</h2>
 				<p className="text-sm text-muted-foreground mt-1">
 					Manage your account settings
 				</p>
@@ -183,7 +183,7 @@ export function AccountSettings({ visibleItems }: AccountSettingsProps) {
 					<div className={showProfile ? "pt-6 border-t" : ""}>
 						<h3 className="text-sm font-medium mb-2">Sign Out</h3>
 						<p className="text-sm text-muted-foreground mb-4">
-							Sign out of your ADE account on this device.
+							Sign out of your Argus account on this device.
 						</p>
 						<Button variant="outline" onClick={() => signOutMutation.mutate()}>
 							Sign Out

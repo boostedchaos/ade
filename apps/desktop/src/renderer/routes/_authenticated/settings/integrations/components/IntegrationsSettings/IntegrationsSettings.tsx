@@ -114,7 +114,7 @@ export function IntegrationsSettings({
 		return (
 			<div className="p-6 max-w-4xl w-full">
 				<div className="mb-8">
-					<h2 className="text-xl font-semibold">Integrations</h2>
+					<h2 className="text-xl font-medium">Integrations</h2>
 					<p className="text-sm text-muted-foreground mt-1">
 						Connect external services to sync data
 					</p>
@@ -129,7 +129,7 @@ export function IntegrationsSettings({
 	return (
 		<div className="p-6 max-w-4xl w-full">
 			<div className="mb-8">
-				<h2 className="text-xl font-semibold">Integrations</h2>
+				<h2 className="text-xl font-medium">Integrations</h2>
 				<p className="text-sm text-muted-foreground mt-1">
 					Connect external services to sync data with your organization
 				</p>

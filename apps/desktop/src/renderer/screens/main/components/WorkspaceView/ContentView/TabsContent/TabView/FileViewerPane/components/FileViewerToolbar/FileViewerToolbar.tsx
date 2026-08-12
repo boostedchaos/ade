@@ -74,7 +74,9 @@ export function FileViewerToolbar({
 								!isPinned && "italic",
 							)}
 						>
-							{isDirty && <span className="text-amber-500 mr-1">●</span>}
+							{isDirty && (
+								<span className="text-[var(--argus-iris-waiting)] mr-1">●</span>
+							)}
 							{fileName}
 						</button>
 					</TooltipTrigger>
@@ -94,21 +96,21 @@ export function FileViewerToolbar({
 					{hasRenderedMode && (
 						<ToggleGroupItem
 							value="rendered"
-							className="h-5 px-1.5 text-[10px] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+							className="h-5 px-1.5 text-[10px] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:"
 						>
 							Rendered
 						</ToggleGroupItem>
 					)}
 					<ToggleGroupItem
 						value="raw"
-						className="h-5 px-1.5 text-[10px] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+						className="h-5 px-1.5 text-[10px] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:"
 					>
 						Raw
 					</ToggleGroupItem>
 					{hasDiff && (
 						<ToggleGroupItem
 							value="diff"
-							className="h-5 px-1.5 text-[10px] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+							className="h-5 px-1.5 text-[10px] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:"
 						>
 							Changes
 						</ToggleGroupItem>

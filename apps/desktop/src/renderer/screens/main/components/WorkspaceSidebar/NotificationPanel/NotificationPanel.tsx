@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { LuBell } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { relativeTime } from "renderer/lib/relative-time";
 import { navigateToWorkspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
 import { AttentionBadge } from "renderer/screens/main/components/AttentionBadge";
 import {
@@ -22,16 +23,6 @@ import { useTabsStore } from "renderer/stores/tabs/store";
  * layout persistence, the split actions and the drag-and-drop surface for no
  * benefit.
  */
-
-function relativeTime(timestamp: number): string {
-	const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
-	if (seconds < 60) return "just now";
-	const minutes = Math.round(seconds / 60);
-	if (minutes < 60) return `${minutes}m ago`;
-	const hours = Math.round(minutes / 60);
-	if (hours < 24) return `${hours}h ago`;
-	return `${Math.round(hours / 24)}d ago`;
-}
 
 interface NotificationPanelProps {
 	isCollapsed?: boolean;

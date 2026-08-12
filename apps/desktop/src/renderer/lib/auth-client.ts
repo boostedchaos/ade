@@ -48,7 +48,12 @@ export const authClient = {
 	useSession: () => {
 		// Must be a real hook (call useMemo) so React hook count matches
 		const data = useMemo(() => mockSession, []);
-		return { data, isPending: false, error: null, refetch: async () => mockSession };
+		return {
+			data,
+			isPending: false,
+			error: null,
+			refetch: async () => mockSession,
+		};
 	},
 	signOut: async (_opts?: any) => {},
 	signIn: {
@@ -58,7 +63,7 @@ export const authClient = {
 		getFullOrganization: async () => ({
 			data: {
 				id: MOCK_ORG_ID,
-				name: "ADE",
+				name: "Argus",
 				slug: "ade",
 				members: [
 					{

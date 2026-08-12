@@ -1,5 +1,6 @@
 import { useSidebarStore } from "renderer/stores/sidebar-state";
 import { SidebarControl } from "../../SidebarControl";
+import { BlockedSessionStrip } from "./BlockedSessionStrip/BlockedSessionStrip";
 import { ContentHeader } from "./ContentHeader";
 import { ModelBar } from "./ModelBar";
 import { TabsContent } from "./TabsContent";
@@ -17,6 +18,9 @@ export function ContentView() {
 			</ContentHeader>
 			<ModelBar />
 			<TabsContent />
+			{/* Above the status bar, below the terminal — and it renders nothing
+			    at all unless another agent is actually waiting. */}
+			<BlockedSessionStrip />
 		</div>
 	);
 }

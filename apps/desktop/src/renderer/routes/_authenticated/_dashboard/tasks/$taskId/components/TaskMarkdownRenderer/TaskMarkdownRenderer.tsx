@@ -75,12 +75,12 @@ const LinearImage = Image.extend({
 });
 
 const HEADING_CLASSES: Record<number, string> = {
-	1: "text-3xl font-bold leading-tight mt-0 mb-3",
-	2: "text-2xl font-semibold leading-snug mt-6 mb-2",
-	3: "text-xl font-semibold leading-snug mt-5 mb-2",
-	4: "text-base font-semibold leading-normal mt-4 mb-2",
-	5: "text-base font-semibold leading-normal mt-4 mb-2",
-	6: "text-base font-semibold leading-normal mt-4 mb-2",
+	1: "text-3xl font-medium leading-tight mt-0 mb-3",
+	2: "text-2xl font-medium leading-snug mt-6 mb-2",
+	3: "text-xl font-medium leading-snug mt-5 mb-2",
+	4: "text-base font-medium leading-normal mt-4 mb-2",
+	5: "text-base font-medium leading-normal mt-4 mb-2",
+	6: "text-base font-medium leading-normal mt-4 mb-2",
 };
 
 const StyledHeading = Heading.extend({
@@ -132,7 +132,7 @@ export function TaskMarkdownRenderer({
 			}),
 			StyledHeading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
 			Bold.configure({
-				HTMLAttributes: { class: "font-semibold" },
+				HTMLAttributes: { class: "font-medium" },
 			}),
 			Italic.configure({
 				HTMLAttributes: { class: "italic" },

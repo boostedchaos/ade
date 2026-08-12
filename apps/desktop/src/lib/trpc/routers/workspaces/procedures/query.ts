@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentRuntime } from "@superset/local-db";
 import { projects, workspaces, worktrees } from "@superset/local-db";
@@ -26,6 +26,36 @@ interface AgentFileEntry {
 	absolutePath: string;
 	/** Worktree-relative path when the file lives inside the worktree, else null. */
 	relativeToWorktree: string | null;
+	/**
+	 * Size on disk in bytes, and last-modified epoch ms. Null when the file
+	 * could not be stat'd — the Agent Files panel renders the row WITHOUT a
+	 * size rather than inventing one, which is the difference between the
+	 * panel reporting the filesystem and the panel decorating itself.
+	 */
+	sizeBytes: number | null;
+	modifiedAt: number | null;
+}
+
+/**
+ * Stamp size + mtime onto entries that already know their absolute path.
+ * Applied once at the end of collectAgentFiles rather than at each push site,
+ * so a new file group cannot be added without picking this up.
+ */
+type AgentFileLocation = Omit<AgentFileEntry, "sizeBytes" | "modifiedAt">;
+
+function withFileStats(entries: AgentFileLocation[]): AgentFileEntry[] {
+	return entries.map((entry) => {
+		try {
+			const stat = statSync(entry.absolutePath);
+			return {
+				...entry,
+				sizeBytes: stat.size,
+				modifiedAt: Math.round(stat.mtimeMs),
+			};
+		} catch {
+			return { ...entry, sizeBytes: null, modifiedAt: null };
+		}
+	});
 }
 
 /** Recursively collect SKILL.md files under a skills dir (tolerates missing dir). */
@@ -55,8 +85,8 @@ function findSkillFiles(skillsDir: string): string[] {
  * List an agent's memory surface: canonical memory files, skill definitions,
  * and the worktree bridge files. Tolerates missing dirs (returns what exists).
  */
-function collectAgentFiles(agentId: string): AgentFileEntry[] {
-	const entries: AgentFileEntry[] = [];
+function collectAgentFiles(agentId: string): AgentFileLocation[] {
+	const entries: AgentFileLocation[] = [];
 
 	// Canonical memory dir
 	const memoryDir = getAgentMemoryDir(agentId);
@@ -455,10 +485,13 @@ export const createQueryProcedures = () => {
 		listAgentFiles: publicProcedure
 			.input(z.object({ workspaceId: z.string() }))
 			.query(({ input }): AgentFileEntry[] => {
-				// Staged off for the video series: the panel stays present but
-				// shows its empty state regardless of what's on disk.
+				// The memory scaffold defaults ON (see server-core/feature-flags:
+				// "this is the revealed, final state"); ADE_MEMORY_SCAFFOLD=false is
+				// only an escape hatch. The old comment here still described the
+				// staging gate as if it were the default, which it has not been for
+				// some time.
 				if (!MEMORY_SCAFFOLD_ENABLED) return [];
-				return collectAgentFiles(input.workspaceId);
+				return withFileStats(collectAgentFiles(input.workspaceId));
 			}),
 
 		getPreviousWorkspace: publicProcedure

@@ -1,4 +1,4 @@
-# ADE Monorepo Guide
+# Argus Monorepo Guide
 
 Guidelines for agents and developers working in this repository.
 
@@ -163,7 +163,7 @@ The `src/components/ui/` and `src/components/ai-elements` directories contain sh
 
 ## Database Rules
 
-- ADE's live database is local SQLite: schema in `packages/local-db/src/`,
+- Argus's live database is local SQLite: schema in `packages/local-db/src/`,
   managed with Drizzle. Generate migrations with `bun run db:generate:desktop`.
 - **NEVER manually edit generated Drizzle migration files** (`.sql`,
   `meta/_journal.json`, snapshots) — change the schema source and regenerate.

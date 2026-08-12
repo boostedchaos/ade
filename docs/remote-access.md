@@ -1,6 +1,6 @@
 # Remote access
 
-ADE is designed to run on **one machine** (where your repos and coding
+Argus is designed to run on **one machine** (where your repos and coding
 CLIs live) and be reached from any browser — your Windows laptop locally, and
 your Mac or iPhone remotely. The server binds to `127.0.0.1` by default and is
 **never** meant to face the raw internet. Remote access goes through one of the
@@ -95,7 +95,7 @@ single client and is unaffected.
 ## iPhone (PWA)
 
 Once the server is reachable over HTTPS (Tailscale or Caddy), open the URL in
-Safari and choose **Share → Add to Home Screen**. ADE installs as a
+Safari and choose **Share → Add to Home Screen**. Argus installs as a
 standalone app (its own icon, no browser chrome). It reconnects automatically
 when you reopen it; terminal sessions survive because they live in the
 server-side daemon, not the browser tab.

@@ -37,9 +37,7 @@ export function WorkspaceSidebar({
 		<SidebarDropZone className="flex flex-col h-full bg-muted/45 dark:bg-muted/35">
 			{!isCollapsed && (
 				<div className="flex items-center justify-between px-3 h-10 shrink-0">
-					<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-						Teams
-					</span>
+					<span className="argus-label">Teams</span>
 					<div className="flex items-center gap-0.5">
 						<NotificationPanel />
 						<Tooltip>

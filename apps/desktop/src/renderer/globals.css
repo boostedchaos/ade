@@ -7,6 +7,59 @@
 @source "../../../../packages/ui/node_modules/streamdown/dist/*.js";
 
 /**
+ * IBM Plex — the Argus typeface.
+ *
+ * Bundled locally as .woff2 (SIL OFL, license in ./assets/fonts/LICENSE.txt).
+ * The renderer CSP sets `font-src 'self'`, so a remote font would simply be
+ * blocked — bundling is required, not a preference. The app must also work
+ * offline.
+ *
+ * ONLY the weights the design uses are bundled: Sans 300/400/500 and Mono
+ * 300/400. There is deliberately no bold face — see `font-synthesis-weight`
+ * in the base layer, which stops the browser faking one.
+ */
+@font-face {
+	font-family: "IBM Plex Sans";
+	font-style: normal;
+	font-weight: 300;
+	font-display: block;
+	src: url("./assets/fonts/ibm-plex-sans-latin-300-normal.woff2")
+		format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Sans";
+	font-style: normal;
+	font-weight: 400;
+	font-display: block;
+	src: url("./assets/fonts/ibm-plex-sans-latin-400-normal.woff2")
+		format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Sans";
+	font-style: normal;
+	font-weight: 500;
+	font-display: block;
+	src: url("./assets/fonts/ibm-plex-sans-latin-500-normal.woff2")
+		format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 300;
+	font-display: block;
+	src: url("./assets/fonts/ibm-plex-mono-latin-300-normal.woff2")
+		format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 400;
+	font-display: block;
+	src: url("./assets/fonts/ibm-plex-mono-latin-400-normal.woff2")
+		format("woff2");
+}
+
+/**
  * Theme CSS Variables
  *
  * Dark theme fallback values are used by default.
@@ -15,84 +68,207 @@
  * This ensures the app looks correct during initial load before hydration.
  */
 :root {
-	/* Default to dark (ember) theme colors as fallback */
-	--background: #151110;
-	--foreground: #eae8e6;
-	--card: #201e1c;
-	--card-foreground: #eae8e6;
-	--popover: #201e1c;
-	--popover-foreground: #eae8e6;
-	--primary: #eae8e6;
-	--primary-foreground: #151110;
-	--secondary: #2a2827;
-	--secondary-foreground: #eae8e6;
-	--muted: #2a2827;
-	--muted-foreground: #a8a5a3;
-	--accent: #2a2827;
-	--accent-foreground: #eae8e6;
-	--tertiary: #1a1716;
-	--tertiary-active: #252220;
-	--destructive: #cc4444;
-	--destructive-foreground: #ffcccc;
-	--border: #2a2827;
-	--input: #2a2827;
-	--ring: #3a3837;
-	--chart-1: #e07850;
-	--chart-2: #50a878;
-	--chart-3: #d4a84b;
-	--chart-4: #7b68ee;
-	--chart-5: #dc6b6b;
+	/* Pre-hydration fallback: Ink (Argus dark, the default theme).
+	   Must stay in sync with shared/themes/built-in/ink.ts. */
+	--background: #0b0e14;
+	--foreground: #d7dde8;
+	--card: #10141d;
+	--card-foreground: #d7dde8;
+	--popover: #10141d;
+	--popover-foreground: #d7dde8;
+	--primary: #d7dde8;
+	--primary-foreground: #0b0e14;
+	--secondary: #16202f;
+	--secondary-foreground: #d7dde8;
+	--muted: #16202f;
+	--muted-foreground: #7b8598;
+	--accent: #16202f;
+	--accent-foreground: #d7dde8;
+	--tertiary: #0e1219;
+	--tertiary-active: #141a25;
+	--destructive: #e06a6a;
+	--destructive-foreground: #ffd9d9;
+	--border: #1c2231;
+	--input: #1c2231;
+	--ring: #21324a;
+	--chart-1: #4da3ff;
+	--chart-2: #5fc48f;
+	--chart-3: #ffb547;
+	--chart-4: #a78bfa;
+	--chart-5: #e06a6a;
 	--radius: 0.625rem;
-	--sidebar: #1a1716;
-	--sidebar-foreground: #eae8e6;
-	--sidebar-primary: #e07850;
-	--sidebar-primary-foreground: #151110;
-	--sidebar-accent: #252220;
-	--sidebar-accent-foreground: #eae8e6;
-	--sidebar-border: #2a2827;
-	--sidebar-ring: #3a3837;
-	--highlight-match: rgba(224, 120, 80, 0.2);
-	--highlight-active: rgba(224, 120, 80, 0.5);
+	--sidebar: #0e1219;
+	--sidebar-foreground: #d7dde8;
+	--sidebar-primary: #4da3ff;
+	--sidebar-primary-foreground: #0b0e14;
+	--sidebar-accent: #16202f;
+	--sidebar-accent-foreground: #d7dde8;
+	--sidebar-border: #1c2231;
+	--sidebar-ring: #21324a;
+	--highlight-match: rgba(77, 163, 255, 0.2);
+	--highlight-active: rgba(77, 163, 255, 0.5);
+
+	/* Argus surface ladder and semantic ink.
+	   These are the non-token values the mocks use (DESIGN-BRIEF.md
+	   "Additional non-token values"). They are NOT part of the Theme
+	   interface; they are the app's chrome vocabulary and are re-declared
+	   per theme in the :root.light block below. */
+	--argus-panel: #0e1219;
+	--argus-raised: #141a25;
+	--argus-selected: #16202f;
+	--argus-hairline: #1c2231;
+	--argus-focus: #21324a;
+
+	--argus-iris-idle: #2b3448;
+	--argus-iris-working: #4da3ff;
+	--argus-iris-waiting: #ffb547;
+	--argus-iris-review: #5fc48f;
+
+	--argus-text-disabled: #3f4a5e;
+	--argus-text-label: #5c6779;
+	--argus-text-secondary: #7b8598;
+	--argus-text-body: #9aa5b6;
+	--argus-text-emphasis: #c6cfdd;
+	--argus-text-active: #e6ecf5;
+	--argus-text-amber: #e0cba6;
+	--argus-amber-muted: #8a7a5c;
+	--argus-pass: #5fc48f;
+
+	/* Alpha washes, derived from the accent above. */
+	--argus-wash-accent: rgba(77, 163, 255, 0.1);
+	--argus-wash-accent-soft: rgba(77, 163, 255, 0.07);
+	--argus-wash-amber: rgba(255, 181, 71, 0.05);
+	--argus-ring-amber: rgba(255, 181, 71, 0.35);
+	--argus-ring-amber-strong: rgba(255, 181, 71, 0.45);
+	/* Modal scrim (DESIGN-BRIEF.md §5a). A near-black tuned to Ink rather than
+	   pure black at 50%, which reads blue-grey over this palette. */
+	--argus-scrim: rgba(6, 8, 12, 0.66);
+
+	/* Chrome geometry (DESIGN-BRIEF.md "Spacing, radii, borders").
+	   Overridden under .platform-win32 for Windows 11 chrome. */
+	--argus-radius-window: 10px;
+	--argus-radius-surface: 2px;
+	--argus-radius-surface-lg: 3px;
+	--argus-rail-width: 238px;
+	--argus-panel-width: 280px;
+	--argus-titlebar-height: 46px;
+	--argus-tabstrip-height: 44px;
+	--argus-modelbar-height: 40px;
+	--argus-statusbar-height: 30px;
+
+	/* Motion duration tokens (DESIGN-BRIEF.md "Motion"). Four movements only. */
+	--argus-duration-fast: 120ms;
+	--argus-duration-base: 220ms;
+	--argus-duration-slow: 900ms;
+	--argus-ease-wake: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+	/* Type stacks. Theme-independent, declared here so the pre-hydration paint
+	   already uses Plex. */
+	--argus-font-sans:
+		"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+		sans-serif;
+	--argus-font-mono:
+		"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas,
+		monospace;
+
+	/* The size ladder (DESIGN-BRIEF.md "Typography"). */
+	--argus-size-brand: 14px;
+	--argus-size-rail: 13.5px;
+	--argus-size-tab: 13px;
+	--argus-size-body: 13.5px;
+	--argus-size-body-tight: 13px;
+	--argus-size-terminal: 12.5px;
+	--argus-size-chip: 11px;
+	--argus-size-label: 10px;
+	--argus-size-status: 10.5px;
+
+	/* Weights. There is no bold. */
+	--argus-weight-display: 300;
+	--argus-weight-body: 400;
+	--argus-weight-active: 500;
+
+	--argus-terminal-line-height: 1.95;
 }
 
-/* Light theme fallback values - applied before hydration if user has light theme saved */
+/* Light theme fallback values - applied before hydration if user has light theme saved.
+   Daylight (Argus light). Must stay in sync with
+   shared/themes/built-in/daylight.ts. */
 :root.light {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--tertiary: oklch(0.95 0.003 40);
-	--tertiary-active: oklch(0.9 0.003 40);
-	--destructive: oklch(0.577 0.245 27.325);
-	--destructive-foreground: oklch(0.985 0 0);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
-	--chart-1: oklch(0.646 0.222 41.116);
-	--chart-2: oklch(0.6 0.118 184.704);
-	--chart-3: oklch(0.398 0.07 227.392);
-	--chart-4: oklch(0.828 0.189 84.429);
-	--chart-5: oklch(0.769 0.188 70.08);
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.205 0 0);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
-	--highlight-match: rgba(255, 211, 61, 0.35);
-	--highlight-active: rgba(255, 150, 50, 0.55);
+	--background: #f6f7f9;
+	--foreground: #1a2130;
+	--card: #ffffff;
+	--card-foreground: #1a2130;
+	--popover: #ffffff;
+	--popover-foreground: #1a2130;
+	--primary: #1a2130;
+	--primary-foreground: #f6f7f9;
+	--secondary: #eef4fd;
+	--secondary-foreground: #1a2130;
+	--muted: #eef4fd;
+	--muted-foreground: #64708a;
+	--accent: #eef4fd;
+	--accent-foreground: #1a2130;
+	--tertiary: #ffffff;
+	--tertiary-active: #edf1f7;
+	--destructive: #c0392b;
+	--destructive-foreground: #ffffff;
+	--border: #e4e8ef;
+	--input: #e4e8ef;
+	--ring: #c7d8f2;
+	--chart-1: #1f6fd0;
+	--chart-2: #2f8f5b;
+	--chart-3: #b8720d;
+	--chart-4: #7c5cd6;
+	--chart-5: #c0392b;
+	--sidebar: #ffffff;
+	--sidebar-foreground: #1a2130;
+	--sidebar-primary: #1f6fd0;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #eef4fd;
+	--sidebar-accent-foreground: #1a2130;
+	--sidebar-border: #e4e8ef;
+	--sidebar-ring: #c7d8f2;
+	--highlight-match: rgba(31, 111, 208, 0.18);
+	--highlight-active: rgba(31, 111, 208, 0.4);
+
+	/* Argus surface ladder and semantic ink - Daylight. */
+	--argus-panel: #ffffff;
+	--argus-raised: #edf1f7;
+	--argus-selected: #eef4fd;
+	--argus-hairline: #e4e8ef;
+	--argus-focus: #c7d8f2;
+
+	--argus-iris-idle: #c2cbd8;
+	--argus-iris-working: #1f6fd0;
+	--argus-iris-waiting: #b8720d;
+	--argus-iris-review: #2f8f5b;
+
+	--argus-text-disabled: #a8b1c2;
+	--argus-text-label: #8a94a8;
+	--argus-text-secondary: #64708a;
+	--argus-text-body: #3c465c;
+	--argus-text-emphasis: #1a2130;
+	--argus-text-active: #1a2130;
+	--argus-text-amber: #7a5a14;
+	--argus-amber-muted: #7a5a14;
+	--argus-pass: #2f8f5b;
+
+	--argus-wash-accent: rgba(31, 111, 208, 0.08);
+	--argus-wash-accent-soft: rgba(31, 111, 208, 0.06);
+	--argus-wash-amber: rgba(184, 114, 13, 0.07);
+	--argus-ring-amber: rgba(184, 114, 13, 0.35);
+	--argus-ring-amber-strong: rgba(184, 114, 13, 0.45);
+	--argus-scrim: rgba(26, 33, 48, 0.38);
+}
+
+/* Windows 11 chrome geometry (2b / 5b). The class is set on <html> by the
+   renderer from the detected platform. */
+:root.platform-win32 {
+	--argus-radius-window: 8px;
+	--argus-radius-surface: 4px;
+	--argus-radius-surface-lg: 4px;
+	--argus-rail-width: 250px;
+	--argus-titlebar-height: 40px;
 }
 
 @theme inline {
@@ -122,10 +298,23 @@
 	--color-chart-3: var(--chart-3);
 	--color-chart-4: var(--chart-4);
 	--color-chart-5: var(--chart-5);
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
+	/**
+	 * Argus radii, retargeted rather than re-typed across the app.
+	 *
+	 * Tailwind v4 compiles `rounded-md` to `border-radius: var(--radius-md)`,
+	 * so redefining these four values reskins every `rounded-*` utility in the
+	 * renderer — 64 files — from one place, and keeps following the platform:
+	 * `--argus-radius-surface` is 2px on mac and 4px on Windows, so the same
+	 * markup is correct on both without a single conditional.
+	 *
+	 * The old scale derived from `--radius` with calc(); at Argus's 2-3px
+	 * surfaces that arithmetic goes negative, which is the other reason these
+	 * are now stated outright.
+	 */
+	--radius-sm: var(--argus-radius-surface);
+	--radius-md: var(--argus-radius-surface);
+	--radius-lg: var(--argus-radius-surface-lg);
+	--radius-xl: var(--argus-radius-window);
 	--color-sidebar: var(--sidebar);
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar-primary: var(--sidebar-primary);
@@ -134,6 +323,10 @@
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-ring: var(--sidebar-ring);
+
+	/* Tailwind's font-sans / font-mono utilities resolve to IBM Plex. */
+	--font-sans: var(--argus-font-sans);
+	--font-mono: var(--argus-font-mono);
 }
 
 @layer base {
@@ -161,6 +354,220 @@
 		scroll-behavior: smooth;
 		-webkit-app-region: no-drag;
 		-webkit-font-smoothing: antialiased;
+
+		/* Argus type. IBM Plex Sans at body size / weight 400. */
+		font-family: var(--argus-font-sans);
+		font-size: var(--argus-size-body);
+		font-weight: var(--argus-weight-body);
+	}
+
+	/* Argus never uses bold. Only Sans 300/400/500 and Mono 300/400 are
+	   bundled, so any `font-bold` left in a component would otherwise render
+	   as a synthesised faux-bold — visibly off-brand and impossible to spot in
+	   a diff. Turning synthesis off makes such a site fall back to 500, which
+	   is the heaviest weight the design admits. */
+	html,
+	body,
+	input,
+	textarea,
+	select,
+	button {
+		font-synthesis-weight: none;
+	}
+
+	code,
+	kbd,
+	samp,
+	pre {
+		font-family: var(--argus-font-mono);
+	}
+
+	/**
+	 * The label grammar.
+	 *
+	 * "IBM Plex Mono, 10px, letter-spacing .24em, uppercase, #5C6779" — the
+	 * brief calls this the single most identity-carrying detail and asks for it
+	 * on EVERY panel header. Defined once here so a panel header is a class,
+	 * not five copied declarations that can drift apart.
+	 */
+	.argus-label {
+		font-family: var(--argus-font-mono);
+		font-size: var(--argus-size-label);
+		font-weight: var(--argus-weight-body);
+		letter-spacing: 0.24em;
+		text-transform: uppercase;
+		color: var(--argus-text-label);
+		line-height: 1;
+	}
+
+	/**
+	 * Motion — the four movements, and nothing else.
+	 *
+	 * Rules from DESIGN-BRIEF.md "Motion" that are enforced here rather than
+	 * left to callers:
+	 * - No element ever changes position. Only color, opacity and radius move,
+	 *   so nothing reflows and nothing can fight the terminal for layout.
+	 * - The attention ring runs EXACTLY three times and stops. It is written as
+	 *   `animation-iteration-count: 3` with no `infinite` anywhere, so a stuck
+	 *   state cannot turn into a permanent throb.
+	 * - `prefers-reduced-motion` collapses every one to an instant state change.
+	 */
+
+	/* 1. Iris wake — idle -> working. 220ms. */
+	@keyframes argus-iris-wake {
+		0% {
+			transform: scale(0);
+			opacity: 0;
+		}
+		60% {
+			transform: scale(1.5);
+			opacity: 1;
+		}
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+	}
+
+	/* NOTE the split: a pupil that merely EXISTS does not animate. Only
+	   `-wake` animates, and the Iris component adds it exclusively on a real
+	   idle -> working transition that happens after mount. Putting the
+	   animation on `.argus-iris-pupil` itself would fire it on every mount —
+	   app launch, a rail re-render, a list scroll — which is precisely the
+	   "nothing animates on load" rule the brief calls non-negotiable. */
+	.argus-iris-pupil {
+		transform-origin: center;
+		transform-box: fill-box;
+	}
+
+	.argus-iris-pupil-wake {
+		animation: argus-iris-wake var(--argus-duration-base) var(--argus-ease-wake)
+			both;
+	}
+
+	/* The ring crossfades to its new color over the same beat. */
+	.argus-iris-ring {
+		transition: stroke var(--argus-duration-base) var(--argus-ease-wake);
+	}
+
+	/* 2. Attention ring — agent becomes blocked. 900ms, three pulses, stop.
+	   A second ring expands 6 -> 6.6r while fading .45 -> 0. The badge
+	   persists after the movement ends; the movement never loops. */
+	@keyframes argus-attention-pulse {
+		0% {
+			r: 6;
+			opacity: 0.45;
+		}
+		100% {
+			r: 6.6;
+			opacity: 0;
+		}
+	}
+
+	.argus-iris-attention-ring {
+		animation: argus-attention-pulse var(--argus-duration-slow) ease-out 3 both;
+	}
+
+	/* 3. Pane focus — 120ms linear, border and background only.
+	   The rule itself lives in mosaic-theme.css, on `.mosaic-window`, because
+	   that is the element mosaic actually renders. Keeping a second copy here
+	   would be dead CSS that looks authoritative. */
+
+	/* 4. Memory write — flash in 90ms, out over 600ms. */
+	@keyframes argus-memory-write {
+		0% {
+			background-color: transparent;
+		}
+		13% {
+			background-color: var(--argus-wash-accent);
+		}
+		100% {
+			background-color: transparent;
+		}
+	}
+
+	.argus-memory-write {
+		animation: argus-memory-write 690ms ease-out both;
+	}
+
+	/**
+	 * `prefers-reduced-motion` drops EVERY movement to an instant state change.
+	 *
+	 * The brief calls this non-negotiable, and it has to reach further than the
+	 * four Argus movements: the app still runs 21 `animate-spin` busy
+	 * indicators, plus a couple of `animate-pulse` skeletons and an
+	 * `animate-ping`. Those are kept deliberately — a spinner during a genuinely
+	 * async operation REPORTS STATE, which is the test the brief sets for
+	 * motion, and deleting them would leave buttons with no feedback. But under
+	 * reduced motion they must stop like everything else, and per-component
+	 * `motion-safe:` prefixes had only been applied in one place.
+	 *
+	 * Spinners are held at full opacity rather than hidden: an invisible busy
+	 * indicator is worse than a still one.
+	 */
+	@media (prefers-reduced-motion: reduce) {
+		/* Tailwind's utility layer outranks @layer base, so cancelling
+		   .animate-spin from here requires !important — without it the spinners
+		   keep spinning under reduced motion. */
+		.animate-spin,
+		.animate-ping,
+		.animate-pulse {
+			/* biome-ignore lint/complexity/noImportantStyles: see above */
+			animation: none !important;
+			/* biome-ignore lint/complexity/noImportantStyles: see above */
+			opacity: 1 !important;
+		}
+
+		.argus-iris-pupil-wake,
+		.argus-iris-attention-ring,
+		.argus-memory-write {
+			animation: none;
+		}
+
+		.argus-iris-ring,
+		.argus-pane {
+			transition: none;
+		}
+
+		/* The attention ring's job is to draw the eye. With motion off, the
+		   static ring still has to be visible, so it holds its start opacity
+		   instead of animating away to nothing. */
+		.argus-iris-attention-ring {
+			opacity: 0.45;
+		}
+	}
+
+	/**
+	 * Rail rows (DESIGN-BRIEF.md "Spacing, radii, borders"): 11px vertical and
+	 * 18px horizontal padding, 13.5px label. The 12px gap between iris and
+	 * label is set on the icon slot in WorkspaceListItem.
+	 */
+	.argus-rail-row {
+		padding-block: 11px;
+		padding-inline: 18px;
+		font-size: var(--argus-size-rail);
+	}
+
+	/**
+	 * The selected rail row is a wash that fades out to the right plus a 2px
+	 * inset accent bar — a flat fill would fight the hairline vocabulary and
+	 * read as a button.
+	 */
+	.argus-rail-row-selected {
+		background: linear-gradient(90deg, var(--argus-wash-accent), transparent);
+	}
+
+	/* The wordmark: Plex Sans 300, uppercase, .42em (.46em at display size). */
+	.argus-wordmark {
+		font-family: var(--argus-font-sans);
+		font-weight: var(--argus-weight-display);
+		text-transform: uppercase;
+		letter-spacing: 0.42em;
+		min-width: 96px;
+	}
+
+	.argus-wordmark-display {
+		letter-spacing: 0.46em;
 	}
 
 	/* Ensure the React root fills the viewport and provides a positioning context */

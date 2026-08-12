@@ -1,4 +1,4 @@
-# Codex as an ADE runtime
+# Codex as an Argus runtime
 
 How Codex-runtime sessions are launched, which model they use, and how a
 Codex agent gets the same identity/memory/skills a Claude-runtime agent gets.
@@ -6,10 +6,10 @@ Everything here was set up and verified 2026-08-11.
 
 ## Default model
 
-ADE launches Codex with an explicit model flag, hardcoded in
+Argus launches Codex with an explicit model flag, hardcoded in
 `packages/shared/src/agent-command.ts` (`AGENT_PRESET_COMMANDS` and
 `PROMPT_COMMANDS`). A CLI flag always beats `~/.codex/config.toml`, so the
-user's Codex config cannot change what ADE sessions run — the preset in
+user's Codex config cannot change what Argus sessions run — the preset in
 source is the only knob (there is no per-workspace command column in
 `local.db`; workspaces store only `runtime`).
 
@@ -20,9 +20,9 @@ Current preset: `gpt-5.6-terra` with `model_reasoning_effort="medium"`
 
 Until an app build carries the preset above, a deployed install still types
 the old model into every session. The fix that works without a rebuild:
-patch ADE's own wrapper at `~/.ade-default/bin/codex` (first on PATH for
-every ADE terminal) to rewrite the model args — scoped to launches carrying
-ADE's `--sandbox danger-full-access` signature so manual `codex` runs pass
+patch Argus's own wrapper at `~/.ade-default/bin/codex` (first on PATH for
+every Argus terminal) to rewrite the model args — scoped to launches carrying
+Argus's `--sandbox danger-full-access` signature so manual `codex` runs pass
 through untouched. This patch is applied on Kyle's Mac (backup:
 `~/.codex/.trash/2026-08-11/ade-bin-codex.bak`). Caveat: wrapper scripts are
 generated (`agent-setup/shell-wrappers.ts`, marker `agent-wrapper v2`), so a
@@ -43,7 +43,7 @@ agent needs a worktree `AGENTS.md` that explicitly instructs it to read:
    injected; Codex must be told to read it)
 4. The user's global rules file (`~/.claude/CLAUDE.md`)
 
-Verified working: a fresh ADE Codex session answered identity questions
+Verified working: a fresh Argus Codex session answered identity questions
 correctly and self-located the right skill from the memory index alone.
 
 ## Skills
@@ -63,7 +63,7 @@ symlink of `~/.agents/skills`). Claude Code skills are plain
   their checklists and bundled scripts; the agent must say so rather than
   improvise an equivalent.
 
-Verified working: asked which skill governs a domain task, an ADE Codex
+Verified working: asked which skill governs a domain task, an Argus Codex
 session named the right skill and quoted its actual constraints.
 
 ## Headless quirks (codex exec)

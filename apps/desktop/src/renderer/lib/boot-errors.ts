@@ -23,7 +23,7 @@ const renderBootError = (message: string, error?: unknown) => {
 	inner.style.maxWidth = "520px";
 
 	const title = document.createElement("div");
-	title.textContent = "ADE failed to start";
+	title.textContent = "Argus failed to start";
 	title.style.fontSize = "18px";
 	title.style.marginBottom = "8px";
 

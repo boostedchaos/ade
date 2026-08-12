@@ -31,7 +31,7 @@ export function SettingsSidebar() {
 			</Link>
 
 			{/* Settings title */}
-			<h1 className="text-lg font-semibold px-3 mb-4">Settings</h1>
+			<h1 className="text-lg font-medium px-3 mb-4">Settings</h1>
 
 			{/* Search input */}
 			<div className="relative px-1 mb-4">

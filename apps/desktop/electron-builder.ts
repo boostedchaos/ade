@@ -164,7 +164,7 @@ export function createConfig(target: BuildTarget = "default"): Configuration {
 	const isWin = target === "win";
 
 	return {
-		appId: "studio.persimmons.ade",
+		appId: "com.boostedchaos.argus",
 		productName,
 		copyright: `Copyright © ${currentYear} — ${author}`,
 		electronVersion: pkg.devDependencies.electron.replace(/^\^/, ""),
@@ -278,21 +278,24 @@ export function createConfig(target: BuildTarget = "default"): Configuration {
 				CFBundleDisplayName: productName,
 				// Required for macOS microphone permission prompt
 				NSMicrophoneUsageDescription:
-					"ADE needs microphone access so voice-enabled tools like Codex transcription can capture audio input.",
+					"Argus needs microphone access so voice-enabled tools like Codex transcription can capture audio input.",
 				// Required for macOS local network permission prompt
 				NSLocalNetworkUsageDescription:
-					"ADE needs access to your local network to discover and connect to development servers running on your network.",
+					"Argus needs access to your local network to discover and connect to development servers running on your network.",
 				// Bonjour service types to browse for (triggers the permission prompt)
 				NSBonjourServices: ["_http._tcp", "_https._tcp"],
 				// Required for Apple Events / Automation permission prompt
 				NSAppleEventsUsageDescription:
-					"ADE needs to interact with other applications to run terminal commands and development tools.",
+					"Argus needs to interact with other applications to run terminal commands and development tools.",
 			},
 		},
 
 		// Deep linking protocol
 		protocols: {
 			name: productName,
+			// The scheme stays `ade` deliberately (SPEC Decisions): renaming it
+			// breaks every deep link already in the wild, and it is the same
+			// reasoning that keeps the `ade` CLI and ~/.ade as they are.
 			schemes: ["ade"],
 		},
 

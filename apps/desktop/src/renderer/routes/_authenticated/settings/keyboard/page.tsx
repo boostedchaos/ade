@@ -252,7 +252,7 @@ function KeyboardShortcutsPage() {
 			{/* Header */}
 			<div className="mb-6 flex items-start justify-between gap-4">
 				<div>
-					<h2 className="text-lg font-semibold">Keyboard Shortcuts</h2>
+					<h2 className="text-lg font-medium">Keyboard Shortcuts</h2>
 					<p className="text-sm text-muted-foreground mt-1">
 						Customize keyboard shortcuts for your workflow. Press{" "}
 						<KbdGroup>
@@ -308,12 +308,8 @@ function KeyboardShortcutsPage() {
 							</h3>
 							<div className="rounded-lg border border-border overflow-hidden">
 								<div className="flex items-center justify-between py-2 px-4 bg-accent/10 border-b border-border">
-									<span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-										Command
-									</span>
-									<span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-										Shortcut
-									</span>
+									<span className="argus-label">Command</span>
+									<span className="argus-label">Shortcut</span>
 								</div>
 								<div className="divide-y divide-border">
 									{hotkeys.map((hotkey) => (

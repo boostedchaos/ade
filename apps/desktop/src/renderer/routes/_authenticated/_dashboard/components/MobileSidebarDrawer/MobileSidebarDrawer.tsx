@@ -30,12 +30,12 @@ export function MobileSidebarDrawer({
 	return (
 		<div className="fixed inset-0 z-50">
 			<div
-				className="absolute inset-0 bg-black/50"
+				className="absolute inset-0 bg-[var(--argus-scrim)]"
 				onClick={() => setOpen(false)}
 				aria-hidden="true"
 			/>
 			<div
-				className="absolute inset-y-0 left-0 flex w-[300px] max-w-[85vw] flex-col overflow-hidden border-r border-border bg-background shadow-xl"
+				className="absolute inset-y-0 left-0 flex w-[300px] max-w-[85vw] flex-col overflow-hidden border-r border-border bg-background"
 				style={{
 					paddingTop: "env(safe-area-inset-top)",
 					paddingBottom: "env(safe-area-inset-bottom)",

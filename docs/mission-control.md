@@ -1,15 +1,15 @@
 # Mission Control
 
-Mission Control is a command line for the ADE app. You type `ade …` in any
+Mission Control is a command line for the Argus app. You type `ade …` in any
 terminal and the running app does it — opens panes, reads screens, moves focus.
-Agents running inside ADE can call the same commands, so they can show you
+Agents running inside Argus can call the same commands, so they can show you
 things and tell you when they need you.
 
 Nothing here leaves your machine. `ade` talks to the app over a local socket.
 
 ## Get `ade` in your terminal
 
-Agents already have it. Every terminal pane ADE starts has `ade` on its PATH —
+Agents already have it. Every terminal pane Argus starts has `ade` on its PATH —
 you do not have to do anything for that.
 
 For your own shell, run this once:
@@ -23,7 +23,7 @@ if that is not writable). On Windows it adds `~/.ade\bin` to your user `PATH`
 (`HKCU\Environment`); **restart your shell** afterwards for it to take effect.
 Safe to re-run. See [`../WINDOWS.md`](../WINDOWS.md) for the Windows specifics.
 
-If a command prints `ADE app is not running (no control socket)`, open the ADE
+If a command prints `ADE app is not running (no control socket)`, open the Argus
 app and try again. `ade` never launches the app for you.
 
 If it says that while the app is plainly open, `ade` is looking in the wrong
@@ -135,7 +135,7 @@ prints the path.
 ade claude-teams
 ```
 
-This launches Claude Code so its teammate agents appear as real ADE panes you
+This launches Claude Code so its teammate agents appear as real Argus panes you
 can watch. It is marked experimental because agent teams is an undocumented
 Claude Code feature behind a server-side switch Anthropic controls — a teammate
 may simply never show up, and that is not a bug on this side.
@@ -187,7 +187,7 @@ raw result instead of a table.
 | `agent-sessions` | List tracked agent sessions, one per terminal pane |
 | `set-status` | Report a pane as `working`, `needsInput`, or `idle` |
 | `set-progress` | Set or clear a pane's progress bar |
-| `hooks` | Wire up ADE's Claude Code hooks (`hooks setup claude`, `hooks status`) |
+| `hooks` | Wire up Argus's Claude Code hooks (`hooks setup claude`, `hooks status`) |
 | `agent-event` | Report a hook event — called by the hooks, not by you |
 
 **Todos**
@@ -222,7 +222,7 @@ raw result instead of a table.
 | Command | What it does |
 | --- | --- |
 | `cli` | Manage the `ade` bin itself (`cli install`) |
-| `claude-teams` | EXPERIMENTAL: launch Claude Code with agent teams as ADE panes |
+| `claude-teams` | EXPERIMENTAL: launch Claude Code with agent teams as Argus panes |
 | `tmux-compat` | Internal — the shim `claude-teams` points a fake `tmux` at |
 
 **Exit codes:** `0` worked · `1` the command failed · `2` bad usage or
@@ -247,9 +247,9 @@ teammates may never spawn even when the command itself works. It also needs a
 real TTY. Windows exits with code 2.
 
 **A plain `claude` session will not find the `ade-workspace` skill on its own.**
-ADE installs the skill to `~/.ade/skills/ade-workspace/SKILL.md` and copies it
-into each ADE-managed agent, where that agent's `CLAUDE.md` points at it. Claude
+Argus installs the skill to `~/.ade/skills/ade-workspace/SKILL.md` and copies it
+into each Argus-managed agent, where that agent's `CLAUDE.md` points at it. Claude
 Code discovers skills from `~/.claude/skills` and `<project>/.claude/skills`, and
-ADE deliberately never writes into your Claude config. So in an ordinary
+Argus deliberately never writes into your Claude config. So in an ordinary
 workspace terminal the file is on disk but nothing tells Claude to read it —
 point it at the path yourself if you want it.

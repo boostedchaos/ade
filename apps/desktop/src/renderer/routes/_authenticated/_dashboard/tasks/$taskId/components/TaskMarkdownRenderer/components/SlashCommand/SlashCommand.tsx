@@ -31,21 +31,21 @@ const COMMANDS: CommandItem[] = [
 	// Headings group
 	{
 		title: "Heading 1",
-		icon: <span className="text-xs font-semibold">H₁</span>,
+		icon: <span className="text-xs font-medium">H₁</span>,
 		command: (editor) =>
 			editor.chain().focus().toggleHeading({ level: 1 }).run(),
 		group: "headings",
 	},
 	{
 		title: "Heading 2",
-		icon: <span className="text-xs font-semibold">H₂</span>,
+		icon: <span className="text-xs font-medium">H₂</span>,
 		command: (editor) =>
 			editor.chain().focus().toggleHeading({ level: 2 }).run(),
 		group: "headings",
 	},
 	{
 		title: "Heading 3",
-		icon: <span className="text-xs font-semibold">H₃</span>,
+		icon: <span className="text-xs font-medium">H₃</span>,
 		command: (editor) =>
 			editor.chain().focus().toggleHeading({ level: 3 }).run(),
 		group: "headings",
@@ -136,7 +136,7 @@ const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
 
 		if (items.length === 0) {
 			return (
-				<div className="bg-popover text-popover-foreground rounded-md border p-1 shadow-md">
+				<div className="bg-popover text-popover-foreground rounded-md border p-1">
 					<div className="px-2 py-1.5 text-sm text-muted-foreground">
 						No results
 					</div>
@@ -164,7 +164,7 @@ const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
 		return (
 			<div
 				ref={containerRef}
-				className="bg-popover text-popover-foreground rounded-md border p-1 shadow-md overflow-hidden max-h-80 overflow-y-auto w-48"
+				className="bg-popover text-popover-foreground rounded-md border p-1 overflow-hidden max-h-80 overflow-y-auto w-48"
 			>
 				{groups.map((group, groupIndex) => (
 					<div key={group.key}>

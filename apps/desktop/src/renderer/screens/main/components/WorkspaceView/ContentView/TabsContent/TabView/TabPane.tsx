@@ -147,7 +147,11 @@ export function TabPane({
 							</span>
 						)}
 						{paneStatus && paneStatus !== "idle" && (
-							<StatusIndicator status={paneStatus} />
+							<StatusIndicator
+								status={paneStatus}
+								size={12}
+								pulse={paneStatus === "permission"}
+							/>
 						)}
 					</div>
 					<PaneToolbarActions

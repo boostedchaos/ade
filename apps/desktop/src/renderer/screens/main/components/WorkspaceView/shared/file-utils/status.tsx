@@ -12,15 +12,15 @@ export function getStatusColor(status: FileStatus): string {
 	switch (status) {
 		case "added":
 		case "untracked":
-			return "text-green-600 dark:text-green-400";
+			return "text-[var(--argus-pass)] dark:text-[var(--argus-pass)]";
 		case "modified":
-			return "text-yellow-600 dark:text-yellow-400";
+			return "text-[var(--argus-iris-waiting)] dark:text-[var(--argus-iris-waiting)]";
 		case "deleted":
-			return "text-red-600 dark:text-red-400";
+			return "text-[var(--destructive)] dark:text-[var(--destructive)]";
 		case "renamed":
-			return "text-blue-600 dark:text-blue-400";
+			return "text-[var(--argus-iris-working)] dark:text-[var(--argus-iris-working)]";
 		case "copied":
-			return "text-purple-600 dark:text-purple-400";
+			return "text-[var(--chart-4)] dark:text-[var(--chart-4)]";
 		default:
 			return "text-muted-foreground";
 	}

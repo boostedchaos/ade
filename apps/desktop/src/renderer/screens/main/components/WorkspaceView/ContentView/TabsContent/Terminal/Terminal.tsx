@@ -590,7 +590,7 @@ export const Terminal = ({ paneId, tabId, workspaceId }: TerminalProps) => {
 						type="button"
 						onClick={handleTakeControl}
 						title="Another device is typing in this terminal. Click to take control."
-						className="absolute top-1.5 right-2 z-10 rounded-full border border-white/15 bg-black/60 px-2.5 py-0.5 text-[11px] font-medium text-white/75 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+						className="absolute top-1.5 right-2 z-10 rounded-full border border-[var(--argus-hairline)] bg-[var(--argus-scrim)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--argus-text-body)] backdrop-blur-sm transition-colors hover:bg-[var(--argus-scrim)] hover:text-[var(--argus-text-emphasis)]"
 					>
 						View only · Take control
 					</button>

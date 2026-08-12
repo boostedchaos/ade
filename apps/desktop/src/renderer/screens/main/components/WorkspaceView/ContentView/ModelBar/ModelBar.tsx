@@ -16,7 +16,7 @@ import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useProviderKeys } from "renderer/stores/model-bar/useProviderKeys";
 import { useRuntimeAvailability } from "renderer/stores/model-bar/useRuntimeAvailability";
 import { useAgentSession } from "renderer/stores/tabs/useAgentSession";
-import { type ModelDescriptor, MODEL_BAR_MODELS } from "./models";
+import { MODEL_BAR_MODELS, type ModelDescriptor } from "./models";
 import {
 	ProviderKeyDialog,
 	type ProviderKeyDialogMode,
@@ -95,7 +95,14 @@ export function ModelBar() {
 	};
 
 	return (
-		<div className="flex h-9 shrink-0 items-center gap-0.5 border-b bg-background px-2">
+		<div
+			className="flex shrink-0 items-center gap-0.5 px-2"
+			style={{
+				height: "var(--argus-modelbar-height)",
+				backgroundColor: "var(--argus-panel)",
+				borderBottom: "1px solid var(--argus-hairline)",
+			}}
+		>
 			<div
 				className={`flex items-center gap-0.5 ${
 					ready ? "" : "pointer-events-none opacity-40"
@@ -140,7 +147,7 @@ export function ModelBar() {
 										<span className="absolute -bottom-px h-[3px] w-[3px] rounded-full bg-foreground/40" />
 									)}
 									{missing && (
-										<span className="absolute -right-px -top-px h-[5px] w-[5px] rounded-full bg-amber-500 ring-1 ring-background" />
+										<span className="absolute -right-px -top-px h-[5px] w-[5px] rounded-full bg-[var(--argus-iris-waiting)] ring-1 ring-background" />
 									)}
 								</button>
 							</TooltipTrigger>

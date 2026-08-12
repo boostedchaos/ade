@@ -28,7 +28,7 @@ export function createCanaryConfig(
 
 	return {
 		...baseConfig,
-		appId: "studio.persimmons.ade.canary",
+		appId: "com.boostedchaos.argus.canary",
 		productName,
 
 		// Inherit the public release repo from the base config (single source of

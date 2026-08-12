@@ -26,7 +26,7 @@ export function CategoryHeader({
 			) : (
 				<LuChevronRight className="size-4 text-muted-foreground" />
 			)}
-			<span className="text-sm font-semibold">{title}</span>
+			<span className="text-sm font-medium">{title}</span>
 			<span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
 				{count}
 			</span>

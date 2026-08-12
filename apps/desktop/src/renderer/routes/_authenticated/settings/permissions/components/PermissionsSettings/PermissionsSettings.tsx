@@ -31,7 +31,7 @@ function PermissionRow({
 			</div>
 			<div className="flex items-center gap-3">
 				{granted && (
-					<span className="text-xs font-medium text-green-500 bg-green-500/10 px-2 py-1 rounded-md">
+					<span className="text-xs font-medium text-[var(--argus-pass)] bg-[var(--argus-pass)]/10 px-2 py-1 rounded-md">
 						Granted
 					</span>
 				)}
@@ -66,7 +66,7 @@ export function PermissionsSettings({
 	return (
 		<div className="p-6 max-w-4xl w-full">
 			<div className="mb-8">
-				<h2 className="text-xl font-semibold">Permissions</h2>
+				<h2 className="text-xl font-medium">Permissions</h2>
 				<p className="text-sm text-muted-foreground mt-1">
 					Grant these permissions once to avoid repeated prompts. For persistent
 					directory access, enable Full Disk Access in System Settings for

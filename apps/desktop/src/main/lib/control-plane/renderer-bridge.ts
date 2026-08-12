@@ -96,7 +96,7 @@ export class RendererBridge {
 		if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
 			throw new ControlError(
 				"RENDERER_UNAVAILABLE",
-				"No ADE window is open to run this layout operation",
+				"No Argus window is open to run this layout operation",
 			);
 		}
 		if (!this.listening) {

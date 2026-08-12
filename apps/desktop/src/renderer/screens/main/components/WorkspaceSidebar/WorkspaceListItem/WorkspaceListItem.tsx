@@ -15,7 +15,6 @@ import { toast } from "@superset/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
-import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { HiMiniXMark } from "react-icons/hi2";
@@ -29,6 +28,7 @@ import {
 	LuPencil,
 	LuTrash2,
 } from "react-icons/lu";
+import { useBlockedAgents } from "renderer/hooks/useBlockedAgent";
 import { downscaleImageToDataUrl } from "renderer/lib/downscale-image";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import {
@@ -139,10 +139,12 @@ export function WorkspaceListItem({
 
 	// Agent avatar (circular rail bust) photo upload.
 	const photoInputRef = useRef<HTMLInputElement>(null);
-	const setWorkspaceIcon = electronTrpc.workspaces.setWorkspaceIcon.useMutation({
-		onSuccess: () => utils.workspaces.getAllGrouped.invalidate(),
-		onError: (error) => toast.error(`Failed to set photo: ${error.message}`),
-	});
+	const setWorkspaceIcon = electronTrpc.workspaces.setWorkspaceIcon.useMutation(
+		{
+			onSuccess: () => utils.workspaces.getAllGrouped.invalidate(),
+			onError: (error) => toast.error(`Failed to set photo: ${error.message}`),
+		},
+	);
 	const handlePhotoFileChange = async (
 		e: React.ChangeEvent<HTMLInputElement>,
 	) => {
@@ -318,7 +320,23 @@ export function WorkspaceListItem({
 
 	// The branch name is intentionally not shown on rail agents; the subtitle row
 	// exists only to carry the PR badge when there is one.
-	const hasSubtitle = !!pr;
+	// The rail's attention reason (DESIGN-BRIEF §2a, "additive"): a two-line
+	// mono note under a waiting agent saying WHY it is waiting, so the rail
+	// answers the question without a click. The text is real — it comes from
+	// the attention inbox. When nothing explains the block, nothing renders:
+	// an invented reason would be worse than none.
+	const blockedAgents = useBlockedAgents();
+	const attentionReason = useMemo(() => {
+		for (const paneId of workspacePaneIds) {
+			const reason = blockedAgents[paneId]?.reason;
+			if (reason) return reason;
+		}
+		return null;
+	}, [blockedAgents, workspacePaneIds]);
+
+	// The reason row is a subtitle too, or the row keeps its centred
+	// single-line padding and the note collides with the label.
+	const hasSubtitle = !!pr || !!attentionReason;
 
 	if (isCollapsed) {
 		return (
@@ -370,28 +388,31 @@ export function WorkspaceListItem({
 			onMouseEnter={handleMouseEnter}
 			onDoubleClick={isBranchWorkspace ? undefined : rename.startRename}
 			className={cn(
-				"flex w-full pl-3 pr-2 text-sm",
-				"hover:bg-muted/50 transition-colors text-left cursor-pointer",
+				"flex w-full argus-rail-row",
+				"hover:bg-[var(--argus-raised)] transition-colors text-left cursor-pointer",
 				"group relative",
-				hasSubtitle ? "py-1.5" : "py-2 items-center",
-				isActive && "bg-muted",
+				hasSubtitle ? "py-1.5" : "items-center",
+				isActive && "argus-rail-row-selected",
 				isDragging && "opacity-30",
 			)}
 			style={{ cursor: isDragging ? "grabbing" : "pointer" }}
 		>
 			{isActive && (
-				<div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary rounded-r" />
+				<div
+					className="absolute left-0 top-0 bottom-0"
+					style={{ width: 2, backgroundColor: "var(--argus-iris-working)" }}
+				/>
 			)}
 
 			<Tooltip delayDuration={500}>
 				<TooltipTrigger asChild>
 					<div
 						className={cn(
-							"relative shrink-0 flex items-center justify-center mr-2.5",
-								// Photo avatars get a larger slot; glyph icons keep the compact
-								// one. The slot must match the img size or the reset's max-width
-								// squeezes the circle into an oval.
-								iconUrl ? "size-8" : "size-5",
+							"relative shrink-0 flex items-center justify-center mr-3",
+							// Photo avatars get a larger slot; glyph icons keep the compact
+							// one. The slot must match the img size or the reset's max-width
+							// squeezes the circle into an oval.
+							iconUrl ? "size-8" : "size-3.5",
 							hasSubtitle && "mt-0.5",
 						)}
 					>
@@ -447,10 +468,10 @@ export function WorkspaceListItem({
 						<div className="flex items-center gap-1.5">
 							<span
 								className={cn(
-									"truncate text-[13px] leading-tight transition-colors flex-1",
+									"truncate leading-tight transition-colors flex-1 text-[13.5px]",
 									isActive
-										? "text-foreground font-medium"
-										: "text-foreground/80",
+										? "text-[var(--argus-text-active)] font-medium"
+										: "text-[var(--argus-text-emphasis)]",
 								)}
 							>
 								{isBranchWorkspace ? "local" : name || branch}
@@ -501,6 +522,23 @@ export function WorkspaceListItem({
 								</div>
 							</div>
 						</div>
+
+						{attentionReason && (
+							<div
+								className="w-full font-mono"
+								style={{
+									color: "var(--argus-amber-muted)",
+									fontSize: "10.5px",
+									lineHeight: 1.45,
+									display: "-webkit-box",
+									WebkitLineClamp: 2,
+									WebkitBoxOrient: "vertical",
+									overflow: "hidden",
+								}}
+							>
+								{attentionReason}
+							</div>
+						)}
 
 						{pr && (
 							<div className="flex items-center gap-2 text-[11px] w-full">
@@ -591,9 +629,7 @@ export function WorkspaceListItem({
 							<LuPencil className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />
 							Rename
 						</ContextMenuItem>
-						<ContextMenuItem
-							onSelect={() => photoInputRef.current?.click()}
-						>
+						<ContextMenuItem onSelect={() => photoInputRef.current?.click()}>
 							<LuImage className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />
 							Change Photo
 						</ContextMenuItem>

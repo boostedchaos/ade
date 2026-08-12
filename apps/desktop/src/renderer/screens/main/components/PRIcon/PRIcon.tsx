@@ -9,9 +9,9 @@ interface PRIconProps {
 }
 
 const stateStyles: Record<PRState, string> = {
-	open: "text-emerald-500",
-	merged: "text-violet-500",
-	closed: "text-red-500",
+	open: "text-[var(--argus-pass)]",
+	merged: "text-[var(--chart-4)]",
+	closed: "text-[var(--destructive)]",
 	draft: "text-muted-foreground",
 };
 

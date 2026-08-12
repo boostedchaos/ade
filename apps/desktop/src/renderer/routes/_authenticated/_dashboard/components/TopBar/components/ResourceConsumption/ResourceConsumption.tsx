@@ -122,9 +122,7 @@ export function ResourceConsumption() {
 			<PopoverContent align="start" className="w-80 p-0">
 				<div className="p-3 border-b border-border">
 					<div className="flex items-center justify-between">
-						<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-							Resource Usage
-						</h4>
+						<h4 className="argus-label">Resource Usage</h4>
 						<button
 							type="button"
 							onClick={() => refetch()}
@@ -149,9 +147,7 @@ export function ResourceConsumption() {
 
 				{usage && (usage.claude || usage.openrouter) && (
 					<div className="p-3 border-b border-border">
-						<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-							Provider Usage
-						</h4>
+						<h4 className="argus-label">Provider Usage</h4>
 						<div className="mt-2 space-y-1.5">
 							{usage.claude?.fiveHour && (
 								<UsageRow
@@ -182,7 +178,7 @@ export function ResourceConsumption() {
 						<div className="border-b border-border/50">
 							<div className="px-3 py-2 flex items-center justify-between">
 								<span className="text-xs font-medium min-w-0 truncate">
-									ADE App
+									Argus App
 								</span>
 								<div className={`${METRIC_COLS} text-xs text-muted-foreground`}>
 									<span className={CPU_COL}>{formatCpu(snapshot.app.cpu)}</span>

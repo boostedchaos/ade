@@ -39,6 +39,27 @@ const {
 	setupPasteHandler,
 } = await import("./helpers");
 
+const { DEFAULT_THEME_ID, getBuiltInTheme } = await import(
+	"shared/themes/built-in"
+);
+
+// Derived from the registry, not hardcoded: a rebrand that changes the default
+// theme must not require hand-editing this file (it did once - the ember ->
+// ink switch). Asserting the property keeps the test pointed at the same thing
+// the code reads.
+const defaultTheme = getBuiltInTheme(DEFAULT_THEME_ID);
+if (!defaultTheme) {
+	throw new Error(
+		`DEFAULT_THEME_ID "${DEFAULT_THEME_ID}" does not resolve to a built-in theme`,
+	);
+}
+const DEFAULT_TERMINAL_BG = defaultTheme.terminal?.background;
+if (!DEFAULT_TERMINAL_BG) {
+	throw new Error(
+		`Default theme "${DEFAULT_THEME_ID}" defines no terminal background`,
+	);
+}
+
 describe("getDefaultTerminalTheme", () => {
 	beforeEach(() => {
 		mockStorage.clear();
@@ -77,8 +98,8 @@ describe("getDefaultTerminalTheme", () => {
 	it("should fall back to default dark theme when localStorage is empty", () => {
 		const theme = getDefaultTerminalTheme();
 
-		// Default theme is dark (ember)
-		expect(theme.background).toBe("#151110");
+		// Default theme is dark (ink, post-Argus)
+		expect(theme.background).toBe(DEFAULT_TERMINAL_BG);
 	});
 
 	it("should handle invalid JSON in cached terminal gracefully", () => {
@@ -87,7 +108,7 @@ describe("getDefaultTerminalTheme", () => {
 		const theme = getDefaultTerminalTheme();
 
 		// Should fall back to default
-		expect(theme.background).toBe("#151110");
+		expect(theme.background).toBe(DEFAULT_TERMINAL_BG);
 	});
 });
 
@@ -110,7 +131,7 @@ describe("getDefaultTerminalBg", () => {
 	});
 
 	it("should return default background when no cache", () => {
-		expect(getDefaultTerminalBg()).toBe("#151110");
+		expect(getDefaultTerminalBg()).toBe(DEFAULT_TERMINAL_BG);
 	});
 });
 

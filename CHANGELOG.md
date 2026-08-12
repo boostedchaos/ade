@@ -1,11 +1,38 @@
 # Changelog
 
-Notable changes to ADE. Releases before 0.4.0 were recorded only as GitHub
-release notes — see the [releases page](https://github.com/boostedchaos/ade/releases).
+Notable changes to Argus, which was called ADE until the rebrand landed on
+`main` (2026-08-12, unreleased at the time of writing). Releases before 0.4.0
+were recorded only as GitHub release notes — see the
+[releases page](https://github.com/boostedchaos/ade/releases).
+
+Every entry below still says "ADE" because that is the name those versions
+shipped under. They are history and are left as written.
 
 ## Unreleased
 
 ### Changed
+
+- **Renamed to Argus, with a full visual redesign.** The identity is one idea —
+  the iris: an open ring with a pupil that is simultaneously the app mark and
+  the per-agent status indicator, replacing every status dot, avatar and badge.
+  - Two new themes, **Ink** (dark, now the default) and **Daylight** (light).
+    Ember, monokai and one-dark stay registered as alternates. Ember keeps its
+    `dark` id, so a persisted theme choice still resolves.
+  - **IBM Plex Sans + Mono** bundled locally as `.woff2` (SIL OFL). Argus has
+    no bold: only weights 300/400/500 are shipped, and font synthesis is off.
+  - Status colors changed: `working` is now blue and `waiting on you` amber
+    (they were amber and red). `review` gained its own green ring.
+  - Three additive affordances, all reading signals the app already tracked:
+    the rail shows WHY an agent is waiting, a blocked-session strip above the
+    status bar jumps you to another agent that is blocked, and a blocked pane
+    in Mission Control takes an amber ring instead of a red one.
+  - `appId` is now `com.boostedchaos.argus`. **macOS treats this as a new
+    application**: it will not auto-update over an existing ADE install. Install
+    Argus once by hand and delete the old app. Agent data in `~/.ade` is
+    untouched — it is keyed by workspace name, not by `appId`.
+  - Deliberately NOT renamed: the `ade` CLI, the `ade` URL scheme, `~/.ade` on
+    disk, and the `ade-server` package. Renaming any of them breaks existing
+    installs and every agent skill that shells out to `ade`.
 
 - **Codex runtime default model is now `gpt-5.6-terra` (medium reasoning)**,
   was `gpt-5.5` (high), in both launch presets in

@@ -77,7 +77,7 @@ export function DeleteWorktreeDialog({
 
 				{!isLoading && canDelete && hasWarnings && (
 					<div className="px-4 pb-2">
-						<div className="text-sm text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
+						<div className="text-sm text-[var(--argus-iris-waiting)] dark:text-[var(--argus-iris-waiting)] bg-[var(--argus-iris-waiting)] dark:bg-[var(--argus-iris-waiting)]/50 border border-[var(--argus-iris-waiting)] dark:border-[var(--argus-iris-waiting)] rounded px-2 py-1.5">
 							{hasChanges && hasUnpushedCommits
 								? "Has uncommitted changes and unpushed commits"
 								: hasChanges

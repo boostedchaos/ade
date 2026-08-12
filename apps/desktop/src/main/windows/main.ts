@@ -120,7 +120,10 @@ export async function MainWindow() {
 		minWidth: 400,
 		minHeight: 400,
 		show: false,
-		backgroundColor: nativeTheme.shouldUseDarkColors ? "#252525" : "#ffffff",
+		// Argus: the color painted before the renderer's first frame. Must match
+		// the theme backgrounds in shared/themes/built-in (ink / daylight) or the
+		// window flashes a foreign grey on open.
+		backgroundColor: nativeTheme.shouldUseDarkColors ? "#0B0E14" : "#F6F7F9",
 		center: initialBounds.center,
 		movable: true,
 		resizable: true,

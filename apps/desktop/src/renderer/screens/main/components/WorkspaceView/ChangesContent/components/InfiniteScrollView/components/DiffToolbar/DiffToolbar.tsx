@@ -78,12 +78,12 @@ export function DiffToolbar({
 					<span className="flex items-center gap-1 font-mono">
 						{totalFiles} files
 						{totalAdditions > 0 && (
-							<span className="text-green-600 dark:text-green-500">
+							<span className="text-[var(--argus-pass)] dark:text-[var(--argus-pass)]">
 								+{totalAdditions}
 							</span>
 						)}
 						{totalDeletions > 0 && (
-							<span className="text-red-600 dark:text-red-400">
+							<span className="text-[var(--destructive)] dark:text-[var(--destructive)]">
 								-{totalDeletions}
 							</span>
 						)}

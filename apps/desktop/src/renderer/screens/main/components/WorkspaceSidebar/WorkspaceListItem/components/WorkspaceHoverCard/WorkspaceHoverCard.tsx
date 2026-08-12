@@ -46,9 +46,7 @@ export function WorkspaceHoverCardContent({
 				)}
 				{branchName && (
 					<div className="space-y-0.5">
-						<span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-							Branch
-						</span>
+						<span className="argus-label">Branch</span>
 						{repoUrl && branchExistsOnRemote ? (
 							<a
 								href={`${repoUrl}/tree/${branchName}`}
@@ -79,7 +77,7 @@ export function WorkspaceHoverCardContent({
 			</div>
 
 			{needsRebase && (
-				<div className="flex items-center gap-2 text-amber-500 text-xs bg-amber-500/10 px-2 py-1.5 rounded-md">
+				<div className="flex items-center gap-2 text-[var(--argus-iris-waiting)] text-xs bg-[var(--argus-iris-waiting)]/10 px-2 py-1.5 rounded-md">
 					<LuTriangleAlert
 						className="size-3.5 shrink-0"
 						strokeWidth={STROKE_WIDTH}

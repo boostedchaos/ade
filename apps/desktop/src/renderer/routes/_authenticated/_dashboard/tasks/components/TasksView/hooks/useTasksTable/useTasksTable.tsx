@@ -421,9 +421,9 @@ export function useTasksTable({
 							className={cn(
 								"text-xs shrink-0",
 								isOverdue
-									? "text-red-500 font-medium"
+									? "text-[var(--destructive)] font-medium"
 									: isSoon
-										? "text-amber-500 font-medium"
+										? "text-[var(--argus-iris-waiting)] font-medium"
 										: "text-muted-foreground",
 							)}
 						>

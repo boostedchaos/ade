@@ -85,7 +85,7 @@ export function SecretRow({
 			</div>
 
 			<div className="flex items-center gap-2 min-w-0 flex-1 basis-0 ml-3">
-				<span className="font-mono font-semibold text-sm truncate">
+				<span className="font-mono font-medium text-sm truncate">
 					{secret.key}
 				</span>
 				{secret.sensitive && (
