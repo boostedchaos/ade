@@ -28,6 +28,7 @@ import {
 	LuPencil,
 	LuTrash2,
 } from "react-icons/lu";
+import { useBlockedAgents } from "renderer/hooks/useBlockedAgent";
 import { downscaleImageToDataUrl } from "renderer/lib/downscale-image";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import {
@@ -319,7 +320,23 @@ export function WorkspaceListItem({
 
 	// The branch name is intentionally not shown on rail agents; the subtitle row
 	// exists only to carry the PR badge when there is one.
-	const hasSubtitle = !!pr;
+	// The rail's attention reason (DESIGN-BRIEF §2a, "additive"): a two-line
+	// mono note under a waiting agent saying WHY it is waiting, so the rail
+	// answers the question without a click. The text is real — it comes from
+	// the attention inbox. When nothing explains the block, nothing renders:
+	// an invented reason would be worse than none.
+	const blockedAgents = useBlockedAgents();
+	const attentionReason = useMemo(() => {
+		for (const paneId of workspacePaneIds) {
+			const reason = blockedAgents[paneId]?.reason;
+			if (reason) return reason;
+		}
+		return null;
+	}, [blockedAgents, workspacePaneIds]);
+
+	// The reason row is a subtitle too, or the row keeps its centred
+	// single-line padding and the note collides with the label.
+	const hasSubtitle = !!pr || !!attentionReason;
 
 	if (isCollapsed) {
 		return (
@@ -451,10 +468,10 @@ export function WorkspaceListItem({
 						<div className="flex items-center gap-1.5">
 							<span
 								className={cn(
-									"truncate text-[13px] leading-tight transition-colors flex-1",
+									"truncate leading-tight transition-colors flex-1 text-[13.5px]",
 									isActive
-										? "text-foreground font-medium"
-										: "text-foreground/80",
+										? "text-[var(--argus-text-active)] font-medium"
+										: "text-[var(--argus-text-emphasis)]",
 								)}
 							>
 								{isBranchWorkspace ? "local" : name || branch}
@@ -505,6 +522,23 @@ export function WorkspaceListItem({
 								</div>
 							</div>
 						</div>
+
+						{attentionReason && (
+							<div
+								className="w-full font-mono"
+								style={{
+									color: "var(--argus-amber-muted)",
+									fontSize: "10.5px",
+									lineHeight: 1.45,
+									display: "-webkit-box",
+									WebkitLineClamp: 2,
+									WebkitBoxOrient: "vertical",
+									overflow: "hidden",
+								}}
+							>
+								{attentionReason}
+							</div>
+						)}
 
 						{pr && (
 							<div className="flex items-center gap-2 text-[11px] w-full">

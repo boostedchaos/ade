@@ -4,7 +4,7 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** Phase 5 — Additive affordances.
+**Current phase:** Phase 6 — States and the memory pane.
 
 ---
 
@@ -69,7 +69,7 @@ resolution, hooks-from-disk).
 | 2 — Typography | ✅ done | `PH2` | IBM Plex vendored (5 woff2, OFL); label grammar on 14 headers; 40 bold tokens demoted; verified in the BUILT css |
 | 3 — The iris | ✅ done | `PH3` | `<Iris>` (5 states) + `<ArgusMark>` ladder + lockup; every status dot, avatar and old wordmark replaced; motion CSS landed |
 | 4 — Chrome geometry | ✅ done | `PH4` | Titlebar/rail/tab strip/model bar/status bar geometry; radii retargeted; shadows gone; 89 Tailwind palette colors -> tokens |
-| 5 — Additive affordances | ⬜ not started | | |
+| 5 — Additive affordances | ✅ done | `PH5` | All three built on real signals: rail reason, blocked-session strip, amber ringed pane |
 | 6 — States & memory pane | ⬜ not started | | |
 | 7 — Motion | ⬜ not started | | |
 | 8 — Name, icons, docs | ⬜ not started | | |

@@ -127,16 +127,43 @@
  * mosaic's layout, so growing it would shift the terminal by a pixel every
  * time an agent asked a question.
  */
+/*
+ * Argus: a blocked pane gets an AMBER inset ring and an amber-tinted header
+ * (DESIGN-BRIEF.md §3a / §5b), not a red one. Under Argus, amber means
+ * "waiting on you" and red is reserved for destructive/error — a red ring
+ * around a pane that is merely asking a question overstates it, and would
+ * collide with the error states in 8a.
+ *
+ * mac gets `inset 0 0 0 1px rgba(255,181,71,.35)`; Windows draws it as a
+ * border color instead, matching its bordered-card panes.
+ */
 :is(.mosaic-theme-dark, .mosaic-theme-light) .mosaic-window-attention {
-	border-color: var(--color-destructive);
-	box-shadow: inset 0 0 0 2px var(--color-destructive);
+	border-color: var(--argus-ring-amber-strong);
+	box-shadow: inset 0 0 0 1px var(--argus-ring-amber);
 }
 :is(.mosaic-theme-dark, .mosaic-theme-light)
 	.mosaic-window-attention
 	.mosaic-window-toolbar {
 	background: color-mix(
 		in srgb,
-		var(--color-destructive) 14%,
-		var(--color-secondary)
+		var(--argus-iris-waiting) 10%,
+		var(--argus-panel)
 	);
+}
+
+/*
+ * Argus movement 3 — pane focus. 120ms linear on border and background ONLY;
+ * no scale, no shadow, no reflow. Anything that moves a pane would move the
+ * terminal inside it.
+ */
+:is(.mosaic-theme-dark, .mosaic-theme-light) .mosaic-window {
+	transition:
+		border-color var(--argus-duration-fast) linear,
+		background-color var(--argus-duration-fast) linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:is(.mosaic-theme-dark, .mosaic-theme-light) .mosaic-window {
+		transition: none;
+	}
 }
