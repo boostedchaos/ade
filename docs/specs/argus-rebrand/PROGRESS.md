@@ -4,7 +4,7 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** Phase 7 — Motion.
+**Current phase:** Phase 8 — Name, icons, docs.
 
 ---
 
@@ -71,7 +71,7 @@ resolution, hooks-from-disk).
 | 4 — Chrome geometry | ✅ done | `PH4` | Titlebar/rail/tab strip/model bar/status bar geometry; radii retargeted; shadows gone; 89 Tailwind palette colors -> tokens |
 | 5 — Additive affordances | ✅ done | `PH5` | All three built on real signals: rail reason, blocked-session strip, amber ringed pane |
 | 6 — States & memory pane | ◐ partial | `PH6` | State grammar + 2 of 4 quadrants + Agent Files panel with REAL sizes/mtimes; 8b reading-pane provenance NOT built — see below |
-| 7 — Motion | ⬜ not started | | |
+| 7 — Motion | ✅ done | `PH7` | All four movements wired; reduced-motion covers the app's other 24 animations too; 5 motion tests, canary-proven |
 | 8 — Name, icons, docs | ⬜ not started | | |
 
 ## Deviations from the SPEC (each deliberate, each with a reason)

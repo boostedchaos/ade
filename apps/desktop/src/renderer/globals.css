@@ -468,12 +468,10 @@
 		animation: argus-attention-pulse var(--argus-duration-slow) ease-out 3 both;
 	}
 
-	/* 3. Pane focus — 120ms linear, border and background only. */
-	.argus-pane {
-		transition:
-			border-color var(--argus-duration-fast) linear,
-			background-color var(--argus-duration-fast) linear;
-	}
+	/* 3. Pane focus — 120ms linear, border and background only.
+	   The rule itself lives in mosaic-theme.css, on `.mosaic-window`, because
+	   that is the element mosaic actually renders. Keeping a second copy here
+	   would be dead CSS that looks authoritative. */
 
 	/* 4. Memory write — flash in 90ms, out over 600ms. */
 	@keyframes argus-memory-write {
@@ -492,7 +490,34 @@
 		animation: argus-memory-write 690ms ease-out both;
 	}
 
+	/**
+	 * `prefers-reduced-motion` drops EVERY movement to an instant state change.
+	 *
+	 * The brief calls this non-negotiable, and it has to reach further than the
+	 * four Argus movements: the app still runs 21 `animate-spin` busy
+	 * indicators, plus a couple of `animate-pulse` skeletons and an
+	 * `animate-ping`. Those are kept deliberately — a spinner during a genuinely
+	 * async operation REPORTS STATE, which is the test the brief sets for
+	 * motion, and deleting them would leave buttons with no feedback. But under
+	 * reduced motion they must stop like everything else, and per-component
+	 * `motion-safe:` prefixes had only been applied in one place.
+	 *
+	 * Spinners are held at full opacity rather than hidden: an invisible busy
+	 * indicator is worse than a still one.
+	 */
 	@media (prefers-reduced-motion: reduce) {
+		/* Tailwind's utility layer outranks @layer base, so cancelling
+		   .animate-spin from here requires !important — without it the spinners
+		   keep spinning under reduced motion. */
+		.animate-spin,
+		.animate-ping,
+		.animate-pulse {
+			/* biome-ignore lint/complexity/noImportantStyles: see above */
+			animation: none !important;
+			/* biome-ignore lint/complexity/noImportantStyles: see above */
+			opacity: 1 !important;
+		}
+
 		.argus-iris-pupil-wake,
 		.argus-iris-attention-ring,
 		.argus-memory-write {

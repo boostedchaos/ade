@@ -1,5 +1,5 @@
 import { useParams } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LuDownload } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useTabsStore } from "renderer/stores/tabs/store";
@@ -30,6 +30,46 @@ function formatSize(bytes: number | null): string | null {
  */
 const RECENT_WRITE_MS = 2 * 60 * 1000;
 
+/**
+ * Paths whose mtime changed since the last render — Argus movement 4.
+ *
+ * Keyed on the CHANGE, not on "the file is recent": flashing everything with a
+ * fresh mtime would replay the animation on every mount and every refetch,
+ * which is the "nothing animates on load" rule broken in a way that only shows
+ * up when someone opens the panel next to a busy agent.
+ */
+function useJustWritten(files: AgentFileEntry[] | undefined): Set<string> {
+	const previous = useRef<Map<string, number> | null>(null);
+	const [flashing, setFlashing] = useState<Set<string>>(new Set());
+
+	useEffect(() => {
+		if (!files) return;
+		const current = new Map(
+			files.map((f) => [f.absolutePath, f.modifiedAt ?? 0]),
+		);
+		const prior = previous.current;
+		previous.current = current;
+		// First load records the baseline and animates nothing.
+		if (!prior) return;
+
+		const changed = new Set<string>();
+		for (const [path, mtime] of current) {
+			const before = prior.get(path);
+			if (before !== undefined && mtime > before) changed.add(path);
+		}
+		if (changed.size === 0) return;
+
+		setFlashing(changed);
+		const timer = setTimeout(() => setFlashing(new Set()), MEMORY_FLASH_MS);
+		return () => clearTimeout(timer);
+	}, [files]);
+
+	return flashing;
+}
+
+/** Matches the .argus-memory-write keyframes in globals.css (90ms in, 600ms out). */
+const MEMORY_FLASH_MS = 690;
+
 const GROUP_ORDER: AgentFileGroup[] = [
 	"Memory",
 	"Skills",
@@ -53,6 +93,7 @@ export function AgentFilesView() {
 		{ enabled: !!workspaceId },
 	);
 	const agentName = workspace?.name ?? null;
+	const justWritten = useJustWritten(files);
 
 	const handleActivate = useCallback(
 		(entry: AgentFileEntry) => {
@@ -145,7 +186,11 @@ export function AgentFilesView() {
 											key={entry.absolutePath}
 											type="button"
 											onClick={() => handleActivate(entry)}
-											className="flex items-center gap-2 px-3 py-1 text-left font-mono transition-colors"
+											className={`flex items-center gap-2 px-3 py-1 text-left font-mono transition-colors${
+												justWritten.has(entry.absolutePath)
+													? " argus-memory-write"
+													: ""
+											}`}
 											style={{
 												fontSize: "12px",
 												paddingInlineStart: 12 + depth * 20,
