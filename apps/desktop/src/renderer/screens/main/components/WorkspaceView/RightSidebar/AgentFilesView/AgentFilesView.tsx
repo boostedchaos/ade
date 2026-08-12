@@ -1,6 +1,6 @@
 import { useParams } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
-import { LuDownload, LuFileText } from "react-icons/lu";
+import { LuDownload } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import { ImportSessionDialog } from "./ImportSessionDialog";
@@ -12,7 +12,23 @@ interface AgentFileEntry {
 	group: AgentFileGroup;
 	absolutePath: string;
 	relativeToWorktree: string | null;
+	sizeBytes: number | null;
+	modifiedAt: number | null;
 }
+
+/** "1.2k" / "840" — the right-aligned size in the 2a panel. */
+function formatSize(bytes: number | null): string | null {
+	if (bytes === null) return null;
+	if (bytes < 1000) return String(bytes);
+	return `${(bytes / 1000).toFixed(1)}k`;
+}
+
+/**
+ * A file counts as "just written" for two minutes. The 2a mock shows the
+ * recently-written file highlighted with `now` where its size would be; this
+ * is the window that earns that treatment.
+ */
+const RECENT_WRITE_MS = 2 * 60 * 1000;
 
 const GROUP_ORDER: AgentFileGroup[] = [
 	"Memory",
@@ -32,6 +48,11 @@ export function AgentFilesView() {
 		);
 
 	const addFileViewerPane = useTabsStore((s) => s.addFileViewerPane);
+	const { data: workspace } = electronTrpc.workspaces.get.useQuery(
+		{ id: workspaceId ?? "" },
+		{ enabled: !!workspaceId },
+	);
+	const agentName = workspace?.name ?? null;
 
 	const handleActivate = useCallback(
 		(entry: AgentFileEntry) => {
@@ -78,7 +99,9 @@ export function AgentFilesView() {
 	return (
 		<div className="flex flex-col flex-1 min-h-0">
 			<div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40">
-				<span className="argus-label">Agent files</span>
+				<span className="argus-label">
+					Memory{agentName ? ` · ${agentName}` : ""}
+				</span>
 				<button
 					type="button"
 					onClick={() => setImportOpen(true)}
@@ -109,18 +132,52 @@ export function AgentFilesView() {
 						return (
 							<div key={group} className="flex flex-col">
 								<div className="px-3 pt-2 pb-1 argus-label">{group}</div>
-								{entries.map((entry) => (
-									<button
-										key={entry.absolutePath}
-										type="button"
-										onClick={() => handleActivate(entry)}
-										className="flex items-center gap-2 px-3 py-1 text-sm text-left text-foreground/90 hover:bg-tertiary/20 transition-colors"
-										title={entry.absolutePath}
-									>
-										<LuFileText className="size-3.5 shrink-0 text-muted-foreground" />
-										<span className="truncate">{entry.label}</span>
-									</button>
-								))}
+								{entries.map((entry) => {
+									const isRecent =
+										entry.modifiedAt !== null &&
+										Date.now() - entry.modifiedAt < RECENT_WRITE_MS;
+									// Nested files (skills/x/SKILL.md, memories/y.md) indent
+									// under their group, as in the 2a mock.
+									const depth = entry.label.split("/").length - 1;
+									const size = formatSize(entry.sizeBytes);
+									return (
+										<button
+											key={entry.absolutePath}
+											type="button"
+											onClick={() => handleActivate(entry)}
+											className="flex items-center gap-2 px-3 py-1 text-left font-mono transition-colors"
+											style={{
+												fontSize: "12px",
+												paddingInlineStart: 12 + depth * 20,
+												color: isRecent
+													? "var(--argus-iris-working)"
+													: "var(--argus-text-body)",
+												backgroundColor: isRecent
+													? "var(--argus-wash-accent-soft)"
+													: undefined,
+												borderRadius: "var(--argus-radius-surface)",
+											}}
+											title={entry.absolutePath}
+										>
+											<span className="truncate flex-1">{entry.label}</span>
+											{/* `now` for a just-written file, otherwise the real
+											    size. Nothing at all when the stat failed — an
+											    invented size would be worse than a blank. */}
+											{isRecent ? (
+												<span className="shrink-0">now</span>
+											) : (
+												size && (
+													<span
+														className="shrink-0"
+														style={{ color: "var(--argus-text-label)" }}
+													>
+														{size}
+													</span>
+												)
+											)}
+										</button>
+									);
+								})}
 							</div>
 						);
 					})}

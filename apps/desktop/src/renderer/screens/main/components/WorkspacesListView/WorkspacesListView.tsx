@@ -7,6 +7,11 @@ import { useMemo, useState } from "react";
 import { LuSearch, LuX } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { navigateToWorkspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
+import {
+	ArgusState,
+	ArgusStateAction,
+} from "renderer/screens/main/components/ArgusState/ArgusState";
+import { useOpenNewWorkspaceModal } from "renderer/stores/new-workspace-modal";
 import type { FilterMode, ProjectGroup, WorkspaceItem } from "./types";
 import { WorkspaceRow } from "./WorkspaceRow";
 
@@ -17,6 +22,7 @@ const FILTER_OPTIONS: { value: FilterMode; label: string }[] = [
 ];
 
 export function WorkspacesListView() {
+	const openNewWorkspaceModal = useOpenNewWorkspaceModal();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [filterMode, setFilterMode] = useState<FilterMode>("all");
 	const navigate = useNavigate();
@@ -264,17 +270,34 @@ export function WorkspacesListView() {
 					</div>
 				))}
 
-				{filteredItems.length === 0 && (
-					<div className="flex items-center justify-center h-32 text-foreground/50 text-sm">
-						{searchQuery
-							? "No agents match your search"
-							: filterMode === "active"
-								? "No active agents"
-								: filterMode === "closed"
-									? "No closed agents"
-									: "No agents yet"}
-					</div>
-				)}
+				{filteredItems.length === 0 &&
+					(searchQuery || filterMode !== "all" ? (
+						<div
+							className="flex items-center justify-center h-32"
+							style={{
+								color: "var(--argus-text-label)",
+								fontSize: "var(--argus-size-body-tight)",
+							}}
+						>
+							{searchQuery
+								? "No agents match your search"
+								: filterMode === "active"
+									? "No active agents"
+									: "No closed agents"}
+						</div>
+					) : (
+						<ArgusState
+							className="px-11 py-14"
+							title="No agents yet"
+							description="An agent is a name, a repo, and a memory that outlives the session. Most people start with one that owns the repo they're in."
+							action={
+								<ArgusStateAction onClick={() => openNewWorkspaceModal()}>
+									Create an agent
+								</ArgusStateAction>
+							}
+							actionHint="⌘N"
+						/>
+					))}
 			</div>
 		</div>
 	);

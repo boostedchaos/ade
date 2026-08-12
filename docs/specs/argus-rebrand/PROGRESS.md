@@ -4,7 +4,7 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** Phase 6 — States and the memory pane.
+**Current phase:** Phase 7 — Motion.
 
 ---
 
@@ -70,7 +70,7 @@ resolution, hooks-from-disk).
 | 3 — The iris | ✅ done | `PH3` | `<Iris>` (5 states) + `<ArgusMark>` ladder + lockup; every status dot, avatar and old wordmark replaced; motion CSS landed |
 | 4 — Chrome geometry | ✅ done | `PH4` | Titlebar/rail/tab strip/model bar/status bar geometry; radii retargeted; shadows gone; 89 Tailwind palette colors -> tokens |
 | 5 — Additive affordances | ✅ done | `PH5` | All three built on real signals: rail reason, blocked-session strip, amber ringed pane |
-| 6 — States & memory pane | ⬜ not started | | |
+| 6 — States & memory pane | ◐ partial | `PH6` | State grammar + 2 of 4 quadrants + Agent Files panel with REAL sizes/mtimes; 8b reading-pane provenance NOT built — see below |
 | 7 — Motion | ⬜ not started | | |
 | 8 — Name, icons, docs | ⬜ not started | | |
 
@@ -100,6 +100,42 @@ real component renders icon buttons with tooltips and a "not installed" marker.
 Converting to text would drop the icons, which are an existing product
 affordance the design bundle did not know about. Geometry, height, colors and
 radii follow the brief. Flagged for Kyle's call at visual review.
+
+## Phase 6 — what was NOT built, and why
+
+**8b's per-block provenance treatment is not implemented.** The brief asks the
+memory reading pane to mark each block as agent-written (blue left border,
+`· just added`) or user-pinned (grey border, `· yours, pinned`). SPEC Phase 6
+says to derive this renderer-side "from write history rather than new
+persistent state" — but **there is no write history to derive it from.** The
+app records no per-block authorship and no per-file write log; the only
+provenance signal on disk is a file's mtime, which is per-FILE and says nothing
+about who wrote which paragraph inside it. Deriving it would mean inventing the
+attribution, and a wrong "yours, pinned" on a line the agent actually wrote is
+worse than no marker at all. This needs a real write-log first; it is a
+feature, not a reskin. **Recorded, not fixed — Kyle's call.**
+
+**Two of 8a's four quadrants are built** ("No agents yet", "Can't reach the
+server"). "Runtime missing" and "Worktree conflicts" have no equivalent
+full-page state in this app today — the runtime case is an install dialog
+launched from the model bar, and conflicts surface in the changes view. Both
+would be new screens, not reskins of existing ones. `ArgusState` is built and
+exported so either can be dropped in when someone builds the screen.
+
+## What WAS built in Phase 6
+
+- `ArgusState` / `ArgusStateIcon` / `ArgusStateAction`: the 8a grammar in one
+  place — 40px iris-grammar icon, 20px/300 title, ≤420px description, optional
+  mono detail, exactly one action.
+- Agent Files panel to the 2a spec, with REAL data: `listAgentFiles` now returns
+  `sizeBytes` + `modifiedAt` from `statSync`, so the right-aligned size and the
+  `now` highlight on a just-written file report the filesystem instead of
+  decorating. A row whose stat failed renders with NO size rather than a
+  made-up one.
+- Fixed a stale comment in `query.ts` claiming the memory scaffold was "staged
+  off for the video series". `MEMORY_SCAFFOLD_ENABLED` has defaulted to ON for
+  some time (`ADE_MEMORY_SCAFFOLD=false` is only an escape hatch); the comment
+  had me briefly convinced the whole panel was disabled.
 
 ## Open items
 
