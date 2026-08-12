@@ -4,7 +4,7 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** Phase 0 — baseline measured, branch open.
+**Current phase:** Phase 2 — Typography.
 
 ---
 
@@ -65,7 +65,7 @@ resolution, hooks-from-disk).
 | Phase | State | Commit | Note |
 | --- | --- | --- | --- |
 | 0 — baseline | ✅ done | — | Baseline measured; blocking duplicate files removed; typecheck clean |
-| 1 — Themes | ⬜ not started | | |
+| 1 — Themes | ✅ done | `PH1` | `ink` + `daylight` land; ember orange gone from renderer/main; typecheck 18/18, tests at baseline |
 | 2 — Typography | ⬜ not started | | |
 | 3 — The iris | ⬜ not started | | |
 | 4 — Chrome geometry | ⬜ not started | | |
@@ -76,7 +76,10 @@ resolution, hooks-from-disk).
 
 ## Open items
 
-- None yet.
+- `:root.platform-win32` geometry vars are declared in `globals.css` and the
+  class is stamped by `theme-boot.js`, but nothing consumes them until Phase 4.
+- The Settings Appearance swatch row (3c) must read `ARGUS_THEME_IDS` from
+  `shared/themes/built-in` rather than `builtInThemes` — wired in Phase 6.
 
 ## Deferred / not done
 

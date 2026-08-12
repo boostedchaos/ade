@@ -15,84 +15,176 @@
  * This ensures the app looks correct during initial load before hydration.
  */
 :root {
-	/* Default to dark (ember) theme colors as fallback */
-	--background: #151110;
-	--foreground: #eae8e6;
-	--card: #201e1c;
-	--card-foreground: #eae8e6;
-	--popover: #201e1c;
-	--popover-foreground: #eae8e6;
-	--primary: #eae8e6;
-	--primary-foreground: #151110;
-	--secondary: #2a2827;
-	--secondary-foreground: #eae8e6;
-	--muted: #2a2827;
-	--muted-foreground: #a8a5a3;
-	--accent: #2a2827;
-	--accent-foreground: #eae8e6;
-	--tertiary: #1a1716;
-	--tertiary-active: #252220;
-	--destructive: #cc4444;
-	--destructive-foreground: #ffcccc;
-	--border: #2a2827;
-	--input: #2a2827;
-	--ring: #3a3837;
-	--chart-1: #e07850;
-	--chart-2: #50a878;
-	--chart-3: #d4a84b;
-	--chart-4: #7b68ee;
-	--chart-5: #dc6b6b;
+	/* Pre-hydration fallback: Ink (Argus dark, the default theme).
+	   Must stay in sync with shared/themes/built-in/ink.ts. */
+	--background: #0b0e14;
+	--foreground: #d7dde8;
+	--card: #10141d;
+	--card-foreground: #d7dde8;
+	--popover: #10141d;
+	--popover-foreground: #d7dde8;
+	--primary: #d7dde8;
+	--primary-foreground: #0b0e14;
+	--secondary: #16202f;
+	--secondary-foreground: #d7dde8;
+	--muted: #16202f;
+	--muted-foreground: #7b8598;
+	--accent: #16202f;
+	--accent-foreground: #d7dde8;
+	--tertiary: #0e1219;
+	--tertiary-active: #141a25;
+	--destructive: #e06a6a;
+	--destructive-foreground: #ffd9d9;
+	--border: #1c2231;
+	--input: #1c2231;
+	--ring: #21324a;
+	--chart-1: #4da3ff;
+	--chart-2: #5fc48f;
+	--chart-3: #ffb547;
+	--chart-4: #a78bfa;
+	--chart-5: #e06a6a;
 	--radius: 0.625rem;
-	--sidebar: #1a1716;
-	--sidebar-foreground: #eae8e6;
-	--sidebar-primary: #e07850;
-	--sidebar-primary-foreground: #151110;
-	--sidebar-accent: #252220;
-	--sidebar-accent-foreground: #eae8e6;
-	--sidebar-border: #2a2827;
-	--sidebar-ring: #3a3837;
-	--highlight-match: rgba(224, 120, 80, 0.2);
-	--highlight-active: rgba(224, 120, 80, 0.5);
+	--sidebar: #0e1219;
+	--sidebar-foreground: #d7dde8;
+	--sidebar-primary: #4da3ff;
+	--sidebar-primary-foreground: #0b0e14;
+	--sidebar-accent: #16202f;
+	--sidebar-accent-foreground: #d7dde8;
+	--sidebar-border: #1c2231;
+	--sidebar-ring: #21324a;
+	--highlight-match: rgba(77, 163, 255, 0.2);
+	--highlight-active: rgba(77, 163, 255, 0.5);
+
+	/* Argus surface ladder and semantic ink.
+	   These are the non-token values the mocks use (DESIGN-BRIEF.md
+	   "Additional non-token values"). They are NOT part of the Theme
+	   interface; they are the app's chrome vocabulary and are re-declared
+	   per theme in the :root.light block below. */
+	--argus-panel: #0e1219;
+	--argus-raised: #141a25;
+	--argus-selected: #16202f;
+	--argus-hairline: #1c2231;
+	--argus-focus: #21324a;
+
+	--argus-iris-idle: #2b3448;
+	--argus-iris-working: #4da3ff;
+	--argus-iris-waiting: #ffb547;
+	--argus-iris-review: #5fc48f;
+
+	--argus-text-disabled: #3f4a5e;
+	--argus-text-label: #5c6779;
+	--argus-text-secondary: #7b8598;
+	--argus-text-body: #9aa5b6;
+	--argus-text-emphasis: #c6cfdd;
+	--argus-text-active: #e6ecf5;
+	--argus-text-amber: #e0cba6;
+	--argus-amber-muted: #8a7a5c;
+	--argus-pass: #5fc48f;
+
+	/* Alpha washes, derived from the accent above. */
+	--argus-wash-accent: rgba(77, 163, 255, 0.1);
+	--argus-wash-accent-soft: rgba(77, 163, 255, 0.07);
+	--argus-wash-amber: rgba(255, 181, 71, 0.05);
+	--argus-ring-amber: rgba(255, 181, 71, 0.35);
+	--argus-ring-amber-strong: rgba(255, 181, 71, 0.45);
+
+	/* Chrome geometry (DESIGN-BRIEF.md "Spacing, radii, borders").
+	   Overridden under .platform-win32 for Windows 11 chrome. */
+	--argus-radius-window: 10px;
+	--argus-radius-surface: 2px;
+	--argus-radius-surface-lg: 3px;
+	--argus-rail-width: 238px;
+	--argus-panel-width: 280px;
+	--argus-titlebar-height: 46px;
+	--argus-tabstrip-height: 44px;
+	--argus-modelbar-height: 40px;
+	--argus-statusbar-height: 30px;
+
+	/* Motion duration tokens (DESIGN-BRIEF.md "Motion"). Four movements only. */
+	--argus-duration-fast: 120ms;
+	--argus-duration-base: 220ms;
+	--argus-duration-slow: 900ms;
+	--argus-ease-wake: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Light theme fallback values - applied before hydration if user has light theme saved */
+/* Light theme fallback values - applied before hydration if user has light theme saved.
+   Daylight (Argus light). Must stay in sync with
+   shared/themes/built-in/daylight.ts. */
 :root.light {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--tertiary: oklch(0.95 0.003 40);
-	--tertiary-active: oklch(0.9 0.003 40);
-	--destructive: oklch(0.577 0.245 27.325);
-	--destructive-foreground: oklch(0.985 0 0);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
-	--chart-1: oklch(0.646 0.222 41.116);
-	--chart-2: oklch(0.6 0.118 184.704);
-	--chart-3: oklch(0.398 0.07 227.392);
-	--chart-4: oklch(0.828 0.189 84.429);
-	--chart-5: oklch(0.769 0.188 70.08);
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.205 0 0);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
-	--highlight-match: rgba(255, 211, 61, 0.35);
-	--highlight-active: rgba(255, 150, 50, 0.55);
+	--background: #f6f7f9;
+	--foreground: #1a2130;
+	--card: #ffffff;
+	--card-foreground: #1a2130;
+	--popover: #ffffff;
+	--popover-foreground: #1a2130;
+	--primary: #1a2130;
+	--primary-foreground: #f6f7f9;
+	--secondary: #eef4fd;
+	--secondary-foreground: #1a2130;
+	--muted: #eef4fd;
+	--muted-foreground: #64708a;
+	--accent: #eef4fd;
+	--accent-foreground: #1a2130;
+	--tertiary: #ffffff;
+	--tertiary-active: #edf1f7;
+	--destructive: #c0392b;
+	--destructive-foreground: #ffffff;
+	--border: #e4e8ef;
+	--input: #e4e8ef;
+	--ring: #c7d8f2;
+	--chart-1: #1f6fd0;
+	--chart-2: #2f8f5b;
+	--chart-3: #b8720d;
+	--chart-4: #7c5cd6;
+	--chart-5: #c0392b;
+	--sidebar: #ffffff;
+	--sidebar-foreground: #1a2130;
+	--sidebar-primary: #1f6fd0;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #eef4fd;
+	--sidebar-accent-foreground: #1a2130;
+	--sidebar-border: #e4e8ef;
+	--sidebar-ring: #c7d8f2;
+	--highlight-match: rgba(31, 111, 208, 0.18);
+	--highlight-active: rgba(31, 111, 208, 0.4);
+
+	/* Argus surface ladder and semantic ink - Daylight. */
+	--argus-panel: #ffffff;
+	--argus-raised: #edf1f7;
+	--argus-selected: #eef4fd;
+	--argus-hairline: #e4e8ef;
+	--argus-focus: #c7d8f2;
+
+	--argus-iris-idle: #c2cbd8;
+	--argus-iris-working: #1f6fd0;
+	--argus-iris-waiting: #b8720d;
+	--argus-iris-review: #2f8f5b;
+
+	--argus-text-disabled: #a8b1c2;
+	--argus-text-label: #8a94a8;
+	--argus-text-secondary: #64708a;
+	--argus-text-body: #3c465c;
+	--argus-text-emphasis: #1a2130;
+	--argus-text-active: #1a2130;
+	--argus-text-amber: #7a5a14;
+	--argus-amber-muted: #7a5a14;
+	--argus-pass: #2f8f5b;
+
+	--argus-wash-accent: rgba(31, 111, 208, 0.08);
+	--argus-wash-accent-soft: rgba(31, 111, 208, 0.06);
+	--argus-wash-amber: rgba(184, 114, 13, 0.07);
+	--argus-ring-amber: rgba(184, 114, 13, 0.35);
+	--argus-ring-amber-strong: rgba(184, 114, 13, 0.45);
+}
+
+/* Windows 11 chrome geometry (2b / 5b). The class is set on <html> by the
+   renderer from the detected platform. */
+:root.platform-win32 {
+	--argus-radius-window: 8px;
+	--argus-radius-surface: 4px;
+	--argus-radius-surface-lg: 4px;
+	--argus-rail-width: 250px;
+	--argus-titlebar-height: 40px;
 }
 
 @theme inline {
