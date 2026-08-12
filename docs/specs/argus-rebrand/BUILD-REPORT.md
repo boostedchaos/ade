@@ -1,12 +1,12 @@
 # Argus rebrand — build report
 
-Branch `argus-rebrand` · branch point `ad2a48c` (main) · head `1816c2c`
+Branch `argus-rebrand` · branch point `ad2a48c` (main)
 Pushed to **`boosted`** (`github.com/boostedchaos/ade`). **Not merged, not released** — both are Kyle's call.
 
 Contract: [SPEC.md](SPEC.md) · Design record: [../../design/argus/DESIGN-BRIEF.md](../../design/argus/DESIGN-BRIEF.md) · Live log: [PROGRESS.md](PROGRESS.md)
 
-9 commits, one per phase plus a baseline commit. 146 files changed,
-+3058 / −2331.
+One commit per phase, plus a baseline commit and two fixes for defects the
+gates caught.
 
 ---
 
@@ -17,9 +17,9 @@ Contract: [SPEC.md](SPEC.md) · Design record: [../../design/argus/DESIGN-BRIEF.
 | 1 | Typecheck clean at repo root | ✅ **PASS** — 18/18 (was BROKEN on `main`) |
 | 2 | Test baseline not regressed | ✅ **PASS** — 41 failures, byte-identical set |
 | 3 | Packaged macOS build from `/private/tmp` | ✅ **PASS** — `Argus-0.4.2-arm64.dmg` |
-| 4 | `windows-ci` green | ⏳ see §1.4 |
+| 4 | `windows-ci` green | ✅ **PASS** — after fixing a real break it caught |
 | 5 | Visual verification at 2× | ⚠️ **PARTIAL — static only.** See §1.5, this is the honest gap |
-| 6 | Codex cross-check of the diff | ⏳ see §1.6 |
+| 6 | Codex cross-check of the diff | ✅ **DONE** — 2 findings, 1 confirmed and fixed |
 
 ### 1.1 Typecheck — PASS
 
@@ -118,16 +118,52 @@ Verified **in the packaged artifact**, not in the source that produced it:
 - Extracted the shipped `index-*.css` (421,730 B) out of `app.asar` and asserted
   the tokens against it — see §3.
 
-### 1.4 windows-ci — dispatched
+### 1.4 windows-ci — PASS (second run; the first one caught a real bug)
+
+**Run 1 `31609717875` — FAILED, and the cause was mine.**
+
+Typecheck, the full desktop/control-plane/cli suites, the Windows package build
+and the packaged-resource verification all passed. Then:
 
 ```
-$ gh workflow run windows-ci.yml --ref argus-rebrand -R boostedchaos/ade
-https://github.com/boostedchaos/ade/actions/runs/31609717875
+Start-Process -FilePath "release/win-unpacked/ADE.exe"
+  → This command cannot be run due to the error: The system cannot find the file specified.
 ```
 
-Status at the time of writing: **in_progress**. Recent runs on this workflow
-take ~13–15 min. **Result appended in §5 when it completes** — this report is
-not claiming a pass it has not seen.
+Renaming `productName` renames the built binary to `Argus.exe`. Three smoke
+steps in `.github/workflows/windows-ci.yml` held the old literal. Nothing local
+could have caught it — those steps are unreachable from a macOS build, and the
+failure lands *after* everything else is green, which makes it read like flaky
+infra rather than my change.
+
+**Fixed by DERIVING, not substituting** (`1ca27ee`). Replacing `ADE.exe` with
+`Argus.exe` would reintroduce the identical bug at the next rename:
+
+```powershell
+$exe = "release/win-unpacked/$((Get-Content package.json | ConvertFrom-Json).productName).exe"
+```
+
+Applied at all three call sites; the workflow was parsed to confirm each step
+runs with `working-directory: apps/desktop`, so `package.json` resolves to the
+file that actually declares `productName`.
+
+**Run 2 `31611066395` — SUCCESS**, 11m41s, every step green including the three
+smoke tests that never got to run before:
+
+- ✅ Smoke: native modules load under packaged Electron
+- ✅ Smoke: packaged app boots, initializes `~/.ade`, stays alive
+- ✅ Smoke: installed CLI launcher reaches control server over named pipe
+
+The last two are worth more than a green tick: they prove the **renamed** app
+boots on Windows and that the deliberately **un-renamed** `ade` CLI still
+reaches it over the named pipe. That is direct evidence for the rename boundary
+in SPEC §Decisions, not an assumption about it.
+
+**Left alone, and it is your call:** `release-desktop.yml` writes stable copies
+named `ADE-<arch>.dmg`. Its globs still match the Argus artifacts so a release
+would not fail — but that filename *is* the public
+`/releases/latest/download/ADE-arm64.dmg` URL. Renaming it breaks every existing
+link, which is an outward-facing product decision rather than a build fix.
 
 ### 1.5 Visual verification — PARTIAL, and this is the real gap
 
@@ -164,19 +200,47 @@ What to look at first, in order of how likely I am to have got it wrong:
    terminal. Settings → Appearance overrides it.
 4. **Daylight** — switch to it. It has the most derived (non-brief) values.
 
-### 1.6 Codex cross-check — dispatched
+### 1.6 Codex cross-check — DONE, 2 findings, 1 confirmed
 
-`codex exec -m gpt-5.6-sol` against a 7,605-line diff (docs and binaries
-excluded), with a tight brief: **hard cap of 8 findings**, a **mandatory
-concrete failure scenario per finding**, and an explicit don't-report list
-(style, naming, missing tests, a11y polish, performance speculation,
-abstraction suggestions, docs, pre-existing issues, type nitpicks tsc already
-passes).
+`codex exec -m gpt-5.6-sol` over the 7,605-line diff, tight brief (hard cap of 8
+findings, mandatory concrete failure scenario, explicit don't-report list).
+82,479 tokens. It returned **2** findings — both within the bar, no noise.
 
-Status at the time of writing: **still running**. **Result and my verification
-of each claim appended in §5.** Findings are not accepted on Codex's say-so —
-this reviewer is high-recall / variable-precision, and every claim gets checked
-against the tree before it is treated as real.
+Neither was accepted on its say-so; both were checked against the tree.
+
+**FINDING 1 [high] — `appId` change breaks in-place upgrade. → REJECTED as a
+defect; it is a recorded decision.**
+
+Codex is factually right: `com.boostedchaos.argus` means the updater cannot
+treat this as the same installed app. But that is not a bug — it is
+SPEC §Decisions, which chose it *and named this exact consequence*: "macOS
+treats it as a new application, so the existing `/Applications/ADE.app` will not
+auto-update into it — Kyle installs Argus.app once by hand and deletes the old
+app." Codex only had the diff, not the SPEC, so it could not know. Useful as an
+**independent confirmation that the consequence is real** rather than as a
+finding.
+
+**FINDING 2 [low] — the memory-write flash can stick forever. → CONFIRMED, real,
+and FIXED.**
+
+Severity was understated; the mechanism was slightly wrong; the defect is real.
+
+The clear timer lived inside the `files` effect, so its cleanup cancelled the
+pending clear on *any* subsequent `files` change. If that change found nothing
+new, the effect returned early **without scheduling a replacement**, and the row
+stayed highlighted until the panel unmounted.
+
+Codex's stated trigger — a refetch carrying identical data — would usually not
+fire it, because React Query's structural sharing returns the same reference and
+the effect never re-runs. The genuinely reachable trigger is different and more
+likely: **an agent writes a NEW memory file.** That changes the array (so the
+effect does re-run) without raising any existing file's mtime, so `changed` is
+empty and the early return strands the highlight.
+
+Fixed by splitting detection from clearing and keying the clear timer on
+`flashing` itself rather than on `files`, which makes the invariant hold by
+construction — whenever something is flashing, a timer to stop it exists.
+Typecheck 18/18, tests unchanged at 889/37.
 
 ---
 
@@ -364,16 +428,20 @@ rebrand to the modification chain rather than overwriting the earlier entry.
 
 ---
 
-## 5. Pending gates
+## 5. Final state
 
-Appended when they land.
+**All six gates resolved.** Five pass; gate 5 (visual) remains PARTIAL by
+choice — see §1.5 for why and for the command to close it.
 
-### 5.1 windows-ci
+Two real defects were caught by the gates and fixed, both mine:
 
-Run `31609717875` — **result pending at the time of writing.**
+1. **`windows-ci` smoke steps hardcoded `ADE.exe`** — caught by gate 4, fixed by
+   deriving the name from `productName` (`1ca27ee`).
+2. **The memory-write flash could stick permanently** — caught by gate 6, fixed
+   by keying the clear timer on `flashing` rather than on `files`.
 
-### 5.2 Codex cross-check
+Both fixes went in as their own commits with the reasoning, and both were
+re-verified (windows-ci rerun green; typecheck 18/18, tests at baseline).
 
-**Result pending at the time of writing.** Every finding will be verified
-against the tree before being treated as real, and the verdict on each recorded
-here — including any I reject and why.
+The one gate I did not close is the one I could not close safely, and it is
+stated as such rather than quietly marked green.

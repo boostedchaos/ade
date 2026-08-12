@@ -42,6 +42,7 @@ function useJustWritten(files: AgentFileEntry[] | undefined): Set<string> {
 	const previous = useRef<Map<string, number> | null>(null);
 	const [flashing, setFlashing] = useState<Set<string>>(new Set());
 
+	// Detect: which paths got a NEWER mtime than the last time we looked.
 	useEffect(() => {
 		if (!files) return;
 		const current = new Map(
@@ -58,11 +59,24 @@ function useJustWritten(files: AgentFileEntry[] | undefined): Set<string> {
 			if (before !== undefined && mtime > before) changed.add(path);
 		}
 		if (changed.size === 0) return;
-
 		setFlashing(changed);
+	}, [files]);
+
+	// Clear: keyed on `flashing` itself, NOT on `files`.
+	//
+	// These have to be separate effects. When the clear timer lived in the
+	// detect effect, any later `files` change that found nothing new ran that
+	// effect's cleanup — cancelling the pending clear — and then returned early
+	// without scheduling a replacement, so the row stayed lit forever. The
+	// reachable trigger is an agent writing a NEW memory file: that changes the
+	// array without raising any existing file's mtime. Keying the timer on
+	// `flashing` makes the invariant hold by construction — whenever something
+	// is flashing, a timer to stop it exists.
+	useEffect(() => {
+		if (flashing.size === 0) return;
 		const timer = setTimeout(() => setFlashing(new Set()), MEMORY_FLASH_MS);
 		return () => clearTimeout(timer);
-	}, [files]);
+	}, [flashing]);
 
 	return flashing;
 }
