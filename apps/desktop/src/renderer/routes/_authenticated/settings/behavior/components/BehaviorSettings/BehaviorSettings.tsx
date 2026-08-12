@@ -316,7 +316,7 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 	return (
 		<div className="p-6 max-w-4xl w-full">
 			<div className="mb-8">
-				<h2 className="text-xl font-semibold">Features</h2>
+				<h2 className="text-xl font-medium">Features</h2>
 				<p className="text-sm text-muted-foreground mt-1">
 					Configure app features and preferences
 				</p>

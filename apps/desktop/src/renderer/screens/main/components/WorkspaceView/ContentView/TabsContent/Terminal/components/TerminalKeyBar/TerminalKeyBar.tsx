@@ -46,7 +46,7 @@ export function TerminalKeyBar({ onSendKey, onEscape }: TerminalKeyBarProps) {
 				"active:bg-accent",
 				options?.wide ? "min-w-11 px-2" : "min-w-10 px-1",
 				options?.active &&
-					"border-primary bg-primary/20 text-primary font-semibold",
+					"border-primary bg-primary/20 text-primary font-medium",
 			)}
 		>
 			{label}

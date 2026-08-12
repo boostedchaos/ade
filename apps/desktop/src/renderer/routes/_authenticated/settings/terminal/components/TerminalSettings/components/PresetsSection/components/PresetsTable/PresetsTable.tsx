@@ -21,7 +21,7 @@ export function PresetsTable({
 }: PresetsTableProps) {
 	return (
 		<div className="rounded-lg border border-border overflow-hidden">
-			<div className="flex items-center gap-4 py-2 px-4 bg-accent/10 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wider">
+			<div className="flex items-center gap-4 py-2 px-4 bg-accent/10 border-b border-border argus-label">
 				<div className="w-6 shrink-0" />
 				<div className="flex-1 min-w-0">Preset</div>
 				<div className="flex-[1.2] min-w-0">Commands</div>

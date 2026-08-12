@@ -31,7 +31,7 @@ export function AttentionBadge({
 		<output
 			aria-label={`${count} unread attention notification${count === 1 ? "" : "s"}`}
 			className={cn(
-				"inline-flex shrink-0 items-center justify-center rounded-full bg-destructive font-semibold text-destructive-foreground tabular-nums",
+				"inline-flex shrink-0 items-center justify-center rounded-full bg-destructive font-medium text-destructive-foreground tabular-nums",
 				size === "sm"
 					? "h-3.5 min-w-3.5 px-1 text-[9px]"
 					: "h-4 min-w-4 px-1 text-[10px]",

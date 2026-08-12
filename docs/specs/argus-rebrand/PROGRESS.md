@@ -4,7 +4,7 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** Phase 2 — Typography.
+**Current phase:** Phase 3 — The iris.
 
 ---
 
@@ -66,7 +66,7 @@ resolution, hooks-from-disk).
 | --- | --- | --- | --- |
 | 0 — baseline | ✅ done | — | Baseline measured; blocking duplicate files removed; typecheck clean |
 | 1 — Themes | ✅ done | `PH1` | `ink` + `daylight` land; ember orange gone from renderer/main; typecheck 18/18, tests at baseline |
-| 2 — Typography | ⬜ not started | | |
+| 2 — Typography | ✅ done | `PH2` | IBM Plex vendored (5 woff2, OFL); label grammar on 14 headers; 40 bold tokens demoted; verified in the BUILT css |
 | 3 — The iris | ⬜ not started | | |
 | 4 — Chrome geometry | ⬜ not started | | |
 | 5 — Additive affordances | ⬜ not started | | |
@@ -80,6 +80,12 @@ resolution, hooks-from-disk).
   class is stamped by `theme-boot.js`, but nothing consumes them until Phase 4.
 - The Settings Appearance swatch row (3c) must read `ARGUS_THEME_IDS` from
   `shared/themes/built-in` rather than `builtInThemes` — wired in Phase 6.
+- `SupersetLogo.tsx` still carries the old wordmark and a pre-existing
+  `useAriaPropsSupportedByRole` lint error (present on `main`, verified by
+  stashing). It is replaced wholesale in Phase 3 / Phase 8.
+- Terminal line-height 1.95 is the brief's figure and is airy for a terminal.
+  It is user-overridable from Settings > Appearance; flagged for Kyle's eye at
+  visual review rather than silently softened.
 
 ## Deferred / not done
 

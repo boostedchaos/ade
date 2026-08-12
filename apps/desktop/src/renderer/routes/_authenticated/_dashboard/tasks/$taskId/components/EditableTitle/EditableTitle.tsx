@@ -42,7 +42,7 @@ export function EditableTitle({ value, onSave }: EditableTitleProps) {
 			onChange={(e) => setLocalValue(e.target.value)}
 			onBlur={handleBlur}
 			onKeyDown={handleKeyDown}
-			className="w-full text-2xl font-semibold mb-6 p-0 bg-transparent border-none outline-none focus:outline-none placeholder:text-muted-foreground"
+			className="w-full text-2xl font-medium mb-6 p-0 bg-transparent border-none outline-none focus:outline-none placeholder:text-muted-foreground"
 			placeholder="Task title..."
 		/>
 	);

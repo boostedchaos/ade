@@ -271,10 +271,10 @@ export function CreateAgentWizard({ projectId }: { projectId: string }) {
 			<div className="flex-1 flex items-center justify-center px-6 py-8">
 				<div className="w-full max-w-3xl space-y-6">
 					<div className="space-y-1.5">
-						<p className="text-xs uppercase tracking-wide text-muted-foreground">
+						<p className="argus-label">
 							Step {step === "workspace" ? 1 : 2} of 2
 						</p>
-						<h1 className="text-2xl font-semibold text-foreground">
+						<h1 className="text-2xl font-medium text-foreground">
 							{step === "workspace" && "Create your first agent"}
 							{step === "setup" && "Setup script"}
 						</h1>
@@ -283,8 +283,7 @@ export function CreateAgentWizard({ projectId }: { projectId: string }) {
 								"Agents are isolated task environments backed by git worktrees."}
 							{step === "setup" && (
 								<>
-									These commands run automatically when an agent is
-									created.{" "}
+									These commands run automatically when an agent is created.{" "}
 									<a
 										href="https://docs.superset.sh/setup-teardown-scripts"
 										target="_blank"
@@ -338,10 +337,7 @@ export function CreateAgentWizard({ projectId }: { projectId: string }) {
 									</div>
 								</div>
 
-								<Collapsible
-									open={showAdvanced}
-									onOpenChange={setShowAdvanced}
-								>
+								<Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
 									<CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground/80 hover:text-muted-foreground transition-colors py-1">
 										<HiChevronDown
 											className={`size-3 transition-transform duration-200 ${showAdvanced ? "" : "-rotate-90"}`}
@@ -585,10 +581,7 @@ export function CreateAgentWizard({ projectId }: { projectId: string }) {
 									</div>
 								)}
 
-								<Collapsible
-									open={teardownOpen}
-									onOpenChange={setTeardownOpen}
-								>
+								<Collapsible open={teardownOpen} onOpenChange={setTeardownOpen}>
 									<CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground/80 hover:text-muted-foreground transition-colors py-1">
 										<HiChevronDown
 											className={`size-3 transition-transform duration-200 ${teardownOpen ? "" : "-rotate-90"}`}

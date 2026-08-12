@@ -8,7 +8,7 @@ export function SupersetLogo({ className }: SupersetLogoProps) {
 	return (
 		<span
 			className={cn(
-				"text-foreground font-mono font-bold tracking-[0.25em] text-4xl uppercase select-none",
+				"text-foreground font-mono font-medium tracking-[0.25em] text-4xl uppercase select-none",
 				className,
 			)}
 			aria-label="ADE"

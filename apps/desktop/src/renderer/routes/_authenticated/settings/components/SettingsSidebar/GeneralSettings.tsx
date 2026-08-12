@@ -113,9 +113,7 @@ export function GeneralSettings({ matchCounts }: GeneralSettingsProps) {
 
 	return (
 		<div className="mb-4">
-			<h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
-				General
-			</h2>
+			<h2 className="argus-label px-3 mb-2">General</h2>
 			<nav className="flex flex-col gap-0.5">
 				{filteredSections.map((section) => {
 					const isActive = matchRoute({ to: section.id });

@@ -46,9 +46,7 @@ export function WorkspaceHoverCardContent({
 				)}
 				{branchName && (
 					<div className="space-y-0.5">
-						<span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-							Branch
-						</span>
+						<span className="argus-label">Branch</span>
 						{repoUrl && branchExistsOnRemote ? (
 							<a
 								href={`${repoUrl}/tree/${branchName}`}

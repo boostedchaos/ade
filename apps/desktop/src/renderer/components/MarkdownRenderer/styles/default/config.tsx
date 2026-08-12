@@ -18,7 +18,7 @@ export const defaultConfig: MarkdownStyleConfig = {
 			</div>
 		),
 		th: ({ children }) => (
-			<th className="px-4 py-2 text-left text-sm font-semibold bg-muted">
+			<th className="px-4 py-2 text-left text-sm font-medium bg-muted">
 				{children}
 			</th>
 		),

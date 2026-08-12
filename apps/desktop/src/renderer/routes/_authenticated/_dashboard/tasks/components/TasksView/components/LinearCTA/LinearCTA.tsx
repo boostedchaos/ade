@@ -16,7 +16,7 @@ export function LinearCTA() {
 					<SiLinear className="size-8" />
 				</div>
 				<div className="space-y-2">
-					<h3 className="text-lg font-semibold">Connect Linear</h3>
+					<h3 className="text-lg font-medium">Connect Linear</h3>
 					<p className="text-sm text-muted-foreground">
 						Connect your Linear workspace to sync issues and manage tasks
 						directly from ADE.

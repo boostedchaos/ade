@@ -17,9 +17,7 @@ export function PropertiesSidebar({ task }: PropertiesSidebarProps) {
 		<div className="w-64 border-l border-border shrink-0">
 			<ScrollArea className="h-full">
 				<div className="p-4 space-y-6">
-					<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-						Properties
-					</h3>
+					<h3 className="argus-label">Properties</h3>
 
 					<div className="space-y-3">
 						<StatusProperty task={task} />

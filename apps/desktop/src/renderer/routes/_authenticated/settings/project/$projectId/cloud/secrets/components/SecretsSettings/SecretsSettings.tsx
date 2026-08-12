@@ -118,7 +118,7 @@ export function SecretsSettings({ projectId }: SecretsSettingsProps) {
 	return (
 		<div className="p-6 max-w-4xl w-full select-text">
 			<div className="mb-8">
-				<h2 className="text-xl font-semibold">Environment Variables</h2>
+				<h2 className="text-xl font-medium">Environment Variables</h2>
 			</div>
 
 			<div className="space-y-6">

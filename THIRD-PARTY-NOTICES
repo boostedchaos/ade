@@ -1,0 +1,10 @@
+
+---
+
+IBM Plex Sans, IBM Plex Mono
+Copyright (C) 2017 IBM Corp. with Reserved Font Name "Plex"
+Licensed under the SIL Open Font License, Version 1.1.
+
+Bundled as .woff2 under apps/desktop/src/renderer/assets/fonts/ so the app
+renders its typeface offline (the renderer CSP sets font-src 'self').
+Full license text: apps/desktop/src/renderer/assets/fonts/LICENSE.txt

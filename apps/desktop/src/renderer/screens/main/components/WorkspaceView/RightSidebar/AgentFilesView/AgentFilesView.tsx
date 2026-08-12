@@ -78,9 +78,7 @@ export function AgentFilesView() {
 	return (
 		<div className="flex flex-col flex-1 min-h-0">
 			<div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40">
-				<span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-					Agent files
-				</span>
+				<span className="argus-label">Agent files</span>
 				<button
 					type="button"
 					onClick={() => setImportOpen(true)}
@@ -110,9 +108,7 @@ export function AgentFilesView() {
 						if (!entries || entries.length === 0) return null;
 						return (
 							<div key={group} className="flex flex-col">
-								<div className="px-3 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-									{group}
-								</div>
+								<div className="px-3 pt-2 pb-1 argus-label">{group}</div>
 								{entries.map((entry) => (
 									<button
 										key={entry.absolutePath}

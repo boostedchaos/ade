@@ -216,7 +216,7 @@ export function ScriptsEditor({ projectId, className }: ScriptsEditorProps) {
 		<div className={cn("space-y-5", className)}>
 			<div className="flex items-start justify-between">
 				<div className="space-y-1">
-					<h3 className="text-base font-semibold text-foreground">Scripts</h3>
+					<h3 className="text-base font-medium text-foreground">Scripts</h3>
 					<p className="text-sm text-muted-foreground">
 						Automate your agent lifecycle with setup and teardown scripts.
 					</p>

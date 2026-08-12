@@ -31,21 +31,21 @@ const COMMANDS: CommandItem[] = [
 	// Headings group
 	{
 		title: "Heading 1",
-		icon: <span className="text-xs font-semibold">H₁</span>,
+		icon: <span className="text-xs font-medium">H₁</span>,
 		command: (editor) =>
 			editor.chain().focus().toggleHeading({ level: 1 }).run(),
 		group: "headings",
 	},
 	{
 		title: "Heading 2",
-		icon: <span className="text-xs font-semibold">H₂</span>,
+		icon: <span className="text-xs font-medium">H₂</span>,
 		command: (editor) =>
 			editor.chain().focus().toggleHeading({ level: 2 }).run(),
 		group: "headings",
 	},
 	{
 		title: "Heading 3",
-		icon: <span className="text-xs font-semibold">H₃</span>,
+		icon: <span className="text-xs font-medium">H₃</span>,
 		command: (editor) =>
 			editor.chain().focus().toggleHeading({ level: 3 }).run(),
 		group: "headings",

@@ -126,7 +126,7 @@ function TaskDetailPage() {
 
 						<Separator className="my-8" />
 
-						<h2 className="text-lg font-semibold mb-4">Activity</h2>
+						<h2 className="text-lg font-medium mb-4">Activity</h2>
 
 						<ActivitySection
 							createdAt={new Date(task.createdAt)}

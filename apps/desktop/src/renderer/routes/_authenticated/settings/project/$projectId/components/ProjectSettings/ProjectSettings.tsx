@@ -50,7 +50,7 @@ export function SettingsSection({
 	return (
 		<div className="pt-3 border-t space-y-3">
 			<div>
-				<h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+				<h3 className="text-base font-medium text-foreground flex items-center gap-2">
 					{icon}
 					{title}
 				</h3>
@@ -228,7 +228,7 @@ export function ProjectSettings({ projectId }: ProjectSettingsProps) {
 	return (
 		<div className="p-6 max-w-4xl w-full select-text">
 			<div className="mb-8">
-				<h2 className="text-xl font-semibold">{project.name}</h2>
+				<h2 className="text-xl font-medium">{project.name}</h2>
 				<ClickablePath path={project.mainRepoPath} />
 			</div>
 

@@ -63,7 +63,7 @@ export function UpdateRequiredPage({
 					</div>
 
 					<div className="flex flex-col items-center gap-2 text-center">
-						<h1 className="text-xl font-semibold">Update Required</h1>
+						<h1 className="text-xl font-medium">Update Required</h1>
 						<p className="max-w-md text-muted-foreground">
 							{message ||
 								"A new version of ADE is required to continue. Please update to the latest version."}

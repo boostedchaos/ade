@@ -120,7 +120,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 		<div className="flex-1 flex flex-col min-h-0">
 			<div className="p-8">
 				<div className="max-w-5xl">
-					<h2 className="text-2xl font-semibold">API Keys</h2>
+					<h2 className="text-2xl font-medium">API Keys</h2>
 					<p className="text-sm text-muted-foreground mt-1">
 						Manage API keys for MCP server access and external integrations.{" "}
 						<a
@@ -151,7 +151,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 					)}
 
 					<div className="max-w-5xl space-y-4">
-						<h3 className="text-lg font-semibold">Your API Keys</h3>
+						<h3 className="text-lg font-medium">Your API Keys</h3>
 						<p className="text-sm text-muted-foreground">
 							API keys allow external applications like Claude Desktop or Claude
 							Code to interact with ADE on your behalf.

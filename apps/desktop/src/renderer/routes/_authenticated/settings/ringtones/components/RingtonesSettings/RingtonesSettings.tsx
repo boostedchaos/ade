@@ -257,7 +257,7 @@ export function RingtonesSettings({ visibleItems }: RingtonesSettingsProps) {
 	return (
 		<div className="p-6 max-w-4xl w-full">
 			<div className="mb-8">
-				<h2 className="text-xl font-semibold">Notifications</h2>
+				<h2 className="text-xl font-medium">Notifications</h2>
 				<p className="text-sm text-muted-foreground mt-1">
 					Choose the notification sound for completed tasks
 				</p>

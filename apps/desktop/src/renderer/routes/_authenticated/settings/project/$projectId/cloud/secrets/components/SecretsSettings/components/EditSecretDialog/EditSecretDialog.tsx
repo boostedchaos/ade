@@ -74,7 +74,7 @@ export function EditSecretDialog({
 					<DialogTitle>Edit Environment Variable</DialogTitle>
 					<DialogDescription>
 						Update the value for{" "}
-						<code className="font-mono font-semibold text-foreground">
+						<code className="font-mono font-medium text-foreground">
 							{secret.key}
 						</code>
 					</DialogDescription>

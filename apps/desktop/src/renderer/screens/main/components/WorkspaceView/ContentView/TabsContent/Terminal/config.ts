@@ -12,8 +12,14 @@ export const DEBUG_TERMINAL =
 	typeof localStorage !== "undefined" &&
 	localStorage.getItem("SUPERSET_TERMINAL_DEBUG") === "1";
 
-// Nerd Fonts first for shell theme compatibility (Oh My Posh, Powerlevel10k, etc.)
+// IBM Plex Mono is the Argus terminal face and leads the stack, but font
+// fallback here is PER GLYPH, not per stack: Plex Mono has no Nerd Font
+// private-use glyphs, so a Powerlevel10k / Oh My Posh prompt would render
+// tofu if the Nerd Fonts were dropped. They stay directly behind Plex Mono,
+// which means latin text renders as Plex and only the powerline glyphs fall
+// through — both requirements are met without choosing between them.
 export const DEFAULT_TERMINAL_FONT_FAMILY = [
+	'"IBM Plex Mono"',
 	"MesloLGM Nerd Font",
 	"MesloLGM NF",
 	"MesloLGS NF",
@@ -31,12 +37,19 @@ export const DEFAULT_TERMINAL_FONT_FAMILY = [
 	"monospace",
 ].join(", ");
 
-export const DEFAULT_TERMINAL_FONT_SIZE = 14;
+// DESIGN-BRIEF.md "Typography": terminal 12.5px, IBM Plex Mono 300,
+// line-height 1.95. User-overridable from Settings > Appearance.
+export const DEFAULT_TERMINAL_FONT_SIZE = 12.5;
+export const DEFAULT_TERMINAL_LINE_HEIGHT = 1.95;
 
 export const TERMINAL_OPTIONS: ITerminalOptions = {
 	cursorBlink: true,
 	fontSize: DEFAULT_TERMINAL_FONT_SIZE,
 	fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
+	fontWeight: 300,
+	// Argus has no bold face; 400 is the heaviest mono weight bundled.
+	fontWeightBold: 400,
+	lineHeight: DEFAULT_TERMINAL_LINE_HEIGHT,
 	theme: TERMINAL_THEME,
 	allowProposedApi: true,
 	scrollback: 2000,

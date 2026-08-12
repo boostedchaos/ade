@@ -59,7 +59,7 @@ export function AppearanceSettings({ visibleItems }: AppearanceSettingsProps) {
 	return (
 		<div className="p-6 max-w-4xl w-full">
 			<div className="mb-8">
-				<h2 className="text-xl font-semibold">Appearance</h2>
+				<h2 className="text-xl font-medium">Appearance</h2>
 				<p className="text-sm text-muted-foreground mt-1">
 					Customize how ADE looks on your device
 				</p>

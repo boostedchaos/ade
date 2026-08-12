@@ -39,7 +39,7 @@ export function ProjectsSettings({ searchQuery }: ProjectsSettingsProps) {
 
 	return (
 		<div className="mb-4">
-			<h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
+			<h2 className="argus-label px-3 mb-2">
 				Teams
 				{searchQuery && hasProjectMatches && (
 					<span className="ml-2 text-xs bg-accent/50 px-1.5 py-0.5 rounded">
