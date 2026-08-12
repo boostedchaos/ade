@@ -1,11 +1,12 @@
 # Changelog
 
-Notable changes to Argus (called ADE before the 0.5.0 rebrand). Releases before
-0.4.0 were recorded only as GitHub release notes — see the
+Notable changes to Argus, which was called ADE until the rebrand landed on
+`main` (2026-08-12, unreleased at the time of writing). Releases before 0.4.0
+were recorded only as GitHub release notes — see the
 [releases page](https://github.com/boostedchaos/ade/releases).
 
-Entries below 0.5.0 say "ADE" because that is what shipped; they are history
-and are left as written.
+Every entry below still says "ADE" because that is the name those versions
+shipped under. They are history and are left as written.
 
 ## Unreleased
 

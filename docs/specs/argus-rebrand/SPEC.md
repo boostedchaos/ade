@@ -1,6 +1,10 @@
 # Argus rebrand & design refresh — build spec
 
-Status: **approved, not started** · Created 2026-08-12 · Owner: Kyle Welch
+Status: **built and merged to `main` 2026-08-12** · Created 2026-08-12 · Owner: Kyle Welch
+
+> This file is the contract as it was approved, kept as written. What was
+> actually built — including three deliberate deviations from it and everything
+> that was not done — is in [BUILD-REPORT.md](BUILD-REPORT.md).
 
 ## What this is
 

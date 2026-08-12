@@ -4,9 +4,11 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** COMPLETE. All 8 phases built; BUILD-REPORT.md written; 5 of 6
-ship gates pass (gate 5 visual is PARTIAL by choice — see the report). Awaiting
-Kyle's review; do NOT merge or release.
+**Current phase:** COMPLETE and MERGED to `main` (2026-08-12). All 8 phases
+built; 5 of 6 ship gates pass (gate 5, visual, is PARTIAL by choice — see the
+report). **Not released** — cutting a release is still a separate, deliberate
+step. This file is now a historical log; the durable record is
+[BUILD-REPORT.md](BUILD-REPORT.md).
 
 ---
 

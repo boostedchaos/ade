@@ -1,7 +1,7 @@
 # Argus rebrand — build report
 
 Branch `argus-rebrand` · branch point `ad2a48c` (main)
-Pushed to **`boosted`** (`github.com/boostedchaos/ade`). **Not merged, not released** — both are Kyle's call.
+Merged to **`main`** on 2026-08-12 and pushed to **`boosted`** (`github.com/boostedchaos/ade`). **Not released** — cutting a release remains a separate, deliberate step.
 
 Contract: [SPEC.md](SPEC.md) · Design record: [../../design/argus/DESIGN-BRIEF.md](../../design/argus/DESIGN-BRIEF.md) · Live log: [PROGRESS.md](PROGRESS.md)
 

@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-ADE incorporates material from the third-party projects listed below. Each is
+Argus incorporates material from the third-party projects listed below. Each is
 provided under its own license, reproduced in full. These notices are provided
-for attribution and do not modify the license under which ADE itself is
+for attribution and do not modify the license under which Argus itself is
 distributed (see `LICENSE.md`).
 
 ---
@@ -14,7 +14,7 @@ adapts the structure and self-curation guidance of the Hermes agent
 (<https://github.com/NousResearch/hermes-agent>): the write-back protocol is
 ported from Hermes' memory tool description, the agent identity and skill
 templates follow Hermes' authoring standards, and the session-end reflection is
-an ADE adaptation of Hermes' post-turn background review.
+an Argus adaptation of Hermes' post-turn background review.
 
 ```
 MIT License

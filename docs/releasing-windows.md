@@ -11,7 +11,7 @@ release path. It is not, for this fork:
   There is no Windows branch — no `.exe`, no `-x64.zip`.
 - It fans out to `build-desktop.yml`, which builds macOS + Linux + Windows. The
   macOS legs need signing secrets this fork does not have.
-- It publishes a **draft** titled `ADE desktop-vX.Y.Z`.
+- It publishes a **draft** titled `Argus desktop-vX.Y.Z`.
 
 Tagging `desktop-v0.3.0` therefore burns a three-platform build and produces a
 draft with no Windows installer in it. **Do not use it.**
@@ -37,12 +37,12 @@ every push to `main`, and uploads `ade-windows-x64` (the `.exe`, the portable
    three smokes (native modules under packaged Electron; the app boots and
    initializes `~/.ade`; and the generated `~/.ade\bin\ade.cmd` launcher reaches
    the control server over the named pipe with `USERNAME`/`USER` stripped, the
-   way an ADE agent terminal runs it).
+   way an Argus agent terminal runs it).
 3. Download the artifact and generate checksums:
 
    ```bash
    gh run download <run-id> -n ade-windows-x64 -D ./rel
-   cd rel && shasum -a 256 ADE-*-x64.exe ADE-*-x64.zip > SHA256SUMS.txt
+   cd rel && shasum -a 256 Argus-*-x64.exe Argus-*-x64.zip > SHA256SUMS.txt
    ```
 
 4. Publish against the **CI-verified commit** (full SHA — `--target` rejects a
@@ -50,8 +50,8 @@ every push to `main`, and uploads `ade-windows-x64` (the `.exe`, the portable
 
    ```bash
    gh release create windows-vX.Y.Z --target "$(git rev-parse HEAD)" \
-     --title "ADE Windows X.Y.Z" --notes-file notes.md --latest \
-     ADE-X.Y.Z-x64.exe ADE-X.Y.Z-x64.zip SHA256SUMS.txt
+     --title "Argus Windows X.Y.Z" --notes-file notes.md --latest \
+     Argus-X.Y.Z-x64.exe Argus-X.Y.Z-x64.zip SHA256SUMS.txt
    ```
 
 5. Verify the published bytes, not the upload: re-download the asset and check
@@ -78,7 +78,7 @@ selects the data dir `~/.ade-<name>` (unset → plain `~/.ade`).
 - Public release artifacts: build with the variable UNSET.
 - Kyle's personal install uses `~/.ade-default`, so his replacement builds
   must be produced with `SUPERSET_WORKSPACE_NAME=default`.
-- NEVER build from a shell inside an ADE agent session without scrubbing the
+- NEVER build from a shell inside an Argus agent session without scrubbing the
   env: agent terminals carry `SUPERSET_WORKSPACE_NAME=<workspace>` and the
   value silently bakes in (caught 2026-07-23 when a build bound itself to
   `.ade-ethel`).

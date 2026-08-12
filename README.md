@@ -144,6 +144,23 @@ Every Argus agent keeps a persistent, self-curated memory, adapted from the [Her
 
 A write-back protocol travels with the memory (when to save, when to skip, consolidate over append), and a session-end reflection loop prompts the agent to update its memory before finishing. The same canonical files feed every runtime through thin, auto-generated bridge files, so you can switch an agent's runtime without losing its memory. See [docs/memory.md](docs/memory.md) for the full design.
 
+## Design
+
+Argus is built on one idea: **the iris**. An open ring with a pupil is
+simultaneously the app mark and the per-agent status indicator — it replaces
+every status dot, avatar and badge in the app, so a glance at the rail tells you
+which agents are working, which are waiting on you, and which are idle.
+
+The app ships two themes, **Ink** (dark, the default) and **Daylight** (light),
+and sets its type in IBM Plex Sans and Mono, bundled locally so it works
+offline. Motion is limited to four movements that report state and never
+decorate; `prefers-reduced-motion` collapses all of them.
+
+The design record lives in [`docs/design/argus/`](docs/design/argus/) — a full
+brief plus a 2x screenshot of every screen. What was actually built against it,
+including the deliberate deviations and what was left undone, is in
+[`docs/specs/argus-rebrand/BUILD-REPORT.md`](docs/specs/argus-rebrand/BUILD-REPORT.md).
+
 ## Remote access
 
 The blessed path is [Tailscale](https://tailscale.com): `tailscale serve` in front of the server port gives TLS and tailnet-only access while the server stays bound to localhost. A LAN + Caddy alternative is documented in the plan. Never expose the server to the raw internet.
