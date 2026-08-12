@@ -160,9 +160,14 @@ jobs:
           "@ | Set-Content smoke-natives.cjs
           Remove-Item -Force -ErrorAction SilentlyContinue smoke-result.txt
           $env:ELECTRON_RUN_AS_NODE = "1"
-          # ADE.exe is a GUI-subsystem binary: `&` would NOT wait for it and
+          # The app binary is named after productName in package.json, so it is
+          # DERIVED here rather than hardcoded — a rename must not be able to
+          # break CI with "cannot find the file specified" after everything
+          # else has already gone green.
+          $exe = "release/win-unpacked/$((Get-Content package.json | ConvertFrom-Json).productName).exe"
+          # It is a GUI-subsystem binary: `&` would NOT wait for it and
           # $LASTEXITCODE stays empty — Start-Process -Wait is required.
-          $p = Start-Process -FilePath "release/win-unpacked/ADE.exe" -ArgumentList "smoke-natives.cjs", "`"$unpacked`"" -NoNewWindow -Wait -PassThru
+          $p = Start-Process -FilePath $exe -ArgumentList "smoke-natives.cjs", "`"$unpacked`"" -NoNewWindow -Wait -PassThru
           Write-Output "electron exit code: $($p.ExitCode) (informational)"
           Start-Sleep -Seconds 2
           if (!(Test-Path smoke-result.txt) -or (Get-Content smoke-result.txt) -ne 'OK') {
@@ -182,10 +187,11 @@ jobs:
           $smokeProfile = Join-Path $env:RUNNER_TEMP "ade-smoke-profile"
           New-Item -ItemType Directory -Force $smokeProfile | Out-Null
           $env:USERPROFILE = $smokeProfile
-          $p = Start-Process -FilePath "release/win-unpacked/ADE.exe" -PassThru
+          $exe = "release/win-unpacked/$((Get-Content package.json | ConvertFrom-Json).productName).exe"
+          $p = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 25
           if ($p.HasExited) {
-            Write-Error "ADE.exe exited early with code $($p.ExitCode)"
+            Write-Error "$exe exited early with code $($p.ExitCode)"
             exit 1
           }
           $db = Join-Path $smokeProfile ".ade\local.db"
@@ -236,7 +242,8 @@ jobs:
           Remove-Item -Force -ErrorAction SilentlyContinue cli-smoke-result.txt
           Remove-Item -Force -ErrorAction SilentlyContinue cli-smoke-bash-result.txt
 
-          $app = Start-Process -FilePath "release/win-unpacked/ADE.exe" -PassThru
+          $exe = "release/win-unpacked/$((Get-Content package.json | ConvertFrom-Json).productName).exe"
+          $app = Start-Process -FilePath $exe -PassThru
           # The control server writes control.token once .ade is initialized; poll
           # for it as the readiness signal rather than a fixed sleep.
           $token = Join-Path $smokeProfile ".ade\control.token"
@@ -244,7 +251,7 @@ jobs:
           for ($i = 0; $i -lt 45; $i++) {
             if (Test-Path $token) { $ready = $true; break }
             if ($app.HasExited) {
-              Write-Error "ADE.exe exited early (code $($app.ExitCode)) before control.token appeared"
+              Write-Error "$exe exited early (code $($app.ExitCode)) before control.token appeared"
               exit 1
             }
             Start-Sleep -Seconds 1
