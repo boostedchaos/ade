@@ -102,3 +102,19 @@ apps/server/resources/
 
 # webui build output
 apps/webui/dist/
+
+# iCloud Drive conflict copies.
+#
+# This repo lives under ~/Documents, which is synced by iCloud Drive (Desktop &
+# Documents). When it resolves a conflict it writes a duplicate beside the
+# original — "Iris 2.tsx", "socket-path 2.ts", even whole directories like
+# "commands 2/". 33 of them had been committed by the time anyone noticed, and
+# one ("control-plane-bridge.test 2.ts") broke @ade/webui typecheck, because
+# tsc globs *.ts while bun's test runner does not glob "*.test 2.ts" — so the
+# stray file was compiled but never run.
+#
+# This rule stops them reaching a commit. It does NOT stop them being created:
+# the actual fix is to keep the working copy outside an iCloud-synced folder.
+# Verified when added: zero tracked files match this pattern.
+* [0-9]
+* [0-9].*
