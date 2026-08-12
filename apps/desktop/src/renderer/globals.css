@@ -161,10 +161,12 @@
 
 	/* Type stacks. Theme-independent, declared here so the pre-hydration paint
 	   already uses Plex. */
-	--argus-font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
-		"Segoe UI", sans-serif;
-	--argus-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo,
-		"Cascadia Mono", Consolas, monospace;
+	--argus-font-sans:
+		"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+		sans-serif;
+	--argus-font-mono:
+		"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas,
+		monospace;
 
 	/* The size ladder (DESIGN-BRIEF.md "Typography"). */
 	--argus-size-brand: 14px;
@@ -379,6 +381,118 @@
 		text-transform: uppercase;
 		color: var(--argus-text-label);
 		line-height: 1;
+	}
+
+	/**
+	 * Motion — the four movements, and nothing else.
+	 *
+	 * Rules from DESIGN-BRIEF.md "Motion" that are enforced here rather than
+	 * left to callers:
+	 * - No element ever changes position. Only color, opacity and radius move,
+	 *   so nothing reflows and nothing can fight the terminal for layout.
+	 * - The attention ring runs EXACTLY three times and stops. It is written as
+	 *   `animation-iteration-count: 3` with no `infinite` anywhere, so a stuck
+	 *   state cannot turn into a permanent throb.
+	 * - `prefers-reduced-motion` collapses every one to an instant state change.
+	 */
+
+	/* 1. Iris wake — idle -> working. 220ms. */
+	@keyframes argus-iris-wake {
+		0% {
+			transform: scale(0);
+			opacity: 0;
+		}
+		60% {
+			transform: scale(1.5);
+			opacity: 1;
+		}
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+	}
+
+	/* NOTE the split: a pupil that merely EXISTS does not animate. Only
+	   `-wake` animates, and the Iris component adds it exclusively on a real
+	   idle -> working transition that happens after mount. Putting the
+	   animation on `.argus-iris-pupil` itself would fire it on every mount —
+	   app launch, a rail re-render, a list scroll — which is precisely the
+	   "nothing animates on load" rule the brief calls non-negotiable. */
+	.argus-iris-pupil {
+		transform-origin: center;
+		transform-box: fill-box;
+	}
+
+	.argus-iris-pupil-wake {
+		animation: argus-iris-wake var(--argus-duration-base) var(--argus-ease-wake)
+			both;
+	}
+
+	/* The ring crossfades to its new color over the same beat. */
+	.argus-iris-ring {
+		transition: stroke var(--argus-duration-base) var(--argus-ease-wake);
+	}
+
+	/* 2. Attention ring — agent becomes blocked. 900ms, three pulses, stop.
+	   A second ring expands 6 -> 6.6r while fading .45 -> 0. The badge
+	   persists after the movement ends; the movement never loops. */
+	@keyframes argus-attention-pulse {
+		0% {
+			r: 6;
+			opacity: 0.45;
+		}
+		100% {
+			r: 6.6;
+			opacity: 0;
+		}
+	}
+
+	.argus-iris-attention-ring {
+		animation: argus-attention-pulse var(--argus-duration-slow) ease-out 3 both;
+	}
+
+	/* 3. Pane focus — 120ms linear, border and background only. */
+	.argus-pane {
+		transition:
+			border-color var(--argus-duration-fast) linear,
+			background-color var(--argus-duration-fast) linear;
+	}
+
+	/* 4. Memory write — flash in 90ms, out over 600ms. */
+	@keyframes argus-memory-write {
+		0% {
+			background-color: transparent;
+		}
+		13% {
+			background-color: var(--argus-wash-accent);
+		}
+		100% {
+			background-color: transparent;
+		}
+	}
+
+	.argus-memory-write {
+		animation: argus-memory-write 690ms ease-out both;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.argus-iris-pupil-wake,
+		.argus-iris-attention-ring,
+		.argus-memory-write {
+			animation: none;
+		}
+
+		.argus-iris-ring,
+		.argus-pane {
+			transition: none;
+		}
+
+		/* The attention ring's job is to draw the eye. With motion off, the
+		   static ring still has to be visible, so it holds its start opacity
+		   instead of animating away to nothing. */
+		.argus-iris-attention-ring {
+			opacity: 0.45;
+		}
 	}
 
 	/* The wordmark: Plex Sans 300, uppercase, .42em (.46em at display size). */

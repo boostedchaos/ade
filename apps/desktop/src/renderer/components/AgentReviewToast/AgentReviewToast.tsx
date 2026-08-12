@@ -1,5 +1,6 @@
 import { toast } from "@superset/ui/sonner";
 import { HiMiniXMark } from "react-icons/hi2";
+import { Iris } from "renderer/screens/main/components/Iris";
 
 interface AgentReviewToastProps {
 	toastId: string | number;
@@ -18,7 +19,6 @@ export function AgentReviewToast({
 	toastId,
 	agentName,
 	role,
-	iconUrl,
 	onOpen,
 }: AgentReviewToastProps) {
 	return (
@@ -28,17 +28,11 @@ export function AgentReviewToast({
 				onClick={onOpen}
 				className="flex flex-1 items-center gap-3 p-3 pr-9 text-left hover:bg-muted/50 transition-colors"
 			>
-				{iconUrl ? (
-					<img
-						src={iconUrl}
-						alt=""
-						className="size-9 shrink-0 rounded-full object-cover"
-					/>
-				) : (
-					<span className="size-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-sm font-medium uppercase">
-						{agentName.slice(0, 1)}
-					</span>
-				)}
+				{/* The iris replaces the avatar here too: this toast fires when an
+				    agent finishes, which is exactly the `review` state, so the ring
+				    says what the toast is about. A bust or an initial said only
+				    "an agent". */}
+				<Iris state="review" size={20} decorative className="shrink-0" />
 				<div className="flex min-w-0 flex-col gap-0.5">
 					<span className="truncate text-sm font-medium">
 						{agentName}

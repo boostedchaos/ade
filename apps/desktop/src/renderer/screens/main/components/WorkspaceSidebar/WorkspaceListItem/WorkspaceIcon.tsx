@@ -1,10 +1,10 @@
 import { cn } from "@superset/ui/utils";
-import { LuFolderGit2, LuLaptop } from "react-icons/lu";
-import { AsciiSpinner } from "renderer/screens/main/components/AsciiSpinner";
 import { AttentionBadge } from "renderer/screens/main/components/AttentionBadge";
-import { StatusIndicator } from "renderer/screens/main/components/StatusIndicator";
+import {
+	Iris,
+	irisStateForPaneStatus,
+} from "renderer/screens/main/components/Iris";
 import type { ActivePaneStatus } from "shared/tabs-types";
-import { STROKE_WIDTH } from "../constants";
 
 interface WorkspaceIconProps {
 	isBranchWorkspace: boolean;
@@ -26,73 +26,55 @@ const OVERLAY_POSITION = {
 	expanded: "-top-0.5 -right-0.5",
 } as const;
 
+/**
+ * The leading element of a rail row.
+ *
+ * Under Argus this is the iris and nothing else (DESIGN-BRIEF.md §2a, and the
+ * 2a mock: every rail row is iris + name + a right-aligned count). It replaces
+ * three things that used to compete for this slot — the ASCII spinner shown
+ * while working, the agent bust avatar, and the folder/laptop repo glyph — plus
+ * the corner status dot that sat on top of them.
+ *
+ * DELIBERATE INFORMATION LOSS, recorded rather than hidden: the folder-vs-
+ * laptop glyph distinguished a branch workspace from a repo workspace, and the
+ * iris does not carry that bit. The mocks show no repo-type marker in the rail,
+ * so this follows the design; `isBranchWorkspace` is kept in the props so the
+ * distinction can be re-surfaced without an API change if it turns out to be
+ * missed.
+ */
 export function WorkspaceIcon({
-	isBranchWorkspace,
 	isActive,
 	isUnread,
 	workspaceStatus,
 	attentionCount,
 	variant,
-	iconUrl,
 }: WorkspaceIconProps) {
 	const overlayPosition = OVERLAY_POSITION[variant];
-	const iconColor = isActive ? "text-foreground" : "text-muted-foreground";
 
 	return (
 		<>
-			{workspaceStatus === "working" ? (
-				<AsciiSpinner className="text-base" />
-			) : iconUrl ? (
-				// The agent bust already has its Space brand color baked into the
-				// image background, so render it directly as a clean circle (no
-				// separate tile).
-				<img
-					src={iconUrl}
-					alt=""
-					className={cn(
-						"size-8 shrink-0 rounded-full object-cover",
-						!isActive && "opacity-90",
-					)}
-				/>
-			) : isBranchWorkspace ? (
-				<LuLaptop
-					className={cn(
-						"size-4",
-						variant === "expanded" && "transition-colors",
-						iconColor,
-					)}
-					strokeWidth={STROKE_WIDTH}
-				/>
-			) : (
-				<LuFolderGit2
-					className={cn(
-						"size-4",
-						variant === "expanded" && "transition-colors",
-						iconColor,
-					)}
-					strokeWidth={STROKE_WIDTH}
-				/>
-			)}
+			<Iris
+				state={
+					workspaceStatus ? irisStateForPaneStatus(workspaceStatus) : "idle"
+				}
+				size={14}
+				// The row's own label names the agent and its state in text.
+				decorative
+				className={cn(!isActive && "opacity-90")}
+			/>
 			{/*
-			 * The count outranks the status dot: with several panes blocked, "3"
-			 * is strictly more information than a red dot, and showing both in
-			 * the same corner would just overlap them.
+			 * The count outranks the status iris: with several panes blocked, "3"
+			 * is strictly more information than a ring, and showing both in the
+			 * same corner would just overlap them.
 			 */}
-			{attentionCount > 0 ? (
+			{attentionCount > 0 && (
 				<span className={cn("absolute", overlayPosition)}>
 					<AttentionBadge count={attentionCount} size="sm" />
 				</span>
-			) : (
-				workspaceStatus &&
-				workspaceStatus !== "working" && (
-					<span className={cn("absolute", overlayPosition)}>
-						<StatusIndicator status={workspaceStatus} />
-					</span>
-				)
 			)}
 			{isUnread && !workspaceStatus && attentionCount === 0 && (
-				<span className={cn("absolute flex size-2", overlayPosition)}>
-					<span className="relative inline-flex size-2 rounded-full bg-blue-500" />
+				<span className={cn("absolute flex size-1.5", overlayPosition)}>
+					<span className="relative inline-flex size-1.5 rounded-full bg-[var(--argus-iris-working)]" />
 				</span>
 			)}
 		</>

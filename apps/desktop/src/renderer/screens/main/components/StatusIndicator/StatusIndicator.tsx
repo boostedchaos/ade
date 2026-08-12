@@ -1,69 +1,53 @@
 import { cn } from "@superset/ui/utils";
 import type { ActivePaneStatus } from "shared/tabs-types";
+import { getIrisLabel, Iris, irisStateForPaneStatus } from "../Iris";
 
 // Re-export for consumers
 export type { ActivePaneStatus } from "shared/tabs-types";
 
-/** Lookup object for status indicator styling - avoids if/else chains */
-const STATUS_CONFIG = {
-	permission: {
-		pingColor: "bg-red-400",
-		dotColor: "bg-red-500",
-		pulse: true,
-		tooltip: "Needs input",
-	},
-	working: {
-		pingColor: "bg-amber-400",
-		dotColor: "bg-amber-500",
-		pulse: true,
-		tooltip: "Agent working",
-	},
-	review: {
-		pingColor: "",
-		dotColor: "bg-green-500",
-		pulse: false,
-		tooltip: "Ready for review",
-	},
-} as const satisfies Record<
-	ActivePaneStatus,
-	{ pingColor: string; dotColor: string; pulse: boolean; tooltip: string }
->;
-
+/**
+ * Visual indicator for pane/workspace status.
+ *
+ * Under Argus this IS the iris — an open ring with a pupil — not a filled dot.
+ * The component is kept so the eight existing call sites do not each need to
+ * learn the PaneStatus -> IrisState mapping; it is now a thin adapter over
+ * `<Iris>`.
+ *
+ * The state colors changed with the rebrand (SPEC.md §Rulings 1):
+ * - working: blue ring, filled pupil   (was amber)
+ * - permission -> "waiting on you": amber ring, filled pupil   (was red)
+ * - review: green ring, no pupil
+ */
 interface StatusIndicatorProps {
 	status: ActivePaneStatus;
 	className?: string;
+	/** Rendered size in px; defaults to the 14px base geometry. */
+	size?: number;
+	/**
+	 * Pulse the attention ring. Only `permission` pulses, and only three times
+	 * — motion reports state, it does not decorate.
+	 */
+	pulse?: boolean;
 }
 
-/**
- * Visual indicator for pane/workspace status.
- * - Red pulsing: needs user input (permission)
- * - Amber pulsing: agent working
- * - Green static: ready for review
- */
-export function StatusIndicator({ status, className }: StatusIndicatorProps) {
-	const config = STATUS_CONFIG[status];
-
+export function StatusIndicator({
+	status,
+	className,
+	size = 14,
+	pulse = false,
+}: StatusIndicatorProps) {
 	return (
-		<span className={cn("relative flex size-2 shrink-0", className)}>
-			{config.pulse && (
-				<span
-					className={cn(
-						"absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
-						config.pingColor,
-					)}
-				/>
-			)}
-			<span
-				className={cn(
-					"relative inline-flex size-2 rounded-full",
-					config.dotColor,
-				)}
-			/>
-		</span>
+		<Iris
+			state={irisStateForPaneStatus(status)}
+			size={size}
+			pulse={pulse}
+			className={cn(className)}
+			decorative
+		/>
 	);
 }
 
 /** Get tooltip text for a status - for consumers that wrap with Tooltip */
 export function getStatusTooltip(status: ActivePaneStatus): string {
-	return STATUS_CONFIG[status].tooltip;
+	return getIrisLabel(irisStateForPaneStatus(status));
 }

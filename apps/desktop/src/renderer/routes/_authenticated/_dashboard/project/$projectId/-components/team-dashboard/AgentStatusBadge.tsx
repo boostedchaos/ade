@@ -35,7 +35,7 @@ export function AgentStatusBadge({ status }: AgentStatusBadgeProps) {
 	if (status === "working") {
 		return (
 			<span className="inline-flex items-center gap-1.5">
-				<StatusIndicator status="working" />
+				<StatusIndicator status="working" size={12} />
 				<span className="text-xs text-muted-foreground">Working</span>
 			</span>
 		);

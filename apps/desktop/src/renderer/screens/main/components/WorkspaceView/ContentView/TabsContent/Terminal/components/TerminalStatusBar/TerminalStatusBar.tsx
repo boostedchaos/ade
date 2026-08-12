@@ -50,7 +50,7 @@ export function TerminalStatusBar({
 					// AgentStatusBadge's idle treatment.
 					<span className="size-2 shrink-0 rounded-full bg-white/30" />
 				) : (
-					<StatusIndicator status={status} />
+					<StatusIndicator status={status} size={10} />
 				)}
 				<span className="text-white/60">{STATUS_LABEL[status]}</span>
 			</span>

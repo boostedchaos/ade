@@ -39,8 +39,8 @@ export function DaemonStatusToast({ status }: DaemonStatusToastProps) {
 				/>
 			) : (
 				<span aria-hidden="true" className="relative mt-1 size-2 shrink-0">
-					<span className="absolute inset-0 size-2 rounded-full bg-amber-500/40 motion-safe:animate-ping motion-reduce:hidden" />
-					<span className="relative size-2 rounded-full bg-amber-500 dark:bg-amber-400" />
+					<span className="absolute inset-0 size-2 rounded-full bg-[var(--argus-ring-amber)] motion-safe:animate-ping motion-reduce:hidden" />
+					<span className="relative size-2 rounded-full bg-[var(--argus-iris-waiting)]" />
 				</span>
 			)}
 

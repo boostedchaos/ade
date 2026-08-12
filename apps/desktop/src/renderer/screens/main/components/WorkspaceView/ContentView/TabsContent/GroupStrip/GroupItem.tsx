@@ -78,9 +78,7 @@ export function GroupItem({
 	const focusedPane = useTabsStore((s) =>
 		focusedPaneId ? s.panes[focusedPaneId] : undefined,
 	);
-	const setPaneTerminalProfile = useTabsStore(
-		(s) => s.setPaneTerminalProfile,
-	);
+	const setPaneTerminalProfile = useTabsStore((s) => s.setPaneTerminalProfile);
 	const isTerminalTab = focusedPane?.type === "terminal";
 	const currentProfileId = focusedPane?.terminalProfileId;
 	const [isEditing, setIsEditing] = useState(false);
@@ -267,7 +265,7 @@ export function GroupItem({
 								<SessionStatsBadge workspaceId={tab.workspaceId} />
 							)}
 							{status && status !== "idle" && (
-								<StatusIndicator status={status} />
+								<StatusIndicator status={status} size={12} />
 							)}
 							<AttentionBadge count={attentionCount} size="sm" />
 						</button>
@@ -315,12 +313,8 @@ export function GroupItem({
 									setPaneTerminalProfile(focusedPaneId, undefined)
 								}
 							>
-								{!currentProfileId && (
-									<LuCheck className="size-3 mr-2" />
-								)}
-								<span className={!currentProfileId ? "" : "ml-5"}>
-									Default
-								</span>
+								{!currentProfileId && <LuCheck className="size-3 mr-2" />}
+								<span className={!currentProfileId ? "" : "ml-5"}>Default</span>
 							</ContextMenuItem>
 							{TERMINAL_PROFILES.map((profile) => (
 								<ContextMenuItem
@@ -333,9 +327,7 @@ export function GroupItem({
 										<LuCheck className="size-3 mr-2" />
 									)}
 									<span
-										className={
-											currentProfileId === profile.id ? "" : "ml-5"
-										}
+										className={currentProfileId === profile.id ? "" : "ml-5"}
 									>
 										{profile.name}
 									</span>

@@ -140,7 +140,7 @@ export function ModelBar() {
 										<span className="absolute -bottom-px h-[3px] w-[3px] rounded-full bg-foreground/40" />
 									)}
 									{missing && (
-										<span className="absolute -right-px -top-px h-[5px] w-[5px] rounded-full bg-amber-500 ring-1 ring-background" />
+										<span className="absolute -right-px -top-px h-[5px] w-[5px] rounded-full bg-[var(--argus-iris-waiting)] ring-1 ring-background" />
 									)}
 								</button>
 							</TooltipTrigger>

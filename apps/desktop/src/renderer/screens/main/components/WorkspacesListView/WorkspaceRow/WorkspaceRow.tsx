@@ -134,9 +134,8 @@ export function WorkspaceRow({
 
 			{/* Unread indicator */}
 			{workspace.isUnread && (
-				<span className="relative flex size-2 shrink-0">
-					<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-					<span className="relative inline-flex size-2 rounded-full bg-red-500" />
+				<span className="relative flex size-1.5 shrink-0">
+					<span className="relative inline-flex size-1.5 rounded-full bg-[var(--argus-iris-working)]" />
 				</span>
 			)}
 

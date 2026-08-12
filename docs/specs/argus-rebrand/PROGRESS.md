@@ -4,7 +4,7 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** Phase 3 — The iris.
+**Current phase:** Phase 4 — Chrome geometry.
 
 ---
 
@@ -67,7 +67,7 @@ resolution, hooks-from-disk).
 | 0 — baseline | ✅ done | — | Baseline measured; blocking duplicate files removed; typecheck clean |
 | 1 — Themes | ✅ done | `PH1` | `ink` + `daylight` land; ember orange gone from renderer/main; typecheck 18/18, tests at baseline |
 | 2 — Typography | ✅ done | `PH2` | IBM Plex vendored (5 woff2, OFL); label grammar on 14 headers; 40 bold tokens demoted; verified in the BUILT css |
-| 3 — The iris | ⬜ not started | | |
+| 3 — The iris | ✅ done | `PH3` | `<Iris>` (5 states) + `<ArgusMark>` ladder + lockup; every status dot, avatar and old wordmark replaced; motion CSS landed |
 | 4 — Chrome geometry | ⬜ not started | | |
 | 5 — Additive affordances | ⬜ not started | | |
 | 6 — States & memory pane | ⬜ not started | | |
@@ -80,9 +80,16 @@ resolution, hooks-from-disk).
   class is stamped by `theme-boot.js`, but nothing consumes them until Phase 4.
 - The Settings Appearance swatch row (3c) must read `ARGUS_THEME_IDS` from
   `shared/themes/built-in` rather than `builtInThemes` — wired in Phase 6.
-- `SupersetLogo.tsx` still carries the old wordmark and a pre-existing
-  `useAriaPropsSupportedByRole` lint error (present on `main`, verified by
-  stashing). It is replaced wholesale in Phase 3 / Phase 8.
+- The rail no longer distinguishes a branch workspace from a repo workspace.
+  The folder/laptop glyph was the only carrier of that bit and the 2a mock has
+  no repo-type marker; `isBranchWorkspace` is still in `WorkspaceIcon`'s props
+  so it can be re-surfaced without an API change. Flagged for Kyle at visual
+  review.
+- `detached` is built and drawable but rendered nowhere, per SPEC §Rulings 2.
+  Note the 2a mock DOES show it (agent `nova`, dashed ring) — the SPEC wins.
+- Phase 7 still owns wiring `pulse` to real blocked-agent state, the pane-focus
+  transition and the memory-write flash. The CSS for all four movements is
+  already in `globals.css`; only the iris wake is currently driven.
 - Terminal line-height 1.95 is the brief's figure and is airy for a terminal.
   It is user-overridable from Settings > Appearance; flagged for Kyle's eye at
   visual review rather than silently softened.
