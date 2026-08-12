@@ -30,12 +30,45 @@ env -u SUPERSET_WORKSPACE_NAME bun run build
 
 Artifacts land in `release/`: `ADE-<version>-arm64.dmg`, `ADE-<version>-arm64-mac.zip`.
 
+## Verify the build is publishable — do this before anything else
+
+Trap 2 above is a *build-time* `define`. Nothing downstream can detect it, and a
+polluted build passes typecheck, tests, packaging and the smoke test below. Read
+the baked value straight out of the artifact:
+
+```bash
+grep -o -a 'SUPERSET_WORKSPACE_NAME: *[^,;)]\{0,20\}' \
+  release/mac-arm64/<AppName>.app/Contents/Resources/app.asar | sort -u
+```
+
+- `SUPERSET_WORKSPACE_NAME: void 0` → built with the variable unset. **Publishable.**
+- `SUPERSET_WORKSPACE_NAME: "default"` (or any literal) → the shell leaked a
+  workspace name in. **Do not publish** — rebuild from a clean clone with every
+  `SUPERSET_*` variable `-u`'d (there are ~10 inside an agent session; `env |
+  grep SUPERSET_` first, and unset all of them, not the ones you remember).
+
+Do not use `grep -c` for this. An asar is effectively a single line, so the count
+is identical for a clean and a polluted build — it will tell you the check passed
+when it did not.
+
+Written after `mac-v0.4.2` (2026-08-12), where a build made with
+`SUPERSET_WORKSPACE_NAME=default` reached the point of publication. The build
+report recorded the offending command verbatim and still marked the step PASS.
+
 ## Smoke test
 
 Launch the built binary directly and confirm it boots past DB migration:
 
 ```bash
 ./release/mac-arm64/ADE.app/Contents/MacOS/ADE   # watch for "[local-db] Migrations complete"
+```
+
+Then confirm which workspace directory it actually created — this is the runtime
+proof of the check above, and it is stronger than reading the bundle:
+
+```bash
+# a publishable build writes ~/.ade ; a polluted one writes ~/.ade-<name>
+ls -d ~/.ade                     # expect: exists, with control.sock inside
 ```
 
 ## Publish
