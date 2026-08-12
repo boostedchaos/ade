@@ -81,6 +81,22 @@ snapshot of it.
 
 ### 1.3 Packaged macOS build — PASS
 
+> **CORRECTION, 2026-08-12 — this PASS was wrong, and the evidence for that is
+> the command quoted below.** The build ran with `SUPERSET_WORKSPACE_NAME=default`
+> set. It is a build-time `define`, so `default` was baked into the bundle and
+> that artifact reads `~/.ade-default` instead of `~/.ade` — which
+> `docs/releasing-mac.md` requires be unset for any public build. The gate was
+> real (the app packaged, signed and ran); what it did not check was whether the
+> result was *publishable*. The section is left as written because the defect is
+> legible in it: the scrub paragraph below lists nine variables and misses the
+> load-bearing tenth.
+>
+> The artifact hashed in the table below was therefore **never published**. The
+> shipped `mac-v0.4.2` was rebuilt from a clean clone of `main` (`7daeeb8`) with
+> all ten `SUPERSET_*` variables unset; its hashes are in the project folder's
+> `SHA256SUMS.txt` and on the release. `docs/releasing-mac.md` now carries the
+> pre-publish check that would have caught this.
+
 Built from `/private/tmp/argus-build` (a full `rsync` copy), **not** from
 `~/Documents`, per the File-Provider xattr trap.
 
@@ -432,6 +448,15 @@ rebrand to the modification chain rather than overwriting the earlier entry.
 
 **All six gates resolved.** Five pass; gate 5 (visual) remains PARTIAL by
 choice — see §1.5 for why and for the command to close it.
+
+> **UPDATE, 2026-08-12 — gate 5 is now CLOSED, and gate 3's PASS was withdrawn.**
+> Gate 5: Kyle ran a full working session inside Argus 0.4.2; the installed
+> `/Applications/Argus.app` `app.asar` hashed identical to the one inside the
+> dmg, and that day's `daemon.log` held 75 lines with zero ERROR or WARN.
+> Gate 3: see the correction at §1.3 — the packaged build it passed was not
+> publishable, and the shipped artifact was rebuilt. Net: the gate that was
+> flagged as the honest gap held up, and the one marked PASS is the one that
+> was wrong. **A self-declared gap gets re-checked; a green gate does not.**
 
 Two real defects were caught by the gates and fixed, both mine:
 

@@ -1,14 +1,19 @@
 # Changelog
 
 Notable changes to Argus, which was called ADE until the rebrand landed on
-`main` (2026-08-12, unreleased at the time of writing). Releases before 0.4.0
+`main` and shipped as `mac-v0.4.2` (2026-08-12). Releases before 0.4.0
 were recorded only as GitHub release notes — see the
 [releases page](https://github.com/boostedchaos/ade/releases).
 
 Every entry below still says "ADE" because that is the name those versions
 shipped under. They are history and are left as written.
 
-## Unreleased
+## 0.4.2 — 2026-08-12 (macOS)
+
+Note the version collision: `0.4.2` shipped twice, one day apart, as **different
+software**. The Windows 0.4.2 below is the last ADE-branded build; this macOS
+0.4.2 is the first Argus one. They share a number because the rebrand did not
+bump the version, and the Windows Argus build has not been cut yet.
 
 ### Changed
 
