@@ -1,8 +1,9 @@
 import { SearchIcon } from "lucide-react";
 import {
-	getStatusTooltip,
-	StatusIndicator,
-} from "renderer/screens/main/components/StatusIndicator";
+	Iris,
+	irisStateForPaneStatus,
+} from "renderer/screens/main/components/Iris";
+import { getStatusTooltip } from "renderer/screens/main/components/StatusIndicator";
 import type { PaneStatus } from "shared/tabs-types";
 
 /** Short label shown next to the dot for each of the four statuses. */
@@ -40,23 +41,36 @@ export function TerminalStatusBar({
 	onToggleSearch,
 }: TerminalStatusBarProps) {
 	return (
-		<div className="flex h-6 shrink-0 items-center gap-2 border-b border-white/10 px-2 text-[11px] text-white/70 select-none">
+		<div
+			className="flex shrink-0 items-center gap-2 px-2 font-mono select-none"
+			style={{
+				height: "var(--argus-statusbar-height)",
+				borderBottom: "1px solid var(--argus-hairline)",
+				fontSize: "var(--argus-size-status)",
+				color: "var(--argus-text-label)",
+			}}
+		>
 			<span
 				className="flex items-center gap-1.5"
 				title={status === "idle" ? "Idle" : getStatusTooltip(status)}
 			>
-				{status === "idle" ? (
-					// StatusIndicator has no idle variant — plain muted dot, mirroring
-					// AgentStatusBadge's idle treatment.
-					<span className="size-2 shrink-0 rounded-full bg-white/30" />
-				) : (
-					<StatusIndicator status={status} size={10} />
-				)}
-				<span className="text-white/60">{STATUS_LABEL[status]}</span>
+				{/* The iris now HAS an idle state (an open ring, no pupil), so idle
+				    no longer needs a substitute dot. */}
+				<Iris state={irisStateForPaneStatus(status)} size={10} decorative />
+				<span
+					style={{
+						color:
+							status === "idle"
+								? "var(--argus-text-label)"
+								: "var(--argus-iris-working)",
+					}}
+				>
+					{STATUS_LABEL[status]}
+				</span>
 			</span>
 			<div className="ml-auto flex items-center gap-2">
 				<span
-					className="font-mono text-white/45 tabular-nums"
+					className="font-mono text-[var(--argus-text-disabled)] tabular-nums"
 					title="Keystroke→paint latency"
 				>
 					{echoMs != null ? `${echoMs}ms` : "—"}
@@ -66,7 +80,7 @@ export function TerminalStatusBar({
 					onClick={onToggleSearch}
 					aria-label="Search terminal"
 					title="Search"
-					className="flex size-5 items-center justify-center rounded text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
+					className="flex size-5 items-center justify-center rounded text-[var(--argus-text-label)] transition-colors hover:bg-[var(--argus-raised)] hover:text-[var(--argus-text-emphasis)]"
 				>
 					<SearchIcon className="size-3" />
 				</button>

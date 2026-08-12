@@ -58,8 +58,8 @@ export function UpdateRequiredPage({
 			<Background />
 			<AppFrame>
 				<div className="flex h-full w-full flex-col items-center justify-center gap-6 bg-background p-8">
-					<div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">
-						<HiExclamationTriangle className="h-8 w-8 text-amber-500" />
+					<div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--argus-iris-waiting)]/10">
+						<HiExclamationTriangle className="h-8 w-8 text-[var(--argus-iris-waiting)]" />
 					</div>
 
 					<div className="flex flex-col items-center gap-2 text-center">

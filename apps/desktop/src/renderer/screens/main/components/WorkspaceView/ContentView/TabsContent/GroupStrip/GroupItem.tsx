@@ -209,8 +209,8 @@ export function GroupItem({
 	const tabStyles = cn(
 		"flex items-center gap-2 transition-colors w-full shrink-0 pl-3 pr-8 h-full",
 		isActive
-			? "text-foreground"
-			: "text-muted-foreground/70 hover:text-foreground",
+			? "text-[var(--argus-text-active)]"
+			: "text-[var(--argus-text-label)] hover:text-[var(--argus-text-emphasis)]",
 	);
 
 	return (
@@ -228,7 +228,15 @@ export function GroupItem({
 					style={{ cursor: isDragging ? "grabbing" : undefined }}
 				>
 					{isActive && !isEditing && (
-						<div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+						// DESIGN-BRIEF §2a: the active tab's marker is a 1px inset
+						// rule in the accent, not a 2px primary bar.
+						<div
+							className="absolute bottom-0 left-0 right-0"
+							style={{
+								height: 1,
+								backgroundColor: "var(--argus-iris-working)",
+							}}
+						/>
 					)}
 					{isEditing ? (
 						<div className="flex items-center w-full shrink-0 px-2 h-full">
@@ -256,7 +264,21 @@ export function GroupItem({
 							}}
 							className={tabStyles}
 						>
-							<span className="text-sm truncate flex-1 text-left">
+							{isActive && (
+								<span
+									aria-hidden
+									className="inline-block shrink-0 rounded-full"
+									style={{
+										width: 5,
+										height: 5,
+										backgroundColor: "var(--argus-iris-working)",
+									}}
+								/>
+							)}
+							<span
+								className="truncate flex-1 text-left"
+								style={{ fontSize: "var(--argus-size-tab)" }}
+							>
 								{displayName}
 							</span>
 							{/* Live model + context usage for the active session tab
@@ -332,7 +354,7 @@ export function GroupItem({
 										{profile.name}
 									</span>
 									<span
-										className="ml-auto size-3 rounded-sm border border-white/20"
+										className="ml-auto size-3 rounded-sm border border-[var(--argus-hairline)]"
 										style={{
 											backgroundColor: profile.colors.background,
 										}}

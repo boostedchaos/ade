@@ -28,8 +28,8 @@ export function DaemonStatusToast({ status }: DaemonStatusToastProps) {
 			aria-atomic="true"
 			className={
 				isFailed
-					? "pointer-events-auto flex min-w-[340px] max-w-[420px] items-start gap-3 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg"
-					: "pointer-events-auto flex min-w-[340px] max-w-[420px] items-start gap-3 rounded-lg border border-border bg-popover px-4 py-3 text-popover-foreground shadow-lg"
+					? "pointer-events-auto flex min-w-[340px] max-w-[420px] items-start gap-3 rounded-lg border border-border bg-popover p-4 text-popover-foreground"
+					: "pointer-events-auto flex min-w-[340px] max-w-[420px] items-start gap-3 rounded-lg border border-border bg-popover px-4 py-3 text-popover-foreground"
 			}
 		>
 			{isFailed ? (

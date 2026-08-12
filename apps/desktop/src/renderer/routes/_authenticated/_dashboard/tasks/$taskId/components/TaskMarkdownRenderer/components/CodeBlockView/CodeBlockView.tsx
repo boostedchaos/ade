@@ -96,7 +96,7 @@ export function CodeBlockView({
 					className="flex items-center justify-center h-6 w-6 bg-background/80 backdrop-blur border border-border rounded hover:bg-accent transition-colors"
 				>
 					{copied ? (
-						<HiCheck className="w-3.5 h-3.5 text-green-500" />
+						<HiCheck className="w-3.5 h-3.5 text-[var(--argus-pass)]" />
 					) : (
 						<HiOutlineClipboard className="w-3.5 h-3.5" />
 					)}

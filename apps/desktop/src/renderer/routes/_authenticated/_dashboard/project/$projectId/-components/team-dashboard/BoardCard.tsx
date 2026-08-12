@@ -9,9 +9,12 @@ import { cn } from "@superset/ui/utils";
 import type { BoardItem, ChecksStatus } from "./types";
 
 const CHECKS_LABEL: Record<ChecksStatus, { label: string; color: string }> = {
-	success: { label: "Checks passing", color: "text-emerald-500" },
+	success: { label: "Checks passing", color: "text-[var(--argus-pass)]" },
 	failure: { label: "Checks failing", color: "text-destructive" },
-	pending: { label: "Checks pending", color: "text-amber-500" },
+	pending: {
+		label: "Checks pending",
+		color: "text-[var(--argus-iris-waiting)]",
+	},
 	none: { label: "No checks", color: "text-muted-foreground" },
 };
 

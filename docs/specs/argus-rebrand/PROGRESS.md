@@ -4,7 +4,7 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** Phase 4 — Chrome geometry.
+**Current phase:** Phase 5 — Additive affordances.
 
 ---
 
@@ -68,11 +68,38 @@ resolution, hooks-from-disk).
 | 1 — Themes | ✅ done | `PH1` | `ink` + `daylight` land; ember orange gone from renderer/main; typecheck 18/18, tests at baseline |
 | 2 — Typography | ✅ done | `PH2` | IBM Plex vendored (5 woff2, OFL); label grammar on 14 headers; 40 bold tokens demoted; verified in the BUILT css |
 | 3 — The iris | ✅ done | `PH3` | `<Iris>` (5 states) + `<ArgusMark>` ladder + lockup; every status dot, avatar and old wordmark replaced; motion CSS landed |
-| 4 — Chrome geometry | ⬜ not started | | |
+| 4 — Chrome geometry | ✅ done | `PH4` | Titlebar/rail/tab strip/model bar/status bar geometry; radii retargeted; shadows gone; 89 Tailwind palette colors -> tokens |
 | 5 — Additive affordances | ⬜ not started | | |
 | 6 — States & memory pane | ⬜ not started | | |
 | 7 — Motion | ⬜ not started | | |
 | 8 — Name, icons, docs | ⬜ not started | | |
+
+## Deviations from the SPEC (each deliberate, each with a reason)
+
+**`titleBarOverlay` was NOT set.** SPEC Phase 4 asks for
+`titleBarOverlay: { color: '#0E1219', symbolColor: '#9AA5B6', height: 40 }` in
+`main/windows/main.ts`. This app has never set that option — it uses
+`frame: false` with `titleBarStyle: "hidden"` and draws its own caption buttons
+in `WindowControls.tsx`. Setting the overlay would paint NATIVE Windows caption
+buttons on top of the custom ones, so the window would show two sets. The
+overlay's colors and height are instead applied to the components that actually
+render: `--argus-titlebar-height` (40px under `.platform-win32`),
+`--argus-panel` (#0E1219) and `--argus-text-body` (#9AA5B6) on the caption
+glyphs, which were rebuilt to the brief's primitives (11×1px bar, 10×10px
+square, 11×11px ✕). Same result on screen; no duplicate controls.
+
+**The ⌘K titlebar affordance is a hint, not a button.** The command palette's
+open state is local to the workspace page (`useCommandPalette` holds it in
+`useState`), so making the chip clickable means lifting it into a store — a
+behavior change, and this build is a reskin. It renders exactly as the mock
+draws it and shows `Ctrl K` on Windows.
+
+**The model bar keeps runtime ICONS rather than the mock's text labels.** The
+mock lists runtimes as mono text (`claude  codex  opencode | kimi k2.7 …`); the
+real component renders icon buttons with tooltips and a "not installed" marker.
+Converting to text would drop the icons, which are an existing product
+affordance the design bundle did not know about. Geometry, height, colors and
+radii follow the brief. Flagged for Kyle's call at visual review.
 
 ## Open items
 

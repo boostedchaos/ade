@@ -22,7 +22,7 @@ export function AgentReviewToast({
 	onOpen,
 }: AgentReviewToastProps) {
 	return (
-		<div className="agent-review-toast relative flex items-stretch bg-popover text-popover-foreground rounded-lg border border-border shadow-lg min-w-[320px] overflow-hidden">
+		<div className="agent-review-toast relative flex items-stretch bg-popover text-popover-foreground rounded-lg border border-border min-w-[320px] overflow-hidden">
 			<button
 				type="button"
 				onClick={onOpen}

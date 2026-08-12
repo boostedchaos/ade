@@ -9,7 +9,6 @@ import {
 import { toast } from "@superset/ui/sonner";
 import { Spinner } from "@superset/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
-import { cn } from "@superset/ui/utils";
 import { useParams } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -27,14 +26,12 @@ import { usePRStatus } from "renderer/screens/main/hooks";
 
 type MergeStrategy = "squash" | "merge" | "rebase";
 
-const STRATEGY_LABELS: Record<
-	MergeStrategy,
-	{ action: string; menu: string }
-> = {
-	squash: { action: "Squash and merge", menu: "Squash" },
-	merge: { action: "Merge commit", menu: "Merge commit" },
-	rebase: { action: "Rebase and merge", menu: "Rebase" },
-};
+const STRATEGY_LABELS: Record<MergeStrategy, { action: string; menu: string }> =
+	{
+		squash: { action: "Squash and merge", menu: "Squash" },
+		merge: { action: "Merge commit", menu: "Merge commit" },
+		rebase: { action: "Rebase and merge", menu: "Rebase" },
+	};
 
 const CONFLICT_PREVIEW_COUNT = 5;
 
@@ -164,7 +161,7 @@ export function LandingActions({ worktreePath }: LandingActionsProps) {
 					{needsRebase && (
 						<Badge
 							variant="outline"
-							className="border-amber-500/40 text-amber-600 dark:text-amber-500 gap-1"
+							className="border-[var(--argus-iris-waiting)]/40 text-[var(--argus-iris-waiting)] dark:text-[var(--argus-iris-waiting)] gap-1"
 						>
 							<LuTriangleAlert className="size-3" />
 							Behind {defaultBranch} by {behindCount ?? "?"}
@@ -266,18 +263,20 @@ export function LandingActions({ worktreePath }: LandingActionsProps) {
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="end" className="min-w-[160px]">
-									{(Object.keys(STRATEGY_LABELS) as MergeStrategy[]).map((s) => (
-										<DropdownMenuItem
-											key={s}
-											onClick={() => setStrategy(s)}
-											className="flex items-center justify-between gap-4"
-										>
-											<span>{STRATEGY_LABELS[s].menu}</span>
-											{s === strategy && (
-												<LuCheck className="size-3.5 text-muted-foreground" />
-											)}
-										</DropdownMenuItem>
-									))}
+									{(Object.keys(STRATEGY_LABELS) as MergeStrategy[]).map(
+										(s) => (
+											<DropdownMenuItem
+												key={s}
+												onClick={() => setStrategy(s)}
+												className="flex items-center justify-between gap-4"
+											>
+												<span>{STRATEGY_LABELS[s].menu}</span>
+												{s === strategy && (
+													<LuCheck className="size-3.5 text-muted-foreground" />
+												)}
+											</DropdownMenuItem>
+										),
+									)}
 								</DropdownMenuContent>
 							</DropdownMenu>
 						</div>

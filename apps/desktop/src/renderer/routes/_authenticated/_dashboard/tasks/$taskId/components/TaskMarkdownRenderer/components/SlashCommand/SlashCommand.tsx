@@ -136,7 +136,7 @@ const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
 
 		if (items.length === 0) {
 			return (
-				<div className="bg-popover text-popover-foreground rounded-md border p-1 shadow-md">
+				<div className="bg-popover text-popover-foreground rounded-md border p-1">
 					<div className="px-2 py-1.5 text-sm text-muted-foreground">
 						No results
 					</div>
@@ -164,7 +164,7 @@ const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
 		return (
 			<div
 				ref={containerRef}
-				className="bg-popover text-popover-foreground rounded-md border p-1 shadow-md overflow-hidden max-h-80 overflow-y-auto w-48"
+				className="bg-popover text-popover-foreground rounded-md border p-1 overflow-hidden max-h-80 overflow-y-auto w-48"
 			>
 				{groups.map((group, groupIndex) => (
 					<div key={group.key}>

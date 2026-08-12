@@ -145,8 +145,8 @@ export function DeleteWorkspaceDialog({
 						<AlertDialogDescription asChild>
 							<div className="text-muted-foreground space-y-1.5">
 								<span className="block">
-									This will close the agent and kill any active terminals.
-									Your branch and commits will remain in the repository.
+									This will close the agent and kill any active terminals. Your
+									branch and commits will remain in the repository.
 								</span>
 							</div>
 						</AlertDialogDescription>
@@ -206,7 +206,7 @@ export function DeleteWorkspaceDialog({
 
 				{!isLoading && canDelete && hasWarnings && (
 					<div className="px-4 pb-2">
-						<div className="text-xs text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/20 rounded-md px-2.5 py-1.5">
+						<div className="text-xs text-[var(--argus-iris-waiting)] dark:text-[var(--argus-iris-waiting)] bg-[var(--argus-iris-waiting)] dark:bg-[var(--argus-iris-waiting)]/10 border border-[var(--argus-iris-waiting)] dark:border-[var(--argus-iris-waiting)]/20 rounded-md px-2.5 py-1.5">
 							{hasChanges && hasUnpushedCommits
 								? "Has uncommitted changes and unpushed commits"
 								: hasChanges

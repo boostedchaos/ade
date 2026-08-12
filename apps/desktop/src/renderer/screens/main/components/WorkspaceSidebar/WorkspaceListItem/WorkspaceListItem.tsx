@@ -15,7 +15,6 @@ import { toast } from "@superset/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
-import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { HiMiniXMark } from "react-icons/hi2";
@@ -139,10 +138,12 @@ export function WorkspaceListItem({
 
 	// Agent avatar (circular rail bust) photo upload.
 	const photoInputRef = useRef<HTMLInputElement>(null);
-	const setWorkspaceIcon = electronTrpc.workspaces.setWorkspaceIcon.useMutation({
-		onSuccess: () => utils.workspaces.getAllGrouped.invalidate(),
-		onError: (error) => toast.error(`Failed to set photo: ${error.message}`),
-	});
+	const setWorkspaceIcon = electronTrpc.workspaces.setWorkspaceIcon.useMutation(
+		{
+			onSuccess: () => utils.workspaces.getAllGrouped.invalidate(),
+			onError: (error) => toast.error(`Failed to set photo: ${error.message}`),
+		},
+	);
 	const handlePhotoFileChange = async (
 		e: React.ChangeEvent<HTMLInputElement>,
 	) => {
@@ -370,28 +371,31 @@ export function WorkspaceListItem({
 			onMouseEnter={handleMouseEnter}
 			onDoubleClick={isBranchWorkspace ? undefined : rename.startRename}
 			className={cn(
-				"flex w-full pl-3 pr-2 text-sm",
-				"hover:bg-muted/50 transition-colors text-left cursor-pointer",
+				"flex w-full argus-rail-row",
+				"hover:bg-[var(--argus-raised)] transition-colors text-left cursor-pointer",
 				"group relative",
-				hasSubtitle ? "py-1.5" : "py-2 items-center",
-				isActive && "bg-muted",
+				hasSubtitle ? "py-1.5" : "items-center",
+				isActive && "argus-rail-row-selected",
 				isDragging && "opacity-30",
 			)}
 			style={{ cursor: isDragging ? "grabbing" : "pointer" }}
 		>
 			{isActive && (
-				<div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary rounded-r" />
+				<div
+					className="absolute left-0 top-0 bottom-0"
+					style={{ width: 2, backgroundColor: "var(--argus-iris-working)" }}
+				/>
 			)}
 
 			<Tooltip delayDuration={500}>
 				<TooltipTrigger asChild>
 					<div
 						className={cn(
-							"relative shrink-0 flex items-center justify-center mr-2.5",
-								// Photo avatars get a larger slot; glyph icons keep the compact
-								// one. The slot must match the img size or the reset's max-width
-								// squeezes the circle into an oval.
-								iconUrl ? "size-8" : "size-5",
+							"relative shrink-0 flex items-center justify-center mr-3",
+							// Photo avatars get a larger slot; glyph icons keep the compact
+							// one. The slot must match the img size or the reset's max-width
+							// squeezes the circle into an oval.
+							iconUrl ? "size-8" : "size-3.5",
 							hasSubtitle && "mt-0.5",
 						)}
 					>
@@ -591,9 +595,7 @@ export function WorkspaceListItem({
 							<LuPencil className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />
 							Rename
 						</ContextMenuItem>
-						<ContextMenuItem
-							onSelect={() => photoInputRef.current?.click()}
-						>
+						<ContextMenuItem onSelect={() => photoInputRef.current?.click()}>
 							<LuImage className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />
 							Change Photo
 						</ContextMenuItem>

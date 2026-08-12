@@ -1,4 +1,4 @@
-import { AGENT_RUNTIMES } from "@superset/local-db";
+import type { AGENT_RUNTIMES } from "@superset/local-db";
 import {
 	type AgentBinary,
 	BINARY_INSTALL,
@@ -87,7 +87,8 @@ export function NewAgentModal() {
 	const nameInputRef = useRef<HTMLInputElement>(null);
 
 	const createAgent = electronTrpc.workspaces.createAgent.useMutation();
-	const setWorkspaceIcon = electronTrpc.workspaces.setWorkspaceIcon.useMutation();
+	const setWorkspaceIcon =
+		electronTrpc.workspaces.setWorkspaceIcon.useMutation();
 
 	// Existing agents (grouped by team) — the source pool for
 	// "create from existing agent". Reuses the sidebar's grouped query.
@@ -195,11 +196,7 @@ export function NewAgentModal() {
 	};
 
 	return (
-		<Dialog
-			modal
-			open={isOpen}
-			onOpenChange={(open) => !open && closeModal()}
-		>
+		<Dialog modal open={isOpen} onOpenChange={(open) => !open && closeModal()}>
 			<DialogContent className="sm:max-w-[440px]">
 				<DialogHeader>
 					<DialogTitle>New agent</DialogTitle>
@@ -268,9 +265,9 @@ export function NewAgentModal() {
 						{sourceAgentId && (
 							<>
 								<p className="text-xs text-muted-foreground">
-									Copies the source agent's persona (AGENT.md, USER.md,
-									skills) re-stamped for the new agent. Project memory stays
-									fresh; the source agent is untouched.
+									Copies the source agent's persona (AGENT.md, USER.md, skills)
+									re-stamped for the new agent. Project memory stays fresh; the
+									source agent is untouched.
 								</p>
 								<label className="flex items-center gap-2 text-sm font-normal">
 									<Checkbox
@@ -331,8 +328,8 @@ export function NewAgentModal() {
 						</Select>
 						{runtimeMissing && (
 							<p className="text-xs text-muted-foreground">
-								{AGENT_LABELS[runtime]}'s CLI isn't installed — the agent will be
-								created, but you'll need it to run sessions.{" "}
+								{AGENT_LABELS[runtime]}'s CLI isn't installed — the agent will
+								be created, but you'll need it to run sessions.{" "}
 								<button
 									type="button"
 									className="text-foreground underline underline-offset-2 hover:no-underline"
@@ -399,7 +396,8 @@ export function NewAgentModal() {
 											<CommandEmpty>Loading repos…</CommandEmpty>
 										) : githubRepos.data?.authenticated === false ? (
 											<CommandEmpty>Not signed in to gh</CommandEmpty>
-										) : githubRepos.data && githubRepos.data.repos.length === 0 ? (
+										) : githubRepos.data &&
+											githubRepos.data.repos.length === 0 ? (
 											<CommandEmpty>No repos found</CommandEmpty>
 										) : (
 											githubRepos.data?.repos.map((repo) => (
@@ -429,7 +427,7 @@ export function NewAgentModal() {
 									</CommandList>
 								</Command>
 								{githubRepos.data?.authenticated === false && (
-									<div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs">
+									<div className="flex flex-col gap-2 rounded-md border border-[var(--argus-iris-waiting)]/40 bg-[var(--argus-iris-waiting)]/10 px-3 py-2.5 text-xs">
 										<p className="font-medium text-foreground">
 											GitHub CLI sign-in required
 										</p>
@@ -464,11 +462,11 @@ export function NewAgentModal() {
 				</div>
 
 				{gitMissing && (
-					<div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs">
+					<div className="flex flex-col gap-2 rounded-md border border-[var(--argus-iris-waiting)]/40 bg-[var(--argus-iris-waiting)]/10 px-3 py-2.5 text-xs">
 						<p className="font-medium text-foreground">Git is required</p>
 						<p className="text-muted-foreground">
-							Creating an agent sets up a git repository, and Git isn't installed.
-							Run the command below, then re-check:
+							Creating an agent sets up a git repository, and Git isn't
+							installed. Run the command below, then re-check:
 						</p>
 						<code className="select-all rounded bg-background/60 px-2 py-1 font-mono">
 							{BINARY_INSTALL.git.command}

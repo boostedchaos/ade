@@ -28,7 +28,10 @@ export function AsciiSpinner({ className }: AsciiSpinnerProps) {
 
 	return (
 		<span
-			className={cn("text-amber-500 font-mono select-none", className)}
+			className={cn(
+				"text-[var(--argus-iris-waiting)] font-mono select-none",
+				className,
+			)}
 			aria-hidden="true"
 		>
 			{SPINNER_FRAMES[frameIndex]}

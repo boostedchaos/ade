@@ -1,7 +1,12 @@
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
-const DEFAULT_WORKSPACE_SIDEBAR_WIDTH = 280;
+// Argus rail width (DESIGN-BRIEF.md "Spacing, radii, borders"): 238px on mac,
+// 250px on Windows. This panel is user-resizable and the width is persisted,
+// so this is only the starting point — a user who has already dragged it keeps
+// their width, which is the correct behavior. The 12px platform difference is
+// not worth branching a persisted store over.
+const DEFAULT_WORKSPACE_SIDEBAR_WIDTH = 238;
 export const COLLAPSED_WORKSPACE_SIDEBAR_WIDTH = 52;
 const MIN_WORKSPACE_SIDEBAR_WIDTH = 220;
 export const MAX_WORKSPACE_SIDEBAR_WIDTH = 400;

@@ -31,7 +31,7 @@ function PermissionRow({
 			</div>
 			<div className="flex items-center gap-3">
 				{granted && (
-					<span className="text-xs font-medium text-green-500 bg-green-500/10 px-2 py-1 rounded-md">
+					<span className="text-xs font-medium text-[var(--argus-pass)] bg-[var(--argus-pass)]/10 px-2 py-1 rounded-md">
 						Granted
 					</span>
 				)}

@@ -28,7 +28,7 @@ export function UrlSuggestions({
 	return (
 		<div
 			ref={listRef}
-			className="absolute top-full left-0 right-0 mt-1 z-50 max-h-[320px] overflow-y-auto rounded-md border border-border bg-popover shadow-md"
+			className="absolute top-full left-0 right-0 mt-1 z-50 max-h-[320px] overflow-y-auto rounded-md border border-border bg-popover"
 		>
 			{suggestions.map((item, index) => (
 				<button

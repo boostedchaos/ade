@@ -168,8 +168,8 @@ export function WorkspaceInitializingView({
 							</AlertDialogTitle>
 							<AlertDialogDescription asChild>
 								<div className="text-muted-foreground">
-									This agent was not fully set up. Deleting will clean up
-									any partial files that were created.
+									This agent was not fully set up. Deleting will clean up any
+									partial files that were created.
 								</div>
 							</AlertDialogDescription>
 						</AlertDialogHeader>
@@ -272,8 +272,8 @@ export function WorkspaceInitializingView({
 							</AlertDialogTitle>
 							<AlertDialogDescription asChild>
 								<div className="text-muted-foreground">
-									This agent failed to initialize. Deleting will clean up
-									any partial files that were created.
+									This agent failed to initialize. Deleting will clean up any
+									partial files that were created.
 								</div>
 							</AlertDialogDescription>
 						</AlertDialogHeader>
@@ -338,7 +338,7 @@ export function WorkspaceInitializingView({
 							>
 								{/* Step icon */}
 								{isComplete ? (
-									<LuCheck className="size-4 text-green-500 shrink-0" />
+									<LuCheck className="size-4 text-[var(--argus-pass)] shrink-0" />
 								) : isCurrent ? (
 									<LuLoader className="size-4 text-primary animate-spin shrink-0" />
 								) : (

@@ -51,7 +51,7 @@ export function NewItemInput({
 			style={{ paddingLeft: `${level * TREE_INDENT + 4}px` }}
 		>
 			<span className="w-4 h-4 shrink-0" />
-			<Icon className="size-4 shrink-0 text-amber-500" />
+			<Icon className="size-4 shrink-0 text-[var(--argus-iris-waiting)]" />
 			<input
 				type="text"
 				value={value}

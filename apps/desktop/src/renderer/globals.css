@@ -140,6 +140,9 @@
 	--argus-wash-amber: rgba(255, 181, 71, 0.05);
 	--argus-ring-amber: rgba(255, 181, 71, 0.35);
 	--argus-ring-amber-strong: rgba(255, 181, 71, 0.45);
+	/* Modal scrim (DESIGN-BRIEF.md §5a). A near-black tuned to Ink rather than
+	   pure black at 50%, which reads blue-grey over this palette. */
+	--argus-scrim: rgba(6, 8, 12, 0.66);
 
 	/* Chrome geometry (DESIGN-BRIEF.md "Spacing, radii, borders").
 	   Overridden under .platform-win32 for Windows 11 chrome. */
@@ -255,6 +258,7 @@
 	--argus-wash-amber: rgba(184, 114, 13, 0.07);
 	--argus-ring-amber: rgba(184, 114, 13, 0.35);
 	--argus-ring-amber-strong: rgba(184, 114, 13, 0.45);
+	--argus-scrim: rgba(26, 33, 48, 0.38);
 }
 
 /* Windows 11 chrome geometry (2b / 5b). The class is set on <html> by the
@@ -294,10 +298,23 @@
 	--color-chart-3: var(--chart-3);
 	--color-chart-4: var(--chart-4);
 	--color-chart-5: var(--chart-5);
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
+	/**
+	 * Argus radii, retargeted rather than re-typed across the app.
+	 *
+	 * Tailwind v4 compiles `rounded-md` to `border-radius: var(--radius-md)`,
+	 * so redefining these four values reskins every `rounded-*` utility in the
+	 * renderer — 64 files — from one place, and keeps following the platform:
+	 * `--argus-radius-surface` is 2px on mac and 4px on Windows, so the same
+	 * markup is correct on both without a single conditional.
+	 *
+	 * The old scale derived from `--radius` with calc(); at Argus's 2-3px
+	 * surfaces that arithmetic goes negative, which is the other reason these
+	 * are now stated outright.
+	 */
+	--radius-sm: var(--argus-radius-surface);
+	--radius-md: var(--argus-radius-surface);
+	--radius-lg: var(--argus-radius-surface-lg);
+	--radius-xl: var(--argus-radius-window);
 	--color-sidebar: var(--sidebar);
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar-primary: var(--sidebar-primary);
@@ -493,6 +510,26 @@
 		.argus-iris-attention-ring {
 			opacity: 0.45;
 		}
+	}
+
+	/**
+	 * Rail rows (DESIGN-BRIEF.md "Spacing, radii, borders"): 11px vertical and
+	 * 18px horizontal padding, 13.5px label. The 12px gap between iris and
+	 * label is set on the icon slot in WorkspaceListItem.
+	 */
+	.argus-rail-row {
+		padding-block: 11px;
+		padding-inline: 18px;
+		font-size: var(--argus-size-rail);
+	}
+
+	/**
+	 * The selected rail row is a wash that fades out to the right plus a 2px
+	 * inset accent bar — a flat fill would fight the hairline vocabulary and
+	 * read as a button.
+	 */
+	.argus-rail-row-selected {
+		background: linear-gradient(90deg, var(--argus-wash-accent), transparent);
 	}
 
 	/* The wordmark: Plex Sans 300, uppercase, .42em (.46em at display size). */

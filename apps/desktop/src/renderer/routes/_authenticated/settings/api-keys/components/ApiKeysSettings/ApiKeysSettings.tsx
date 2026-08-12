@@ -299,10 +299,12 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 							</Button>
 						</div>
 						{copied && (
-							<p className="text-sm text-green-600">Copied to clipboard!</p>
+							<p className="text-sm text-[var(--argus-pass)]">
+								Copied to clipboard!
+							</p>
 						)}
-						<div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded-md p-3">
-							<p className="text-sm text-amber-800 dark:text-amber-200">
+						<div className="bg-[var(--argus-iris-waiting)] dark:bg-[var(--argus-iris-waiting)]/50 border border-[var(--argus-iris-waiting)] dark:border-[var(--argus-iris-waiting)] rounded-md p-3">
+							<p className="text-sm text-[var(--argus-iris-waiting)] dark:text-[var(--argus-iris-waiting)]">
 								Make sure to copy this key now. For security reasons, it will
 								not be displayed again.
 							</p>

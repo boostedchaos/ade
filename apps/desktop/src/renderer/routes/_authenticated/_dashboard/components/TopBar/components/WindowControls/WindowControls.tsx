@@ -1,10 +1,5 @@
 import { useEffect } from "react";
-import {
-	HiMiniMinus,
-	HiMiniSquare2Stack,
-	HiMiniStop,
-	HiMiniXMark,
-} from "react-icons/hi2";
+import { HiMiniSquare2Stack, HiMiniXMark } from "react-icons/hi2";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 
 export function WindowControls() {
@@ -35,39 +30,67 @@ export function WindowControls() {
 		closeMutation.mutate();
 	};
 
-	// ponytail: 46×32 native caption-button sizing, but kept in the existing
-	// rounded in-toolbar style (this cluster sits inside the padded TopBar right
-	// group, not flush in the corner). True flush-native strip = a TopBar layout
-	// change, out of scope here.
+	// Argus caption buttons (DESIGN-BRIEF.md §2b): three 46px-wide hit areas,
+	// full titlebar height, flush in the corner, drawn as primitives rather
+	// than icon-font glyphs so they match Windows 11's own weights —
+	// minimize = an 11×1px bar, maximize = a 10×10px 1px-border square,
+	// close = an 11×11px ✕. All in --argus-text-body (#9AA5B6).
+	//
+	// WHY NOT `titleBarOverlay`: SPEC.md §Phase 4 asks for
+	// `titleBarOverlay: { color: '#0E1219', symbolColor: '#9AA5B6', height: 40 }`
+	// in main/windows/main.ts. This app has never set that option — it uses
+	// `frame: false` and draws its own controls, which is what this component
+	// is. Adding the overlay would paint NATIVE caption buttons on top of these
+	// ones, so the window would show two sets. The overlay's stated colors and
+	// height are applied here and via --argus-titlebar-height / --argus-panel
+	// instead, which is the same result on screen.
+	const captionButton =
+		"no-drag flex w-[46px] items-center justify-center transition-colors";
+	const captionStyle = {
+		height: "var(--argus-titlebar-height)",
+		color: "var(--argus-text-body)",
+	} as const;
+
 	return (
-		<div className="no-drag flex items-center h-full gap-1 pr-1">
+		<div className="no-drag flex items-stretch h-full">
 			<button
 				type="button"
 				aria-label="Minimize window"
-				className="no-drag flex h-8 w-[46px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+				className={`${captionButton} hover:bg-[var(--argus-raised)]`}
+				style={captionStyle}
 				onClick={handleMinimize}
 			>
-				<HiMiniMinus className="h-3.5 w-3.5" />
+				<span
+					aria-hidden
+					className="block bg-current"
+					style={{ width: 11, height: 1 }}
+				/>
 			</button>
 			<button
 				type="button"
 				aria-label={isMaximized ? "Restore window" : "Maximize window"}
-				className="no-drag flex h-8 w-[46px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+				className={`${captionButton} hover:bg-[var(--argus-raised)]`}
+				style={captionStyle}
 				onClick={handleMaximize}
 			>
 				{isMaximized ? (
-					<HiMiniSquare2Stack className="h-3.5 w-3.5" />
+					<HiMiniSquare2Stack className="h-[11px] w-[11px]" />
 				) : (
-					<HiMiniStop className="h-3 w-3" />
+					<span
+						aria-hidden
+						className="block border border-current"
+						style={{ width: 10, height: 10 }}
+					/>
 				)}
 			</button>
 			<button
 				type="button"
 				aria-label="Close window"
-				className="no-drag flex h-8 w-[46px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
+				className={`${captionButton} hover:bg-destructive hover:text-destructive-foreground`}
+				style={captionStyle}
 				onClick={handleClose}
 			>
-				<HiMiniXMark className="h-3.5 w-3.5" />
+				<HiMiniXMark style={{ width: 11, height: 11 }} />
 			</button>
 		</div>
 	);

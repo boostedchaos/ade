@@ -19,10 +19,14 @@ const KIND_META: Record<
 > = {
 	"pr-opened": {
 		icon: LuGitPullRequest,
-		color: "text-emerald-500",
+		color: "text-[var(--argus-pass)]",
 		label: "PR opened",
 	},
-	"pr-merged": { icon: LuGitMerge, color: "text-purple-500", label: "PR merged" },
+	"pr-merged": {
+		icon: LuGitMerge,
+		color: "text-[var(--chart-4)]",
+		label: "PR merged",
+	},
 	"pr-closed": {
 		icon: LuGitPullRequest,
 		color: "text-muted-foreground",
@@ -30,15 +34,19 @@ const KIND_META: Record<
 	},
 	"issue-opened": {
 		icon: LuCircleDot,
-		color: "text-emerald-500",
+		color: "text-[var(--argus-pass)]",
 		label: "Issue opened",
 	},
 	"issue-closed": {
 		icon: LuCircleCheck,
-		color: "text-purple-500",
+		color: "text-[var(--chart-4)]",
 		label: "Issue closed",
 	},
-	mail: { icon: LuMail, color: "text-sky-500", label: "Mail" },
+	mail: {
+		icon: LuMail,
+		color: "text-[var(--argus-iris-working)]",
+		label: "Mail",
+	},
 };
 
 function toMillis(at: string): number {
