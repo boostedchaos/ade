@@ -3,6 +3,19 @@
 Notable changes to ADE. Releases before 0.4.0 were recorded only as GitHub
 release notes — see the [releases page](https://github.com/boostedchaos/ade/releases).
 
+## Unreleased
+
+### Changed
+
+- **Codex runtime default model is now `gpt-5.6-terra` (medium reasoning)**,
+  was `gpt-5.5` (high), in both launch presets in
+  `packages/shared/src/agent-command.ts`. The model is a hardcoded CLI flag,
+  so it overrides the user's `~/.codex/config.toml`; new
+  [`docs/codex-runtime.md`](docs/codex-runtime.md) documents this, the
+  interim live-install wrapper override, and the AGENTS.md pattern that
+  gives Codex-runtime agents the same identity/memory/skills as
+  Claude-runtime agents.
+
 ## 0.4.2 — 2026-08-11 (Windows)
 
 ### Fixed

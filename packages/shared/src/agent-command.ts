@@ -73,7 +73,7 @@ export function getAgentPresetCommands(
 	return {
 		claude: ["claude --dangerously-skip-permissions"],
 		codex: [
-			'codex --model gpt-5.5 -c model_reasoning_effort="high" --ask-for-approval never --sandbox danger-full-access -c model_reasoning_summary="detailed" -c model_supports_reasoning_summaries=true',
+			'codex --model gpt-5.6-terra -c model_reasoning_effort="medium" --ask-for-approval never --sandbox danger-full-access -c model_reasoning_summary="detailed" -c model_supports_reasoning_summaries=true',
 		],
 		gemini: ["gemini --yolo"],
 		opencode: ["opencode"],
@@ -252,7 +252,7 @@ const PROMPT_COMMANDS: Record<AgentType, PromptCommandSpec> = {
 	claude: { command: "claude --dangerously-skip-permissions" },
 	codex: {
 		command:
-			'codex --model gpt-5.5 -c model_reasoning_effort="high" --ask-for-approval never --sandbox danger-full-access --',
+			'codex --model gpt-5.6-terra -c model_reasoning_effort="medium" --ask-for-approval never --sandbox danger-full-access --',
 	},
 	gemini: { command: "gemini --yolo" },
 	opencode: { command: "opencode --prompt" },
