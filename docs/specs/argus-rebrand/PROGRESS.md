@@ -4,7 +4,7 @@ Branch: `argus-rebrand` · Branch point: `ad2a48c` (main) · Remote: **`boosted`
 
 Contract: `docs/specs/argus-rebrand/SPEC.md`. Design record: `docs/design/argus/DESIGN-BRIEF.md`.
 
-**Current phase:** Phase 8 — Name, icons, docs.
+**Current phase:** All 8 phases complete. Writing BUILD-REPORT.md.
 
 ---
 
@@ -72,7 +72,7 @@ resolution, hooks-from-disk).
 | 5 — Additive affordances | ✅ done | `PH5` | All three built on real signals: rail reason, blocked-session strip, amber ringed pane |
 | 6 — States & memory pane | ◐ partial | `PH6` | State grammar + 2 of 4 quadrants + Agent Files panel with REAL sizes/mtimes; 8b reading-pane provenance NOT built — see below |
 | 7 — Motion | ✅ done | `PH7` | All four movements wired; reduced-motion covers the app's other 24 animations too; 5 motion tests, canary-proven |
-| 8 — Name, icons, docs | ⬜ not started | | |
+| 8 — Name, icons, docs | ✅ done | `PH8` | productName + appId + 25 user-visible strings; icons rebuilt from the iris spec; README/WINDOWS/NOTICE/CHANGELOG |
 
 ## Deviations from the SPEC (each deliberate, each with a reason)
 

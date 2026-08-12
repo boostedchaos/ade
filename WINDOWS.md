@@ -1,6 +1,6 @@
-# ADE on Windows
+# Argus on Windows
 
-ADE ships a Windows 11 x64 desktop build alongside the macOS build. This page
+Argus ships a Windows 11 x64 desktop build alongside the macOS build. This page
 covers what is Windows-specific: installing the unsigned build, Mission Control
 on Windows, and the handful of platform gaps.
 
@@ -40,13 +40,13 @@ talks to `ade` over a local named pipe; nothing leaves your machine.
 shows the same count as a **taskbar overlay icon** — a small red disc with the
 unread count (`9+` past nine) layered on the app's taskbar button. The overlay
 clears to nothing when the count returns to zero. When a *new* attention arrives
-while the ADE window is not focused, the taskbar button also **flashes** to draw
+while the Argus window is not focused, the taskbar button also **flashes** to draw
 your eye; the flash stops as soon as you focus the window.
 
 ### Get `ade` in your own terminal
 
-Every terminal pane ADE starts already has `ade` on its PATH. To use it from a
-terminal ADE did **not** launch (a plain PowerShell or Windows Terminal window),
+Every terminal pane Argus starts already has `ade` on its PATH. To use it from a
+terminal Argus did **not** launch (a plain PowerShell or Windows Terminal window),
 run once:
 
 ```powershell
@@ -71,7 +71,7 @@ Environment Variables → User variables**.
 
 - `ade.cmd` — for `cmd.exe` and PowerShell.
 - `ade` — an extensionless `#!/bin/sh` script for Git Bash. **As of 0.4.2** a
-  bash pane (ADE's default terminal on Windows) runs plain `ade`; before that
+  bash pane (Argus's default terminal on Windows) runs plain `ade`; before that
   bash only resolved `ade.cmd`, because it does not append `.cmd` to a bare
   name, and typing `ade` exited 127.
 
@@ -81,17 +81,17 @@ Both launchers run the CLI with [`bun`](https://bun.sh). If
 `bun` is not on your PATH, every `ade` command prints:
 
 ```
-ade: bun is required to run the ADE CLI and is not on PATH
+ade: bun is required to run the Argus CLI and is not on PATH
 ```
 
 and exits with code 2. Install `bun` and reopen your terminal. Agent terminals
-ADE launches inherit whatever `bun` is on your system PATH.
+Argus launches inherit whatever `bun` is on your system PATH.
 
 The launcher runs the CLI bundle from `~/.ade\cli\index.mjs`, a copy the app
 refreshes on every boot from the one inside its install directory. The copy is
 not an optimisation: `bun` refuses to execute a script that lives in a directory
 you cannot write to (`error: EPERM reading …`), which is exactly what
-`C:\Program Files\ADE` is. Set `ADE_CLI_ENTRY` to run a different entry.
+`C:\Program Files\Argus` is. Set `ADE_CLI_ENTRY` to run a different entry.
 
 ## Platform gaps
 
@@ -123,7 +123,7 @@ app across an upgrade, still running from the **old** install path. If new
 terminals fail to open after upgrading
 ([issue #6](https://github.com/boostedchaos/ade/issues/6)):
 
-1. Quit the ADE app.
+1. Quit the Argus app.
 2. Kill the stray daemon — in PowerShell:
 
    ```powershell
@@ -132,7 +132,7 @@ terminals fail to open after upgrading
    ```
 
    (or end `terminal-host.js` / the `node` process from Task Manager).
-3. Relaunch ADE.
+3. Relaunch Argus.
 
 ## Releasing (maintainers)
 

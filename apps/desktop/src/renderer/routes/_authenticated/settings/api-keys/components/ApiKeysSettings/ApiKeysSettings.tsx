@@ -154,7 +154,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 						<h3 className="text-lg font-medium">Your API Keys</h3>
 						<p className="text-sm text-muted-foreground">
 							API keys allow external applications like Claude Desktop or Claude
-							Code to interact with ADE on your behalf.
+							Code to interact with Argus on your behalf.
 						</p>
 
 						{showApiKeysList &&

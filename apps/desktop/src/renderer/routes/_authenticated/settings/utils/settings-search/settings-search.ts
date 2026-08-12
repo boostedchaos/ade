@@ -361,7 +361,7 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 		section: "behavior",
 		title: "Keep agents running when quitting",
 		description:
-			"Leave agent sessions running in the background after you quit ADE",
+			"Leave agent sessions running in the background after you quit Argus",
 		keywords: [
 			"features",
 			"agents",
@@ -418,7 +418,7 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 		id: SETTING_ITEM_ID.BEHAVIOR_TELEMETRY,
 		section: "behavior",
 		title: "Send anonymous usage data",
-		description: "Help improve ADE by sending anonymous usage data",
+		description: "Help improve Argus by sending anonymous usage data",
 		keywords: [
 			"telemetry",
 			"analytics",

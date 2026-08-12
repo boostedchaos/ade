@@ -178,7 +178,7 @@ export function ResourceConsumption() {
 						<div className="border-b border-border/50">
 							<div className="px-3 py-2 flex items-center justify-between">
 								<span className="text-xs font-medium min-w-0 truncate">
-									ADE App
+									Argus App
 								</span>
 								<div className={`${METRIC_COLS} text-xs text-muted-foreground`}>
 									<span className={CPU_COL}>{formatCpu(snapshot.app.cpu)}</span>

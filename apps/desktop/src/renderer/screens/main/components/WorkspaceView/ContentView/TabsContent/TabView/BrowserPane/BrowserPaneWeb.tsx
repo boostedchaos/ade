@@ -71,7 +71,7 @@ export function BrowserPaneWeb({
 					</p>
 					<p className="mt-1 max-w-xs text-xs text-muted-foreground/40">
 						The Browser pane relies on the desktop app to embed and control web
-						pages. Open this workspace in the ADE desktop app to use it.
+						pages. Open this workspace in the Argus desktop app to use it.
 					</p>
 				</div>
 			</div>

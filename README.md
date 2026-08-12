@@ -1,6 +1,6 @@
-# ADE
+# Argus
 
-A self-hosted, OS-agnostic agentic development environment. ADE is a local-first, single-user system where you build a roster of persistent coding agents and work alongside them in the terminal. Every agent is a durable identity — its own name, photo, git repository, runtime CLI, and long-lived memory — not a throwaway chat session. You come back to the same agent tomorrow and it remembers what it learned today.
+A self-hosted, OS-agnostic agentic development environment. Argus is a local-first, single-user system where you build a roster of persistent coding agents and work alongside them in the terminal. Every agent is a durable identity — its own name, photo, git repository, runtime CLI, and long-lived memory — not a throwaway chat session. You come back to the same agent tomorrow and it remembers what it learned today.
 
 > **Fork notice:** This repository (`boostedchaos/ade`) is a fork of
 > [`per-simmons/damon-ade`](https://github.com/per-simmons/damon-ade) that adds
@@ -47,15 +47,15 @@ desktop), `v*` (headless ade-server).
 
 The interface is a two-level left rail. **Teams** group your work; inside each team live **Agents**. Selecting an agent opens its workspace: a strip of **session** tabs, each a real terminal running the agent's coding CLI inside that agent's own git worktree. A **model bar** under the tabs lets you spawn a session on a different model without leaving the agent. On the right, the **Agent Files** panel shows the agent's memory growing as it works.
 
-ADE runs whatever CLI coding agents you already have installed. Claude Code, OpenAI's Codex, and OpenCode are first-class runtimes. The model bar can also launch sessions on Kimi K2.7, MiniMax M3, and GLM 5.2 through a single OpenRouter key you enter once, in-app. Nothing here is a hosted service — your code, your keys, and your agents' memory all stay on your machine.
+Argus runs whatever CLI coding agents you already have installed. Claude Code, OpenAI's Codex, and OpenCode are first-class runtimes. The model bar can also launch sessions on Kimi K2.7, MiniMax M3, and GLM 5.2 through a single OpenRouter key you enter once, in-app. Nothing here is a hosted service — your code, your keys, and your agents' memory all stay on your machine.
 
 Terminal sessions live in a detached daemon, not in the app: they survive app restarts, browser disconnects, and (by design) a phone that locks its screen mid-session.
 
-**Mission Control** (new in 0.4.0) gives the app a command line. The `ade` tool — already on the PATH of every terminal pane ADE opens — creates and splits panes, types into terminals and reads their screens, drives browser panes, and keeps per-workspace todos. ADE tracks each agent's state from its own hooks — working, waiting on you, idle — and a pane whose agent is blocked raises a ring and a badge you can jump straight to. There is also an experimental `ade claude-teams` launcher (macOS) that runs Claude Code's agent-teams feature with each teammate materialized as a real pane you can watch. See [`docs/mission-control.md`](docs/mission-control.md) and [`CHANGELOG.md`](CHANGELOG.md).
+**Mission Control** (new in 0.4.0) gives the app a command line. The `ade` tool — already on the PATH of every terminal pane Argus opens — creates and splits panes, types into terminals and reads their screens, drives browser panes, and keeps per-workspace todos. Argus tracks each agent's state from its own hooks — working, waiting on you, idle — and a pane whose agent is blocked raises a ring and a badge you can jump straight to. There is also an experimental `ade claude-teams` launcher (macOS) that runs Claude Code's agent-teams feature with each teammate materialized as a real pane you can watch. See [`docs/mission-control.md`](docs/mission-control.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Prerequisites
 
-ADE orchestrates coding CLIs; it does not bundle them. On the machine that runs the server you need:
+Argus orchestrates coding CLIs; it does not bundle them. On the machine that runs the server you need:
 
 - **Git** — required. Each agent gets its own repository or worktree.
 - **At least one agent CLI.** Claude Code is recommended, because it also powers the Kimi, MiniMax, and GLM sessions from the model bar:
@@ -88,7 +88,7 @@ The headless server (`apps/server`) and browser UI (`apps/webui`) land in Phases
 
 ## No-admin install (Windows)
 
-Everything ADE itself needs installs per-user — no elevation. The catch is picking the right installer at each step; the machine-wide variants all want admin.
+Everything Argus itself needs installs per-user — no elevation. The catch is picking the right installer at each step; the machine-wide variants all want admin.
 
 1. **Git** — use the per-user installer (or portable zip), then:
 
@@ -131,11 +131,11 @@ Everything ADE itself needs installs per-user — no elevation. The catch is pic
 
    Open `http://localhost:7777` and enter the token from `~\.ade\token`. Binding to loopback on an unprivileged port means no firewall prompt and no elevation; ConPTY is built into Windows 10 1809+. The `claude` CLI installs per-user too (`npm i -g` under your user-writable Node).
 
-**What still needs admin (both outside ADE):** installing Tailscale for remote access (network driver), and approving the Windows Firewall prompt if you bind the server to a LAN address instead of loopback. Localhost-only ADE runs fully unelevated.
+**What still needs admin (both outside Argus):** installing Tailscale for remote access (network driver), and approving the Windows Firewall prompt if you bind the server to a LAN address instead of loopback. Localhost-only Argus runs fully unelevated.
 
 ## How memory works
 
-Every ADE agent keeps a persistent, self-curated memory, adapted from the [Hermes agent](https://github.com/NousResearch/hermes-agent). The design is deliberately simple: plain markdown files the agent reads at the start of every session and writes back to as it learns. The files live outside the git worktree, so they survive branch and worktree churn and are never committed to your code.
+Every Argus agent keeps a persistent, self-curated memory, adapted from the [Hermes agent](https://github.com/NousResearch/hermes-agent). The design is deliberately simple: plain markdown files the agent reads at the start of every session and writes back to as it learns. The files live outside the git worktree, so they survive branch and worktree churn and are never committed to your code.
 
 - **AGENT.md** — a short identity and operating brief.
 - **USER.md** — a profile of you: name, preferences, communication style, hard rules.
@@ -161,6 +161,6 @@ The live server runs on `cameronspc` and is reachable tailnet-wide at:
 
 ## License
 
-ADE is a modified derivative of ADE, which is itself a modified derivative of [Superset](https://github.com/superset-sh/superset) (Copyright Superset, Inc.). It is distributed under the **Elastic License 2.0** — see [LICENSE.md](LICENSE.md), with the modification chain documented in [NOTICE](NOTICE). Third-party dependency notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The agent memory architecture is adapted from [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) (MIT).
+Argus (formerly ADE) is a modified derivative of ADE, which is itself a modified derivative of [Superset](https://github.com/superset-sh/superset) (Copyright Superset, Inc.). It is distributed under the **Elastic License 2.0** — see [LICENSE.md](LICENSE.md), with the modification chain documented in [NOTICE](NOTICE). Third-party dependency notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The agent memory architecture is adapted from [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) (MIT).
 
-Under ELv2 you may use, modify, and self-host ADE freely (including distributing it for others to self-host). You may **not** offer ADE to third parties as a hosted or managed service.
+Under ELv2 you may use, modify, and self-host Argus freely (including distributing it for others to self-host). You may **not** offer Argus to third parties as a hosted or managed service.

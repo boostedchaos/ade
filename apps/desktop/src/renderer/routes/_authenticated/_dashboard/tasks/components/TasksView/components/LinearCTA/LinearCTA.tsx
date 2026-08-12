@@ -19,7 +19,7 @@ export function LinearCTA() {
 					<h3 className="text-lg font-medium">Connect Linear</h3>
 					<p className="text-sm text-muted-foreground">
 						Connect your Linear workspace to sync issues and manage tasks
-						directly from ADE.
+						directly from Argus.
 					</p>
 				</div>
 				<Button onClick={handleConnectLinear}>Connect Linear</Button>

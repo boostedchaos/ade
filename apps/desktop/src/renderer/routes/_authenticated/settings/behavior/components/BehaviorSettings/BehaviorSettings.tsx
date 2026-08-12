@@ -353,7 +353,7 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 							</Label>
 							<p className="text-xs text-muted-foreground">
 								Leave agent sessions running in the background after you quit
-								ADE. Turn off to stop all agents when you quit.
+								Argus. Turn off to stop all agents when you quit.
 							</p>
 						</div>
 						<Switch
@@ -538,7 +538,7 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 								Send anonymous usage data
 							</Label>
 							<p className="text-xs text-muted-foreground">
-								Help improve ADE by sending anonymous usage data
+								Help improve Argus by sending anonymous usage data
 							</p>
 						</div>
 						<Switch
