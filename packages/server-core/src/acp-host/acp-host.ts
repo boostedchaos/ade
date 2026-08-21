@@ -80,9 +80,21 @@ class Semaphore {
  * Events are per-pane namespaced: `update:${paneId}`, `exit:${paneId}`,
  * `error:${paneId}` (see `AcpHostEvents`).
  */
+/**
+ * A pane whose `start()` has not resolved yet.
+ *
+ * The SESSION is held alongside the promise, not just the promise: `dispose`
+ * has to reach a still-starting child, and a `Promise<AcpSessionInfo>` is not
+ * something you can kill.
+ */
+interface PendingSession {
+	session: AcpSession;
+	promise: Promise<AcpSessionInfo>;
+}
+
 export class AcpHost extends EventEmitter {
 	private sessions = new Map<string, AcpSession>();
-	private pendingSessions = new Map<string, Promise<AcpSessionInfo>>();
+	private pendingSessions = new Map<string, PendingSession>();
 	private spawnLimiter = new Semaphore(resolveMaxConcurrentAcpSpawns());
 
 	/**
@@ -94,23 +106,26 @@ export class AcpHost extends EventEmitter {
 		const { paneId } = options;
 
 		const pending = this.pendingSessions.get(paneId);
-		if (pending) return pending;
+		if (pending) return pending.promise;
 
 		const existing = this.sessions.get(paneId);
 		if (existing) return Promise.resolve(existing.info());
 
-		const startup = this.startSession(options).finally(() => {
-			this.pendingSessions.delete(paneId);
+		// Built here rather than inside `startSession` so it is reachable from
+		// `disposeSession` for the whole of its startup, not only afterwards.
+		const session = this.buildSession(options);
+		const promise = this.startSession(paneId, session).finally(() => {
+			if (this.pendingSessions.get(paneId)?.session === session) {
+				this.pendingSessions.delete(paneId);
+			}
 		});
-		this.pendingSessions.set(paneId, startup);
-		return startup;
+		this.pendingSessions.set(paneId, { session, promise });
+		return promise;
 	}
 
-	private async startSession(
-		options: AcpSessionOptions,
-	): Promise<AcpSessionInfo> {
+	private buildSession(options: AcpSessionOptions): AcpSession {
 		const { paneId } = options;
-		const session = new AcpSession(options, {
+		const session: AcpSession = new AcpSession(options, {
 			onUpdate: (update) => {
 				if (DEBUG_ACP) {
 					console.log(`[AcpHost] update for ${paneId}: ${update.kind}`);
@@ -122,21 +137,57 @@ export class AcpHost extends EventEmitter {
 				this.emit(`error:${paneId}`, err);
 			},
 			onExit: (info) => {
-				if (this.sessions.get(paneId) === session) {
+				const registered = this.sessions.get(paneId) === session;
+				if (registered) {
 					this.sessions.delete(paneId);
 				}
-				this.emit(`exit:${paneId}`, info);
+				// A session that never reached `ready` reports itself through the
+				// `createSession` rejection. Emitting `exit` for it as well tells a
+				// caller that a pane it never had has now ended.
+				if (registered) {
+					this.emit(`exit:${paneId}`, info);
+				}
+				// The registry entry is gone, so `disposeSession` would return early
+				// at its own guard and never reach the cleanup in its `finally`.
+				// Without this, the next session for the same pane delivers events
+				// to the dead generation's listeners.
+				this.removePaneListeners(paneId);
 			},
 		});
+		return session;
+	}
 
+	private async startSession(
+		paneId: string,
+		session: AcpSession,
+	): Promise<AcpSessionInfo> {
 		const releaseSpawn = await this.spawnLimiter.acquire();
 		try {
 			const info = await session.start();
+			// A dispose that landed mid-startup already tore this child down;
+			// registering it now would resurrect a dead entry.
+			if (session.sessionState !== "ready") {
+				throw acpError(
+					"acp-session-disposed",
+					`ACP session for pane ${paneId} was disposed during startup`,
+				);
+			}
 			this.sessions.set(paneId, session);
 			return info;
+		} catch (error) {
+			// Handlers were registered before the spawn; nothing else unregisters
+			// them on a failed start.
+			this.removePaneListeners(paneId);
+			throw error;
 		} finally {
 			releaseSpawn();
 		}
+	}
+
+	private removePaneListeners(paneId: string): void {
+		this.removeAllListeners(`update:${paneId}`);
+		this.removeAllListeners(`exit:${paneId}`);
+		this.removeAllListeners(`error:${paneId}`);
 	}
 
 	/**
@@ -181,8 +232,18 @@ export class AcpHost extends EventEmitter {
 
 	/** Full teardown ladder. Idempotent, and never throws for "already gone". */
 	async disposeSession(paneId: string): Promise<void> {
-		const session = this.sessions.get(paneId);
+		const pending = this.pendingSessions.get(paneId);
+		// A still-starting pane lives in `pendingSessions` only — reading the
+		// registry alone makes this a no-op and leaks the child.
+		const session = this.sessions.get(paneId) ?? pending?.session;
 		if (!session) return;
+
+		if (pending?.session === session) {
+			// Disposing mid-startup makes `createSession` reject; that rejection
+			// belongs to whoever called `createSession`, not to this call, but it
+			// must not surface as an unhandled rejection either.
+			pending.promise.catch(() => {});
+		}
 
 		try {
 			await session.dispose();
@@ -192,16 +253,22 @@ export class AcpHost extends EventEmitter {
 			if (this.sessions.get(paneId) === session) {
 				this.sessions.delete(paneId);
 			}
-			this.removeAllListeners(`update:${paneId}`);
-			this.removeAllListeners(`exit:${paneId}`);
-			this.removeAllListeners(`error:${paneId}`);
+			if (this.pendingSessions.get(paneId)?.session === session) {
+				this.pendingSessions.delete(paneId);
+			}
+			this.removePaneListeners(paneId);
 		}
 	}
 
-	/** Parallel `disposeSession` over the whole registry; used at shutdown. */
+	/** Parallel `disposeSession` over every live AND starting pane. */
 	async disposeAll(): Promise<void> {
-		const paneIds = Array.from(this.sessions.keys());
-		await Promise.all(paneIds.map((paneId) => this.disposeSession(paneId)));
+		const paneIds = new Set([
+			...this.sessions.keys(),
+			...this.pendingSessions.keys(),
+		]);
+		await Promise.all(
+			Array.from(paneIds, (paneId) => this.disposeSession(paneId)),
+		);
 	}
 
 	private requireSession(paneId: string): AcpSession {

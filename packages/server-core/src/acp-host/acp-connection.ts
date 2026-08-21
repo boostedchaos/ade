@@ -1,5 +1,12 @@
 import { readFile, realpath, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import {
+	basename,
+	dirname,
+	isAbsolute,
+	relative,
+	resolve,
+	sep,
+} from "node:path";
 import { Readable, Writable } from "node:stream";
 import {
 	type ClientConnection,
@@ -139,7 +146,10 @@ export async function resolveInsideRoot(
 	const resolved =
 		missing.length > 0 ? resolve(existing, ...missing) : existing;
 	const rel = relative(realRoot, resolved);
-	if (rel !== "" && (rel.startsWith("..") || isAbsolute(rel))) {
+	// `startsWith("..")` also refuses a legitimate file named `..hidden`. Only a
+	// `rel` that IS `..`, or whose first segment is `..`, escapes the root.
+	const escapes = rel === ".." || rel.startsWith(`..${sep}`);
+	if (rel !== "" && (escapes || isAbsolute(rel))) {
 		throw RequestError.invalidParams(
 			undefined,
 			`path "${requestedPath}" resolves outside the session root`,

@@ -65,8 +65,8 @@ export type AcpSessionUpdate =
 	| { kind: "usage_update"; /* raw */ };
 // Members carry the adapter's payload shape verbatim from the spike transcript;
 // implementer types them from the recorded frames, avoids `any`, and adds an
-// `{ kind: "unknown"; raw: unknown }` catch-all so a new adapter version cannot
-// crash the host.
+// `{ kind: "unknown"; raw: unknown }` catch-all. See the correction below for
+// what that catch-all does and does not protect against.
 
 export interface AcpConfigOption {
 	id: string;
@@ -145,6 +145,17 @@ export function getAcpHost(): AcpHost;
 export function setAcpBinaryPathResolver(resolver: () => string): void;
 /** Throws a named, actionable Error if no resolver registered (client.ts:1221-1229). */
 export function getAcpBinaryPath(): string;
+
+/** Which executable runs the script. Mirrors setDaemonExecPathResolver. */
+export function setAcpExecPathResolver(resolver: () => string): void;
+/** Defaults to process.execPath — unregistered is not an error here. */
+export function getAcpExecPath(): string;
+/** Child env: safe inherited base + caller's env + ELECTRON_RUN_AS_NODE (§3). */
+export function spawnAcpChildEnv(
+	execPath: string,
+	callerEnv: Record<string, string> | undefined,
+	inherited?: Record<string, string>,
+): Record<string, string>;
 ```
 
 `AcpSession` and `AcpConnection` are internal (exported for tests via the module,
@@ -161,10 +172,24 @@ the repo has no AbortSignal convention and `signal` already means POSIX here.
 ### Startup (inside `AcpSession.start()`)
 
 1. `getAcpBinaryPath()` — throws before any spawn if the seam is unregistered.
-2. `spawnProcess(process.execPath, [binaryPath], { cwd, env, stdio: ["pipe","pipe","pipe"] })`.
-   The binary is a Node entry script run under the current runtime; the resolver
-   returns the script path, the session never hardcodes a dist layout.
+2. `spawnProcess(getAcpExecPath(), [binaryPath], { cwd, env: spawnAcpChildEnv(...), stdio: ["pipe","pipe","pipe"] })`.
+   The binary is a Node entry script; **which runtime runs it is a host-app
+   decision, not an assumption made here** (§6). `getAcpExecPath()` defaults to
+   `process.execPath` and is overridable through `setAcpExecPathResolver`.
+   The child env is built by `spawnAcpChildEnv(execPath, options.env)`:
+   `buildSafeEnv(process.env)` as the base so the child always has `PATH` and
+   `HOME`, the caller's own `env` overlaid verbatim on top, and
+   `ELECTRON_RUN_AS_NODE=1` added whenever the exec path IS `process.execPath`.
    stderr is line-buffered to `console.warn("[AcpSession <paneId>] stderr: …")`.
+
+   **Corrected 2026-08-21.** This step originally hardcoded `process.execPath`
+   and passed `options.env` straight through, which contradicted §6 one page
+   later and shipped two real defects: in the desktop app the child came up as
+   an Electron *browser* process that never exits (measured on Electron 40.2.1:
+   alive at 5 s, versus 68 ms with the flag), and under `apps/server` — which
+   runs on bun — `process.execPath` is the bun binary, the same breakage the
+   terminal daemon already works around
+   (`apps/server/src/routers/terminal.ts:32`).
 3. Wrap stdio: `ndJsonStream(child.stdin, child.stdout)` →
    `client({ name: "argus" }).onRequest(…).onNotification(…).connectWith(stream, cb)`.
    Register exactly the five client-side methods (§ handlers below).
@@ -190,8 +215,15 @@ to the default with a `console.warn`, never throws.
 - `fs/read_text_file` / `fs/write_text_file`: implement with `node:fs/promises`,
   paths resolved against the session `cwd` and **rejected if the resolved real
   path escapes it** (defense in depth; the agent normally has bypass anyway).
-- `extNotification`: re-emit as an `update:${paneId}` with
-  `{ kind: "unknown", raw }` semantics — Phase 1 has no consumer for it.
+- `extNotification`: **NOT implemented, by decision (2026-08-21).**
+  `@agentclientprotocol/sdk@1.3.0` offers no supported catch-all. The builder's
+  `onNotification(method, parser, handler)` requires a KNOWN method name, and
+  the only whole-class hook is `extNotification?` on the legacy `Client`
+  interface, which the SDK itself marks
+  `@deprecated Prefer client().onNotification(...) for custom notifications`
+  (`dist/acp.d.ts:1520`). Reaching past that into SDK internals is out of
+  bounds. When a specific ext notification acquires a consumer, register it by
+  name with a parser — that is the supported route.
 
 ### Teardown ladder (`dispose()`)
 
@@ -210,6 +242,27 @@ set **before** any signal is sent (`session.ts:862-867`).
 6. On confirmed exit: emit `exit:${paneId}` with `expected: true`, remove from
    registry, remove pane listeners.
 
+**`expected` means the ladder ran AND worked**, not merely that it ran. A
+force-dispose over a child that never died, or a `treeKillWithEscalation` that
+could not confirm the kill, reports `expected: false` — reporting `true` there
+is exactly how a leaked process stays invisible.
+
+**Every in-flight RPC is failed with `acp-session-disposed`** as the connection
+goes down (step 3), so §5's promise holds on the dispose path and not only on
+the death path. Without it the caller gets the SDK's uncoded "ACP connection
+closed", which nothing can branch on.
+
+**A spawn that never happened has nothing to wait for.** Node emits `error` and
+`close` — never `exit` — for a failed spawn, and leaves `pid` undefined. The
+`error` handler records the cause (with the exec path in the message), marks the
+child gone and releases the exit waiters; otherwise teardown blocks for the full
+`KILL_TIMEOUT_MS` and then reports the wrong reason.
+
+**`disposeSession` must reach a pane that is still STARTING.** `pendingSessions`
+holds the `AcpSession` alongside its promise, because a `Promise<AcpSessionInfo>`
+is not something you can kill; reading the live registry alone makes the dispose
+a no-op and leaks the child. `disposeAll` covers both maps.
+
 ### Unexpected child death (mid-turn or idle)
 
 The child's `exit` event with no `terminatingAt` set is unexpected:
@@ -219,11 +272,41 @@ The child's `exit` event with no `terminatingAt` set is unexpected:
 - Fail all other pending RPC calls the same way (the SDK connection is torn down).
 - Emit `error:${paneId}` with that Error, then `exit:${paneId}` with
   `expected: false`.
-- State → `dead`, remove from registry. **No auto-restart in Phase 1** — the
-  caller (Phase 2 UI) decides whether to create a fresh session; restart policy
-  is a product decision, not a transport one.
+- State → `dead`, remove from registry, **and remove the pane's listeners on the
+  way out**. `disposeSession` cannot do this cleanup for a dead session — its
+  registry lookup already returns nothing, so it returns early and its `finally`
+  never runs, and the next session on that pane would feed the dead
+  generation's listeners. The same removal runs when `start()` fails.
+- A session that never reached `ready` does **not** emit `exit:${paneId}`: it
+  was never a pane the caller had, and the `createSession` rejection is its
+  report.
+- **No auto-restart in Phase 1** — the caller (Phase 2 UI) decides whether to
+  create a fresh session; restart policy is a product decision, not a transport
+  one.
 
 ---
+
+### Correction (2026-08-21): what the `unknown` catch-all actually covers
+
+This document originally justified `{ kind: "unknown", raw }` as protection
+against a `claude-agent-acp` version bump adding a new `sessionUpdate` kind.
+**It cannot do that**, and the claim is withdrawn.
+
+The SDK validates an inbound `session/update` against a **closed** zod union
+before dispatching it, so a kind the schema does not know never reaches
+`mapSessionUpdate` at all. Measured over the real SDK
+(`acp-connection.test.ts`, "the inbound union is CLOSED"): sending
+`{ sessionUpdate: "invented_by_a_future_adapter" }` produces **no** update — the
+SDK logs `Error handling notification … { code: -32602, message: "Invalid
+params" }` listing every union branch it tried, drops the notification, and
+**the connection survives** (the next legal update still arrives).
+
+So the fallback's real, narrower job is the kinds the SDK's schema DOES know
+and our mapper does not: `user_message_chunk`, `plan_update`, `plan_removed`.
+That is worth having — it is why an unmapped-but-valid kind is a silent
+no-consumer event rather than a throw — it is just not version-bump insurance.
+Genuine version-bump safety would require the SDK's schema to move first;
+the integration test in §9 remains the tripwire for that.
 
 ## 4. Id spaces: paneId is the key, acpSessionId is a field
 
@@ -262,6 +345,8 @@ another class). Codes are stable strings so Phase 2 can branch on
 | `acp-session-disposed` | method on a disposed/terminating session | Method rejects (disposed guard). |
 | `acp-session-died` | child exited unexpectedly | In-flight `prompt()` rejects; `error:${paneId}` then `exit:${paneId}` (`expected:false`). |
 | `acp-invalid-config-value` | `setConfigOption` value not in declared `values` | Rejects locally; nothing sent (§7). |
+| `acp-invalid-mode` | `setMode` id not in `session/new`'s `availableModes` | Rejects locally; nothing sent (§8). |
+| `acp-prompt-in-flight` | `prompt()` while a turn is already running | Rejects; the running turn is untouched (§3). |
 | `acp-rpc-error` | ACP server returned a JSON-RPC error | The originating method rejects with server code + message appended. |
 
 `cancel()` and `disposeSession()` never throw for "already gone" — they resolve.
@@ -338,6 +423,18 @@ in that mode).
 export type PermissionHandler = (req: AcpPermissionRequest) => Promise<AcpPermissionOutcome>;
 export const autoApprovePermissionHandler: PermissionHandler; // logs one debug line, approves
 ```
+
+`setMode` validates against `session/new`'s `availableModes` before sending, the
+same gate `setConfigOption` applies — and it matters more here, because the
+permission policy IS the mode. Phase 0 proved this adapter accepts illegal
+config values silently and nothing establishes `session/set_mode` differs. When
+the adapter declares no modes at all there is nothing to validate against, and
+the write goes out unchecked rather than being refused on a guess.
+
+`prompt()` allows **one turn per session**. `session/cancel` cancels by
+`sessionId`, so two overlapping prompts would share one cancel and the first
+`finally` to run would reset the state while the other turn was still live; the
+second call rejects with `acp-prompt-in-flight` instead.
 
 Phase 1 wires `autoApprovePermissionHandler` only (defensive: if the adapter
 ever consults it in bypass mode, behavior is still auto-approve). Phase 2 plugs

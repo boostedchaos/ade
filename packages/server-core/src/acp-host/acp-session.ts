@@ -5,7 +5,11 @@ import type {
 } from "@agentclientprotocol/sdk";
 import { treeKillWithEscalation } from "../tree-kill";
 import { AcpConnection } from "./acp-connection";
-import { getAcpBinaryPath } from "./binary-resolver";
+import {
+	getAcpBinaryPath,
+	getAcpExecPath,
+	spawnAcpChildEnv,
+} from "./binary-resolver";
 import { ConfigOptionCache } from "./config-options";
 import { acpError } from "./errors";
 import {
@@ -109,6 +113,10 @@ export class AcpSession {
 
 	private disposed = false;
 	private terminatingAt: number | null = null;
+	/** The `spawn` error, kept so teardown reports the cause and not a timeout. */
+	private spawnFailure: Error | null = null;
+	/** True when `treeKillWithEscalation` could not confirm the tree died. */
+	private killFailed = false;
 	private killTimer: NodeJS.Timeout | null = null;
 	private exitEmitted = false;
 	private childExited = false;
@@ -187,11 +195,17 @@ export class AcpSession {
 	}
 
 	private spawnBinary(binaryPath: string): ChildProcess {
-		// The adapter is a Node entry script run under the current runtime; the
-		// resolver owns where it lives, so nothing here assumes a dist layout.
-		const child = this.spawnProcess(process.execPath, [binaryPath], {
+		// The adapter is a Node entry script run under a Node-compatible runtime.
+		// WHICH runtime is a host-app decision, not an assumption made here: the
+		// desktop app wants Electron-as-node, `apps/server` runs under bun and
+		// must override to plain node. `spawnAcpChildEnv` adds
+		// ELECTRON_RUN_AS_NODE for the `process.execPath` case and gives the
+		// child a real PATH/HOME. The resolver owns where the script lives, so
+		// nothing here assumes a dist layout either.
+		const execPath = getAcpExecPath();
+		const child = this.spawnProcess(execPath, [binaryPath], {
 			cwd: this.cwd,
-			env: this.env,
+			env: spawnAcpChildEnv(execPath, this.env),
 			stdio: ["pipe", "pipe", "pipe"],
 		});
 
@@ -200,15 +214,30 @@ export class AcpSession {
 		});
 
 		child.on("error", (error) => {
-			this.failInFlight(
-				acpError(
-					"acp-spawn-failed",
-					`claude-agent-acp for pane ${this.paneId} failed to spawn: ${error.message}`,
-				),
+			// A failed spawn emits `error` + `close` and NEVER `exit`, and leaves
+			// `pid` undefined (verified against Node on this platform). So the
+			// teardown ladder has nothing to kill and nothing to wait for: record
+			// the real cause, mark the child gone, and release the waiters — else
+			// teardown blocks until KILL_TIMEOUT_MS and reports the wrong reason.
+			this.spawnFailure = acpError(
+				"acp-spawn-failed",
+				`claude-agent-acp for pane ${this.paneId} failed to spawn ` +
+					`(${execPath} ${binaryPath}): ${error.message}`,
 			);
+			this.childExited = true;
+			this.childExit ??= { code: null, signal: null };
+			this.releaseExitWaiters();
+			this.failInFlight(this.spawnFailure);
 		});
 
 		child.on("exit", (code, signal) => {
+			this.handleChildExit(code, signal);
+		});
+
+		// Backstop: `close` always fires, `exit` does not (see above). Only acts
+		// when nothing has already accounted for the child being gone.
+		child.on("close", (code, signal) => {
+			if (this.childExited) return;
 			this.handleChildExit(code, signal);
 		});
 
@@ -239,10 +268,16 @@ export class AcpSession {
 
 	/** Startup failures are reported as spawn failures unless already coded. */
 	private startupError(error: unknown): Error {
+		// The `error` event carries `spawn ENOENT` and the path; whatever the
+		// torn-down SDK connection rejected with carries neither.
+		if (this.spawnFailure) return this.spawnFailure;
 		if (
 			error instanceof Error &&
 			(error.message.startsWith("acp-startup-timeout") ||
-				error.message.startsWith("acp-spawn-failed"))
+				error.message.startsWith("acp-spawn-failed") ||
+				// A dispose that landed mid-handshake is a disposal, not a spawn
+				// failure; wrapping it hides the code the caller branches on.
+				error.message.startsWith("acp-session-disposed"))
 		) {
 			return error;
 		}
@@ -275,6 +310,17 @@ export class AcpSession {
 
 	async prompt(text: string): Promise<AcpPromptResult> {
 		const { connection, sessionId } = this.requireLive();
+
+		// One turn per session. Two overlapping prompts put two frames on the
+		// wire against one `sessionId`, and `cancel()` cancels BY SESSION — so it
+		// would kill both, while the first `finally` to run would reset the state
+		// to `ready` with the other still going. Reject the second instead.
+		if (this.state === "prompting") {
+			throw acpError(
+				"acp-prompt-in-flight",
+				`ACP session for pane ${this.paneId} already has a prompt in flight`,
+			);
+		}
 
 		this.state = "prompting";
 		try {
@@ -322,10 +368,36 @@ export class AcpSession {
 
 	async setMode(modeId: string): Promise<void> {
 		const { connection, sessionId } = this.requireLive();
+
+		// Same gate as `setConfigOption`, and it matters more: the permission
+		// policy IS the mode. Phase 0 proved this adapter accepts illegal config
+		// values silently, and nothing establishes `session/set_mode` differs —
+		// so an unvalidated write could leave the cache claiming a restrictive
+		// mode while the child stays in whatever it was.
+		this.assertModeAvailable(modeId);
+
 		await this.racingDeath(connection.setMode(sessionId, modeId));
 		if (this.modes) {
 			this.modes = { ...this.modes, currentModeId: modeId };
 		}
+	}
+
+	/**
+	 * `session/new` returns `modes.availableModes`; validate against it.
+	 *
+	 * No declared list means the adapter offered none, so there is nothing to
+	 * validate against and the write goes out unchecked rather than being
+	 * refused on a guess.
+	 */
+	private assertModeAvailable(modeId: string): void {
+		const available = this.modes?.availableModes;
+		if (!available || available.length === 0) return;
+		if (available.some((mode) => mode.id === modeId)) return;
+		throw acpError(
+			"acp-invalid-mode",
+			`mode "${modeId}" is not available for pane ${this.paneId} ` +
+				`(declared: ${available.map((mode) => mode.id).join(", ")})`,
+		);
 	}
 
 	// =========================================================================
@@ -361,6 +433,17 @@ export class AcpSession {
 			);
 		}
 
+		// Design §5 promises `acp-session-disposed` for a method interrupted by
+		// dispose. The death path does this via `racingDeath`; without it here,
+		// an in-flight RPC rejects with the SDK's uncoded "ACP connection closed"
+		// as soon as the connection goes, which no caller can branch on.
+		this.failInFlight(
+			acpError(
+				"acp-session-disposed",
+				`ACP session for pane ${this.paneId} has been disposed`,
+			),
+		);
+
 		connection?.close();
 		this.child?.stdin?.destroy();
 
@@ -372,6 +455,9 @@ export class AcpSession {
 				escalationTimeoutMs: 2000,
 			});
 			if (!result.success) {
+				// Not just a log line: a tree we could not kill means this teardown
+				// did NOT succeed, and `expected: true` would report it as clean.
+				this.killFailed = true;
 				console.warn(
 					`${this.logPrefix} failed to kill process tree ${pid}: ${result.error ?? "unknown error"}`,
 				);
@@ -382,8 +468,21 @@ export class AcpSession {
 		this.finalize({
 			code: this.childExit?.code ?? null,
 			signal: this.childExit?.signal ?? null,
-			expected: true,
+			expected: this.teardownSucceeded(),
 		});
+	}
+
+	/**
+	 * Did the ladder actually end the child?
+	 *
+	 * `expected` means "this exit followed our teardown AND the teardown
+	 * worked". A stuck child, or a `treeKillWithEscalation` that could not
+	 * confirm the kill, is not a clean exit however deliberately it was
+	 * attempted — reporting it as one is how a leaked process stays invisible.
+	 */
+	private teardownSucceeded(): boolean {
+		if (this.killFailed) return false;
+		return this.child === null || this.childExited;
 	}
 
 	private armKillTimer(): void {
@@ -397,7 +496,7 @@ export class AcpSession {
 			this.finalize({
 				code: this.childExit?.code ?? null,
 				signal: this.childExit?.signal ?? null,
-				expected: true,
+				expected: this.teardownSucceeded(),
 			});
 		}, KILL_TIMEOUT_MS);
 		timer.unref();
@@ -413,14 +512,18 @@ export class AcpSession {
 		});
 	}
 
+	private releaseExitWaiters(): void {
+		for (const waiter of this.exitWaiters.splice(0)) {
+			waiter();
+		}
+	}
+
 	private handleChildExit(code: number | null, signal: string | null): void {
 		const expected = this.terminatingAt !== null;
 		this.childExited = true;
 		this.childExit = { code, signal };
 
-		for (const waiter of this.exitWaiters.splice(0)) {
-			waiter();
-		}
+		this.releaseExitWaiters();
 
 		if (expected) {
 			// runTeardown() finalizes; nothing to do beyond releasing the waiters.
@@ -449,9 +552,7 @@ export class AcpSession {
 		this.disposed = true;
 		this.state = "dead";
 
-		for (const waiter of this.exitWaiters.splice(0)) {
-			waiter();
-		}
+		this.releaseExitWaiters();
 
 		this.handlers.onExit(info);
 	}

@@ -7,12 +7,19 @@
  *
  * Register a binary resolver during app bootstrap before creating a session —
  * `server-core` is Electron-free by contract and cannot locate the adapter on
- * its own.
+ * its own. A host app whose `process.execPath` is not a Node-compatible
+ * runtime (`apps/server` runs under bun) also registers an exec-path resolver.
  */
 
 export { mapSessionUpdate } from "./acp-connection";
 export { AcpHost, getAcpHost, resolveMaxConcurrentAcpSpawns } from "./acp-host";
-export { getAcpBinaryPath, setAcpBinaryPathResolver } from "./binary-resolver";
+export {
+	getAcpBinaryPath,
+	getAcpExecPath,
+	setAcpBinaryPathResolver,
+	setAcpExecPathResolver,
+	spawnAcpChildEnv,
+} from "./binary-resolver";
 export type { AcpErrorCode } from "./errors";
 export { acpError } from "./errors";
 export {

@@ -301,6 +301,119 @@ describe("AcpSession teardown", () => {
 		expect(elapsed).toBeGreaterThanOrEqual(4500);
 		expect(session.sessionState).toBe("dead");
 		expect(recorded.exits).toHaveLength(1);
-		expect(recorded.exits[0]?.expected).toBe(true);
+		// The child is STILL ALIVE. `expected` means "our teardown ran and it
+		// worked", so a force-dispose over a child that never died reports
+		// false — reporting true here is what makes a leaked process invisible.
+		expect(recorded.exits[0]?.expected).toBe(false);
+	}, 20_000);
+});
+
+describe("AcpSession spawn failure", () => {
+	it("reports the spawn cause without waiting out KILL_TIMEOUT_MS", async () => {
+		// A failed spawn emits `error` and then stream EOF, NEVER `exit`, and
+		// leaves `pid` undefined. So teardown has no pid to kill and no exit to
+		// wait for: before the fix it blocked on the 5 s fail-safe timer.
+		const dead = new FakeAcpChild({ exitOnStdinClose: false });
+		const session = sessionFor(dead, recorded, "pane-enoent");
+
+		const started = Date.now();
+		const startPromise = session.start();
+		queueMicrotask(() => {
+			dead.failSpawn("spawn /nope/claude-agent-acp ENOENT");
+			dead.stdout?.end();
+		});
+
+		await expect(startPromise).rejects.toThrow(/^acp-spawn-failed/);
+		await expect(startPromise).rejects.toThrow(/ENOENT/);
+		// The failure must name the executable it tried, not just the script.
+		await expect(startPromise).rejects.toThrow(/claude-agent-acp\/index\.js/);
+		expect(Date.now() - started).toBeLessThan(2000);
+	}, 20_000);
+});
+
+describe("AcpSession dispose with work in flight", () => {
+	it("fails an in-flight prompt with acp-session-disposed", async () => {
+		// Design §5 promises this code. The death path gives it via racingDeath;
+		// the dispose path used to leave the caller with the SDK's uncoded
+		// "ACP connection closed", which nothing can branch on.
+		const hang = new FakeAcpChild({ autoRespondPrompt: false });
+		const session = sessionFor(hang, recorded, "pane-dispose-inflight");
+		await session.start();
+
+		// Settled eagerly rather than asserted after the dispose: an unobserved
+		// rejection here is an unhandled rejection, not a test failure.
+		const outcome = session.prompt("hello").then(
+			() => "resolved",
+			(error: Error) => error.message,
+		);
+		await hang.waitFor("session/prompt");
+
+		await session.dispose();
+		expect(await outcome).toMatch(/^acp-session-disposed/);
+	}, 20_000);
+});
+
+describe("AcpSession prompt concurrency", () => {
+	it("refuses a second prompt and puts only one frame on the wire", async () => {
+		const hang = new FakeAcpChild({ autoRespondPrompt: false });
+		const session = sessionFor(hang, recorded, "pane-concurrent");
+		await session.start();
+
+		const first = session.prompt("one").then(
+			(result) => result.stopReason,
+			(error: Error) => error.message,
+		);
+		await hang.waitFor("session/prompt");
+
+		// Bounded: unguarded, the second prompt goes on the wire and stays
+		// pending, which would hang this test instead of failing it.
+		const second = session.prompt("two").then(
+			() => "resolved",
+			(error: Error) => error.message,
+		);
+		expect(
+			await Promise.race([second, Bun.sleep(1000).then(() => "still pending")]),
+		).toMatch(/^acp-prompt-in-flight/);
+		expect(hang.framesFor("session/prompt")).toHaveLength(1);
+
+		// Answer every frame that reached the child, so nothing is left pending.
+		for (const frame of hang.framesFor("session/prompt")) {
+			if (frame.id !== undefined) {
+				hang.respond(frame.id, { stopReason: "end_turn" });
+			}
+		}
+		expect(await first).toBe("end_turn");
+		await second;
+
+		// And the guard lifts once the turn is over.
+		expect(session.sessionState).toBe("ready");
+		await session.dispose();
+	}, 20_000);
+});
+
+describe("AcpSession setMode", () => {
+	it("refuses a mode not in availableModes and sends nothing", async () => {
+		const session = sessionFor(child, recorded, "pane-mode");
+		await session.start();
+		// Startup sets bypassPermissions; that is the only frame so far.
+		expect(child.framesFor("session/set_mode")).toHaveLength(1);
+
+		await expect(session.setMode("totally-made-up")).rejects.toThrow(
+			/^acp-invalid-mode/,
+		);
+		expect(child.framesFor("session/set_mode")).toHaveLength(1);
+
+		await session.dispose();
+	}, 20_000);
+
+	it("sends a declared mode and caches it", async () => {
+		const session = sessionFor(child, recorded, "pane-mode-ok");
+		await session.start();
+
+		await session.setMode("plan");
+		expect(child.framesFor("session/set_mode")).toHaveLength(2);
+		expect(session.info().modes?.currentModeId).toBe("plan");
+
+		await session.dispose();
 	}, 20_000);
 });

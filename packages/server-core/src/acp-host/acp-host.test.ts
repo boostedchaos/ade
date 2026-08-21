@@ -5,7 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import { AcpHost, getAcpHost } from "./acp-host";
 import { setAcpBinaryPathResolver } from "./binary-resolver";
-import { FakeAcpChild } from "./fake-acp-child";
+import { FakeAcpChild, NO_REPLY } from "./fake-acp-child";
 import type { AcpSessionUpdate } from "./types";
 
 setAcpBinaryPathResolver(() => "/fake/claude-agent-acp/index.js");
@@ -172,4 +172,134 @@ describe("getAcpHost", () => {
 	it("returns the same instance every time", () => {
 		expect(getAcpHost()).toBe(getAcpHost());
 	});
+});
+
+describe("AcpHost disposing a still-starting pane", () => {
+	/** A child that answers `initialize` never, so `start()` stays pending. */
+	function hangingChild(): FakeAcpChild {
+		const child = new FakeAcpChild();
+		child.setHandler("initialize", () => NO_REPLY);
+		return child;
+	}
+
+	it("tears down a child whose start() has not resolved", async () => {
+		// `pendingSessions` holds a Promise<AcpSessionInfo>, which is not
+		// something you can kill — before the fix `disposeSession` read only the
+		// registry, found nothing, and returned while the child ran on.
+		const host = new AcpHost();
+		const child = hangingChild();
+		let exited = false;
+		child.on("exit", () => {
+			exited = true;
+		});
+
+		const startup = host.createSession({
+			paneId: "pane-starting",
+			cwd: process.cwd(),
+			spawnProcess: child.spawnProcess,
+		});
+		const outcome = startup.then(
+			() => "resolved",
+			(error: Error) => error.message,
+		);
+		await child.waitFor("initialize");
+
+		await host.disposeSession("pane-starting");
+
+		expect(exited).toBe(true);
+		expect(host.listSessions()).toHaveLength(0);
+		expect(await outcome).toMatch(/^acp-session-disposed/);
+	}, 30_000);
+
+	it("disposeAll reaches a starting pane too", async () => {
+		const host = new AcpHost();
+		const child = hangingChild();
+		let exited = false;
+		child.on("exit", () => {
+			exited = true;
+		});
+
+		const startup = host.createSession({
+			paneId: "pane-starting-all",
+			cwd: process.cwd(),
+			spawnProcess: child.spawnProcess,
+		});
+		const outcome = startup.then(
+			() => "resolved",
+			(error: Error) => error.message,
+		);
+		await child.waitFor("initialize");
+
+		await host.disposeAll();
+
+		expect(exited).toBe(true);
+		expect(await outcome).toMatch(/^acp-session-disposed/);
+	}, 30_000);
+});
+
+describe("AcpHost listener hygiene", () => {
+	it("drops pane listeners when the child dies unexpectedly", async () => {
+		// The registry entry goes in the death path, so `disposeSession` returns
+		// early at its own guard and its `finally` cleanup never runs. Before the
+		// fix the next session on that pane fed the dead generation's listeners.
+		const host = new AcpHost();
+		const first = new FakeAcpChild({ sessionId: "acp-gen-1" });
+		const stale: AcpSessionUpdate[] = [];
+		host.on("update:pane-gen", (update: AcpSessionUpdate) =>
+			stale.push(update),
+		);
+
+		await host.createSession({
+			paneId: "pane-gen",
+			cwd: process.cwd(),
+			spawnProcess: first.spawnProcess,
+		});
+
+		first.exit(9, null);
+		await Bun.sleep(20);
+		expect(host.listSessions()).toHaveLength(0);
+		expect(host.listenerCount("update:pane-gen")).toBe(0);
+
+		// A fresh generation on the same pane must not reach the old listener.
+		const second = new FakeAcpChild({ sessionId: "acp-gen-2" });
+		await host.createSession({
+			paneId: "pane-gen",
+			cwd: process.cwd(),
+			spawnProcess: second.spawnProcess,
+		});
+		second.sessionUpdate({
+			sessionUpdate: "agent_message_chunk",
+			content: { type: "text", text: "second generation" },
+		});
+		await Bun.sleep(20);
+
+		expect(stale).toHaveLength(0);
+
+		await host.disposeAll();
+	}, 30_000);
+
+	it("drops pane listeners when start() fails", async () => {
+		const host = new AcpHost();
+		const child = new FakeAcpChild();
+		child.setHandler("session/new", () => {
+			throw new Error("no session for you");
+		});
+		const exits: unknown[] = [];
+		host.on("update:pane-badstart", () => {});
+		host.on("exit:pane-badstart", (info: unknown) => exits.push(info));
+
+		await expect(
+			host.createSession({
+				paneId: "pane-badstart",
+				cwd: process.cwd(),
+				spawnProcess: child.spawnProcess,
+			}),
+		).rejects.toThrow(/^acp-spawn-failed/);
+
+		expect(host.listenerCount("update:pane-badstart")).toBe(0);
+		expect(host.listenerCount("exit:pane-badstart")).toBe(0);
+		// A pane that never reached `ready` was never a pane the caller had; the
+		// `createSession` rejection is its report, not an `exit` event.
+		expect(exits).toHaveLength(0);
+	}, 30_000);
 });

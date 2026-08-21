@@ -22,6 +22,10 @@ export type AcpErrorCode =
 	| "acp-session-died"
 	/** `setConfigOption` value is not in the option's declared `values`. */
 	| "acp-invalid-config-value"
+	/** `setMode` id is not in the session's declared `availableModes`. */
+	| "acp-invalid-mode"
+	/** `prompt()` called while a turn is already in flight on that session. */
+	| "acp-prompt-in-flight"
 	/** The ACP server answered a request with a JSON-RPC error. */
 	| "acp-rpc-error";
 

@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { SessionUpdate } from "@agentclientprotocol/sdk";
 import { mapSessionUpdate, resolveInsideRoot } from "./acp-connection";
 import { AcpSession } from "./acp-session";
@@ -228,6 +228,63 @@ describe("resolveInsideRoot", () => {
 	it("accepts the root itself", async () => {
 		expect(await resolveInsideRoot(root, ".")).toBeTruthy();
 	});
+
+	it("accepts a legitimate file whose name STARTS with two dots", async () => {
+		// `rel.startsWith("..")` refuses this. Only `rel === ".."` or a first
+		// segment of ".." is an escape.
+		await writeFile(join(root, "..hidden"), "not an escape", "utf8");
+		expect(await resolveInsideRoot(root, "..hidden")).toContain("..hidden");
+		expect(await resolveInsideRoot(root, "nested/../..hidden")).toContain(
+			"..hidden",
+		);
+	});
+
+	it("still refuses a real traversal that lands next to such a name", async () => {
+		// The sibling of the file above, one level UP: same "..h" prefix on the
+		// relative path, opposite verdict.
+		await expect(
+			resolveInsideRoot(root, join("..", `${basename(root)}-sibling`)),
+		).rejects.toThrow(/outside the session root/);
+	});
+});
+
+describe("what the SDK does with an unrecognised sessionUpdate kind", () => {
+	it("never reaches mapSessionUpdate: the inbound union is CLOSED", async () => {
+		// The `{ kind: "unknown", raw }` fallback is documented as protecting the
+		// host from an adapter version bump. It cannot: the SDK validates
+		// `session/update` against a closed zod union BEFORE dispatching, so a
+		// kind the schema does not know is rejected upstream. Measured here, over
+		// the real SDK: the notification produces no update, and the connection
+		// survives it (the next legal update still lands).
+		const child = new FakeAcpChild();
+		const seen: string[] = [];
+		const session = new AcpSession(
+			{
+				paneId: "pane-unknown-kind",
+				cwd: process.cwd(),
+				spawnProcess: child.spawnProcess,
+			},
+			{
+				onUpdate: (update) => seen.push(update.kind),
+				onError: () => {},
+				onExit: () => {},
+			},
+		);
+		await session.start();
+
+		child.sessionUpdate({ sessionUpdate: "invented_by_a_future_adapter" });
+		await Bun.sleep(20);
+		expect(seen).toHaveLength(0);
+
+		child.sessionUpdate({
+			sessionUpdate: "agent_message_chunk",
+			content: { type: "text", text: "still connected" },
+		});
+		await Bun.sleep(20);
+		expect(seen).toEqual(["agent_message_chunk"]);
+
+		await session.dispose();
+	}, 20_000);
 });
 
 describe("fs/* handlers over the wire", () => {
