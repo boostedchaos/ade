@@ -92,6 +92,85 @@ export function fixtureConfigOptions(): SessionConfigOption[] {
 	];
 }
 
+/**
+ * One tool call's whole lifecycle, as the live capture recorded it
+ * (`planning/spikes/acp-phase3-capture/frames.json`, the `Edit beta.txt` card):
+ * a `tool_call` announcing a generic title and `pending`, a refinement that
+ * fills in the real title and `locations`, a diff-content update, a SECOND
+ * diff update replacing the first (the PostToolUse hook — this is the frame
+ * that makes append-instead-of-replace show the edit twice), and a final
+ * update carrying nothing but `status: completed`.
+ *
+ * `in_progress` is deliberately absent: it never appeared on the wire for a
+ * short tool (design ground truth 2), so a fixture that emitted it would be
+ * testing a state the renderer has never been sent.
+ *
+ * Returned as plain frames for the caller to feed through
+ * `FakeAcpChild.sessionUpdate`, so the test drives the real JSON-RPC seam
+ * rather than calling the mapper directly.
+ */
+export type FixtureToolCallFrame = Extract<
+	SessionUpdate,
+	{ sessionUpdate: "tool_call" | "tool_call_update" }
+>;
+
+export function fixtureToolCallSequence(
+	toolCallId = "toolu_fixture_edit",
+	path = "/repo/beta.txt",
+): FixtureToolCallFrame[] {
+	const diff = (oldText: string, newText: string) => ({
+		type: "diff" as const,
+		path,
+		oldText,
+		newText,
+	});
+	return [
+		{
+			sessionUpdate: "tool_call",
+			toolCallId,
+			title: "Edit",
+			kind: "edit",
+			status: "pending",
+			content: [],
+			locations: [],
+			rawInput: { file_path: path },
+			_meta: { claudeCode: { toolName: "Edit" } },
+		},
+		{
+			sessionUpdate: "tool_call_update",
+			toolCallId,
+			kind: "edit",
+			title: "Edit beta.txt",
+			locations: [{ path }],
+			rawInput: { file_path: path },
+			_meta: { claudeCode: { toolName: "Edit" } },
+		},
+		{
+			sessionUpdate: "tool_call_update",
+			toolCallId,
+			content: [diff("beta line 2", "beta line 2 EDITED")],
+			locations: [{ path }],
+			_meta: { claudeCode: { toolName: "Edit" } },
+		},
+		{
+			sessionUpdate: "tool_call_update",
+			toolCallId,
+			content: [
+				diff("beta line 1\nbeta line 2", "beta line 1\nbeta line 2 EDITED"),
+			],
+			locations: [{ path, line: 1 }],
+			_meta: { claudeCode: { toolName: "Edit" } },
+		},
+		{
+			sessionUpdate: "tool_call_update",
+			toolCallId,
+			status: "completed",
+			rawOutput: "The file has been updated.",
+			_meta: { claudeCode: { toolName: "Edit" } },
+		},
+	];
+}
+
 export interface FakeAcpChildOptions {
 	/** Defaults to `undefined` so teardown never signals a real pid. */
 	pid?: number;
