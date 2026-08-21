@@ -167,6 +167,15 @@ export interface AcpSessionInfo {
 	configOptions: AcpConfigOption[];
 	/** Generation of the cache the list above came from (A1). */
 	configSeq: number;
+	/**
+	 * Latest slash commands the adapter advertised, cached by the host.
+	 *
+	 * `session/new` does not return these — they arrive only as an
+	 * `available_commands_update` notification shortly after start, so a pane
+	 * that mounts later (mosaic remounts on every split and drag) has no other
+	 * way to learn them. Empty until the first notification.
+	 */
+	availableCommands: AvailableCommand[];
 }
 
 // =============================================================================

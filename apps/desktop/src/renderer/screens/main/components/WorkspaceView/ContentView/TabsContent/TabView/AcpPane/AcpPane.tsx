@@ -8,6 +8,7 @@ import { AcpControlBar } from "./AcpControlBar";
 import { AcpMessageList } from "./AcpMessageList";
 import { type AcpPaneLifecycle, AcpStatusLine } from "./AcpStatusLine";
 import { AcpUsageMeter } from "./AcpUsageMeter";
+import { useAcpCommandsStore } from "./commands";
 import { useAcpControlBarStore } from "./controlBar";
 import {
 	type AcpTranscript,
@@ -62,6 +63,8 @@ export function AcpPane({
 	const applyEvent = useAcpTranscriptStore((s) => s.apply);
 	const promptSent = useAcpTranscriptStore((s) => s.promptSent);
 	const applyControlBarEvent = useAcpControlBarStore((s) => s.apply);
+	const applyCommandsEvent = useAcpCommandsStore((s) => s.apply);
+	const seedCommands = useAcpCommandsStore((s) => s.seed);
 	const seedControlBar = useAcpControlBarStore((s) => s.seed);
 	const controlBarMounted = useAcpControlBarStore((s) => s.mounted);
 	const setAcpSessionId = useTabsStore((s) => s.setAcpSessionId);
@@ -83,8 +86,18 @@ export function AcpPane({
 
 	// Ref, not state: the subscription callback must see the latest handlers
 	// without re-subscribing (a re-subscribe drops events mid-stream).
-	const handlersRef = useRef({ applyEvent, applyControlBarEvent, onEvent });
-	handlersRef.current = { applyEvent, applyControlBarEvent, onEvent };
+	const handlersRef = useRef({
+		applyEvent,
+		applyControlBarEvent,
+		applyCommandsEvent,
+		onEvent,
+	});
+	handlersRef.current = {
+		applyEvent,
+		applyControlBarEvent,
+		applyCommandsEvent,
+		onEvent,
+	};
 
 	const startSession = useCallback(() => {
 		setLifecycle("starting");
@@ -100,6 +113,11 @@ export function AcpPane({
 					// a wire read-back: a session this pane is re-attaching to may have
 					// been reconfigured since the cache was last touched.
 					seedControlBar(paneId, info.configOptions, info.configSeq);
+					// `session/new` never returns commands, so a pane that mounts after
+					// the notification fired has only this cache to learn them from.
+					// It applies to an EMPTY list only: an event already received must
+					// win over a snapshot read before it (D2).
+					seedCommands(paneId, info.availableCommands);
 					readConfigMutate(
 						{ paneId },
 						{
@@ -122,6 +140,7 @@ export function AcpPane({
 		cwd,
 		setAcpSessionId,
 		seedControlBar,
+		seedCommands,
 		readConfigMutate,
 		ensureSessionMutate,
 	]);
@@ -142,6 +161,7 @@ export function AcpPane({
 			onData: (event) => {
 				handlersRef.current.applyEvent(paneId, event);
 				handlersRef.current.applyControlBarEvent(paneId, event);
+				handlersRef.current.applyCommandsEvent(paneId, event);
 				handlersRef.current.onEvent(event);
 				switch (event.type) {
 					case "update":
@@ -253,6 +273,7 @@ export function AcpPane({
 					onNewSession={startSession}
 				/>
 				<AcpComposer
+					paneId={paneId}
 					isBusy={isBusy}
 					canSend={lifecycle === "ready" || lifecycle === "streaming"}
 					onSend={handleSend}

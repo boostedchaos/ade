@@ -31,6 +31,7 @@ function info(paneId: string, state: AcpSessionInfo["state"]): AcpSessionInfo {
 		modes: null,
 		configOptions: [],
 		configSeq: 1,
+		availableCommands: [],
 	};
 }
 

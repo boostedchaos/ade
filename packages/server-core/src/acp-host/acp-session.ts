@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import type {
+	AvailableCommand,
 	SessionConfigOption,
 	SessionModeState,
 } from "@agentclientprotocol/sdk";
@@ -122,6 +123,13 @@ export class AcpSession {
 	 * each other (A1).
 	 */
 	private configSeq = 0;
+	/**
+	 * Latest `available_commands_update` list, for a pane that mounts AFTER the
+	 * notification fired. `session/new` never returns commands, so a renderer
+	 * relying on the event stream alone would show an empty palette forever
+	 * (Phase 5 D1) — and an empty palette and a dead subscription look alike.
+	 */
+	private availableCommands: AvailableCommand[] = [];
 
 	private child: ChildProcess | null = null;
 	private connection: AcpConnection | null = null;
@@ -333,6 +341,7 @@ export class AcpSession {
 			modes: this.modes,
 			configOptions: this.configCache.list(),
 			configSeq: this.configSeq,
+			availableCommands: [...this.availableCommands],
 		};
 	}
 
@@ -682,6 +691,11 @@ export class AcpSession {
 	}
 
 	private handleSessionUpdate(update: AcpSessionUpdate): void {
+		if (update.kind === "available_commands_update") {
+			// Replaced BEFORE the re-emit: a renderer that reacts to the event by
+			// reading `info()` must not see the previous list.
+			this.availableCommands = [...update.commands];
+		}
 		if (update.kind === "current_mode_update" && this.modes) {
 			this.modes = { ...this.modes, currentModeId: update.modeId };
 		}
