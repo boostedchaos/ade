@@ -8,7 +8,11 @@
 
 import { describe, expect, it } from "bun:test";
 import type { AcpPaneEvent } from "lib/trpc/routers/acp";
-import { ACP_STATUS_ON_PROMPT, acpStatusForEvent } from "./useAcpPaneStatus";
+import {
+	ACP_STATUS_ON_ANSWER,
+	ACP_STATUS_ON_PROMPT,
+	acpStatusForEvent,
+} from "./useAcpPaneStatus";
 
 describe("acpStatusForEvent", () => {
 	it("sends → working", () => {
@@ -24,9 +28,11 @@ describe("acpStatusForEvent", () => {
 		).toBe("review");
 	});
 
-	it("turn_error → idle", () => {
+	it("turn_error → review (A6)", () => {
+		// Was "idle" through Phase 5, which made a FAILED turn look like a
+		// finished one: the pane went quiet and Mission Control never rang.
 		expect(acpStatusForEvent({ type: "turn_error", message: "x" })).toBe(
-			"idle",
+			"review",
 		);
 	});
 
@@ -57,16 +63,52 @@ describe("acpStatusForEvent", () => {
 		expect(acpStatusForEvent(event)).toBeNull();
 	});
 
-	it("never returns permission under Phase 2's auto-approve policy", () => {
+	it("never returns permission for an event the auto-approve policy can emit", () => {
+		// Under the default policy the host emits no permission or elicitation
+		// request at all, so every event a pane can actually see is in this list.
 		const events: AcpPaneEvent[] = [
 			{ type: "turn_end", stopReason: "end_turn" },
 			{ type: "turn_error", message: "x" },
 			{ type: "session_error", message: "x" },
 			{ type: "session_exit", code: 0, signal: null, expected: true },
 			{ type: "update", update: { kind: "unknown", raw: null } },
+			{ type: "events_dropped", count: 3 },
 		];
 		for (const event of events) {
 			expect(acpStatusForEvent(event)).not.toBe("permission");
 		}
+	});
+
+	it("a blocked request → permission, and answering → working (A6)", () => {
+		expect(
+			acpStatusForEvent({
+				type: "permission_request",
+				requestId: "perm-1",
+				title: "Write beta.txt",
+				options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
+			}),
+		).toBe("permission");
+		expect(
+			acpStatusForEvent({
+				type: "elicitation_request",
+				requestId: "elicit-1",
+				message: "Which one?",
+				form: {
+					fields: [
+						{
+							key: "question_0",
+							kind: "select",
+							required: false,
+							options: [{ value: "a", label: "A" }],
+						},
+					],
+				},
+			}),
+		).toBe("permission");
+		expect(ACP_STATUS_ON_ANSWER).toBe("working");
+	});
+
+	it("a dropped-events notice writes NOTHING", () => {
+		expect(acpStatusForEvent({ type: "events_dropped", count: 12 })).toBeNull();
 	});
 });

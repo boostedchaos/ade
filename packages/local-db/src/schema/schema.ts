@@ -2,6 +2,7 @@ import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 
 import type {
+	AcpPermissionPolicy,
 	AgentRuntime,
 	BranchPrefixMode,
 	ExternalApp,
@@ -198,6 +199,11 @@ export const settings = sqliteTable("settings", {
 	worktreeBaseDir: text("worktree_base_dir"),
 	openLinksInApp: integer("open_links_in_app", { mode: "boolean" }),
 	defaultEditor: text("default_editor").$type<ExternalApp>(),
+	// Permission policy new ACP agent sessions start under. Null = the default,
+	// "auto-approve", which is the behavior every ACP pane has had so far.
+	acpPermissionPolicy: text(
+		"acp_permission_policy",
+	).$type<AcpPermissionPolicy>(),
 	// Provider API keys, each encrypted with electron safeStorage and stored as a
 	// base64 blob keyed by provider id (e.g. "openrouter"). Never plaintext; the
 	// decrypted value is only ever read in the main process, never sent to the renderer.

@@ -14,9 +14,10 @@ import type { PaneStatus } from "shared/tabs-types";
  * disjointness is asserted in `packages/server-core/src/acp-host/spawn-env.test.ts`
  * rather than assumed.
  *
- * `"permission"` is deliberately unreachable here: it means a genuine
- * permission block, which Phase 2's auto-approve policy cannot produce. It
- * belongs to the future `"prompt"` policy.
+ * `"permission"` is reachable from Phase 6 on: it means the agent is blocked
+ * on the user, which only the `"prompt"` policy (A4) and elicitation (A5) can
+ * produce. Under the default auto-approve policy nothing emits those events
+ * and the status is unreachable exactly as it was in Phase 2.
  */
 export function acpStatusForEvent(event: AcpPaneEvent): PaneStatus | null {
 	switch (event.type) {
@@ -25,9 +26,21 @@ export function acpStatusForEvent(event: AcpPaneEvent): PaneStatus | null {
 			// to idle as soon as the user looks at the pane.
 			return "review";
 		case "turn_error":
+			// "review", NOT "idle" (A6): a turn that failed needs the user, and
+			// idle makes a failed turn look like a finished one — the pane goes
+			// quiet and Mission Control never rings.
+			return "review";
+		case "permission_request":
+		case "elicitation_request":
+			// The highest-priority status there is, and the one the whole
+			// permission flow exists for: nothing progresses until a human answers.
+			return "permission";
 		case "session_exit":
 		case "session_error":
 			return "idle";
+		case "events_dropped":
+			// Bookkeeping about the stream, not about the agent.
+			return null;
 		case "update":
 			// Streaming content does not move the status: `prompt sent → working`
 			// already covers the whole turn, and re-writing "working" on every
@@ -41,14 +54,28 @@ export function acpStatusForEvent(event: AcpPaneEvent): PaneStatus | null {
 /** Status for the moment the user presses send. */
 export const ACP_STATUS_ON_PROMPT: PaneStatus = "working";
 
+/**
+ * Status for the moment the user answers a permission or elicitation request.
+ *
+ * Back to "working", because that is what the agent goes back to doing — and
+ * the answer is the only signal that it did. The next event that would move
+ * the status is the turn ending, which may be a long way off.
+ */
+export const ACP_STATUS_ON_ANSWER: PaneStatus = "working";
+
 export function useAcpPaneStatus(paneId: string): {
 	onPromptSent: () => void;
+	onRequestAnswered: () => void;
 	onEvent: (event: AcpPaneEvent) => void;
 } {
 	const setPaneStatus = useTabsStore((s) => s.setPaneStatus);
 
 	const onPromptSent = useCallback(() => {
 		setPaneStatus(paneId, ACP_STATUS_ON_PROMPT);
+	}, [paneId, setPaneStatus]);
+
+	const onRequestAnswered = useCallback(() => {
+		setPaneStatus(paneId, ACP_STATUS_ON_ANSWER);
 	}, [paneId, setPaneStatus]);
 
 	const onEvent = useCallback(
@@ -59,5 +86,5 @@ export function useAcpPaneStatus(paneId: string): {
 		[paneId, setPaneStatus],
 	);
 
-	return { onPromptSent, onEvent };
+	return { onPromptSent, onRequestAnswered, onEvent };
 }

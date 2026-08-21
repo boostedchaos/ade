@@ -11,8 +11,10 @@ import { Readable, Writable } from "node:stream";
 import {
 	type ClientConnection,
 	type ContentChunk,
+	type CreateElicitationRequest,
 	client,
 	type InitializeResponse,
+	type LoadSessionResponse,
 	type McpServer,
 	methods,
 	type NewSessionResponse,
@@ -28,6 +30,7 @@ import {
 import { toAcpConfigOption } from "./config-options";
 import { acpError } from "./errors";
 import type {
+	AcpElicitationOutcome,
 	AcpPermissionOutcome,
 	AcpPermissionRequest,
 	AcpSessionUpdate,
@@ -68,6 +71,8 @@ export function mapSessionUpdate(update: SessionUpdate): AcpSessionUpdate {
 			return { kind: "agent_message_chunk", text: textOf(update) };
 		case "agent_thought_chunk":
 			return { kind: "agent_thought_chunk", text: textOf(update) };
+		case "user_message_chunk":
+			return { kind: "user_message_chunk", text: textOf(update) };
 		case "tool_call":
 			return { kind: "tool_call", toolCall: update };
 		case "tool_call_update":
@@ -108,6 +113,32 @@ export function mapSessionUpdate(update: SessionUpdate): AcpSessionUpdate {
 			}
 			return { kind: "unknown", raw: update };
 	}
+}
+
+// =============================================================================
+// session/load fallback
+// =============================================================================
+
+/**
+ * The JSON-RPC codes on which a `session/load` means "start fresh instead",
+ * rather than "this connection is broken".
+ *
+ * Read off the SDK's own constructors rather than transcribed as literals:
+ * `RequestError.resourceNotFound` is -32002 and `RequestError.invalidParams`
+ * is -32602 (`jsonrpc.js:1014, 1038`). The adapter answers the first for a
+ * session id it no longer holds and the second for a `cwd` that no longer
+ * exists — both are ordinary, both are recoverable, and neither should reach
+ * the user as an error.
+ */
+const SESSION_LOAD_FALLBACK_CODES: ReadonlySet<number> = new Set([
+	RequestError.resourceNotFound().code,
+	RequestError.invalidParams().code,
+]);
+
+export function isSessionLoadFallbackError(error: unknown): boolean {
+	return (
+		error instanceof RequestError && SESSION_LOAD_FALLBACK_CODES.has(error.code)
+	);
 }
 
 // =============================================================================
@@ -181,6 +212,15 @@ export interface AcpConnectionCallbacks {
 		req: AcpPermissionRequest,
 	) => Promise<AcpPermissionOutcome>;
 	/**
+	 * `elicitation/create` (A5). Advertising `elicitation.form` is what
+	 * re-enables `AskUserQuestion` — the adapter puts the tool in
+	 * `disallowedTools` when the client cannot render a form
+	 * (`acp-agent.js:4109`), so without this the agent cannot ask at all.
+	 */
+	onElicitationRequest: (
+		req: CreateElicitationRequest,
+	) => Promise<AcpElicitationOutcome>;
+	/**
 	 * Raw `config_option_update` payload, handed over alongside the mapped
 	 * update because the cache needs the adapter's own option shape (select vs
 	 * boolean) that the normalized union member does not carry.
@@ -253,6 +293,9 @@ export class AcpConnection {
 			.onRequest(methods.client.session.requestPermission, async (ctx) => ({
 				outcome: await callbacks.onPermissionRequest(ctx.params),
 			}))
+			.onRequest(methods.client.elicitation.create, async (ctx) =>
+				callbacks.onElicitationRequest(ctx.params),
+			)
 			.onRequest(methods.client.fs.readTextFile, async (ctx) => {
 				const path = await resolveInsideRoot(cwd, ctx.params.path);
 				return { content: await readFile(path, "utf8") };
@@ -284,6 +327,11 @@ export class AcpConnection {
 				clientInfo: { name: CLIENT_NAME, version: "0.1.0" },
 				clientCapabilities: {
 					fs: { readTextFile: true, writeTextFile: true },
+					// `{}` IS the opt-in for form elicitation — the capability object
+					// carries no flags, and its mere presence is what the adapter
+					// reads (`acp-agent.js:4102-4109`). `url` is deliberately absent:
+					// nothing here can open a browser for the user.
+					elicitation: { form: {} },
 				},
 			}),
 		);
@@ -296,6 +344,39 @@ export class AcpConnection {
 				mcpServers: params.mcpServers,
 			}),
 		);
+	}
+
+	/**
+	 * Reopen a stored conversation and replay it (A1).
+	 *
+	 * Takes the SAME params object `newSession` would be given — the adapter
+	 * keys a session on their fingerprint exactly as it does for resume (see
+	 * `AcpSessionParams`).
+	 *
+	 * Unlike `resumeSession`, this replays the entire history as ORDINARY
+	 * `session/update` notifications before answering, with no marker
+	 * separating them from live traffic. Everything downstream therefore has to
+	 * be ready to receive updates before this promise settles.
+	 */
+	async loadSession(
+		sessionId: string,
+		params: AcpSessionParams,
+	): Promise<LoadSessionResponse> {
+		// Deliberately NOT routed through `this.call`: the caller's decision to
+		// fall back to a fresh session keys on the JSON-RPC code, and `call`
+		// flattens every RequestError into one uncoded `acp-rpc-error` string.
+		// Failures that are NOT fallback-worthy are wrapped exactly as `call`
+		// would wrap them, so nothing else sees a different error shape.
+		try {
+			return await this.connection.agent.request(methods.agent.session.load, {
+				sessionId,
+				cwd: params.cwd,
+				mcpServers: params.mcpServers,
+			});
+		} catch (error) {
+			if (isSessionLoadFallbackError(error)) throw error;
+			throw this.wrapRpcError("session/load", error);
+		}
 	}
 
 	/**
@@ -380,13 +461,17 @@ export class AcpConnection {
 		try {
 			return await send();
 		} catch (error) {
-			if (error instanceof RequestError) {
-				throw acpError(
-					"acp-rpc-error",
-					`${method} failed (code ${error.code}): ${error.message}`,
-				);
-			}
-			throw error;
+			throw this.wrapRpcError(method, error);
 		}
+	}
+
+	private wrapRpcError(method: string, error: unknown): unknown {
+		if (error instanceof RequestError) {
+			return acpError(
+				"acp-rpc-error",
+				`${method} failed (code ${error.code}): ${error.message}`,
+			);
+		}
+		return error;
 	}
 }

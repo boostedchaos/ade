@@ -1,4 +1,6 @@
 import {
+	ACP_PERMISSION_POLICIES,
+	type AcpPermissionPolicy,
 	BRANCH_PREFIX_MODES,
 	EXECUTION_MODES,
 	EXTERNAL_APPS,
@@ -24,6 +26,7 @@ import {
 	setProviderKey,
 } from "main/lib/provider-keys";
 import {
+	DEFAULT_ACP_PERMISSION_POLICY,
 	DEFAULT_AUTO_APPLY_DEFAULT_PRESET,
 	DEFAULT_CONFIRM_ON_QUIT,
 	DEFAULT_FILE_OPEN_MODE,
@@ -50,6 +53,27 @@ import {
 	normalizeTerminalPresets,
 	type PresetWithUnknownMode,
 } from "./preset-execution-mode";
+
+/**
+ * The permission policy a NEW ACP session should start under (Phase 6 A4).
+ *
+ * Exported for `routers/index.ts` to hand to the ACP router, which cannot read
+ * it itself: that module is unit-tested without Electron, and importing the
+ * local-db module opens the database and runs migrations at import time.
+ *
+ * Read per session rather than cached, so changing the setting applies to the
+ * next session without a restart. Falls back to the default on any read
+ * failure — an unreadable settings row must not decide the permission policy
+ * by accident, and the default is the conservative-for-UX, unchanged behavior.
+ */
+export function readAcpPermissionPolicy(): AcpPermissionPolicy {
+	try {
+		const row = localDb.select().from(settings).get();
+		return row?.acpPermissionPolicy ?? DEFAULT_ACP_PERMISSION_POLICY;
+	} catch {
+		return DEFAULT_ACP_PERMISSION_POLICY;
+	}
+}
 
 function isValidRingtoneId(ringtoneId: string): boolean {
 	if (isBuiltInRingtoneId(ringtoneId)) {
@@ -394,6 +418,30 @@ export const createSettingsRouter = () => {
 					.onConflictDoUpdate({
 						target: settings.id,
 						set: { confirmOnQuit: input.enabled },
+					})
+					.run();
+
+				return { success: true };
+			}),
+
+		getAcpPermissionPolicy: publicProcedure.query(
+			(): AcpPermissionPolicy => readAcpPermissionPolicy(),
+		),
+
+		/**
+		 * Applies to sessions started AFTER the write — the policy is the ACP
+		 * session's mode, fixed during its handshake. A pane already running
+		 * keeps the policy it started with.
+		 */
+		setAcpPermissionPolicy: publicProcedure
+			.input(z.object({ policy: z.enum(ACP_PERMISSION_POLICIES) }))
+			.mutation(({ input }) => {
+				localDb
+					.insert(settings)
+					.values({ id: 1, acpPermissionPolicy: input.policy })
+					.onConflictDoUpdate({
+						target: settings.id,
+						set: { acpPermissionPolicy: input.policy },
 					})
 					.run();
 

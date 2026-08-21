@@ -183,3 +183,18 @@ export type BranchPrefixMode = (typeof BRANCH_PREFIX_MODES)[number];
 export const FILE_OPEN_MODES = ["split-pane", "new-tab"] as const;
 
 export type FileOpenMode = (typeof FILE_OPEN_MODES)[number];
+
+/**
+ * How an ACP agent session handles a tool that asks permission.
+ *
+ * `auto-approve` runs the adapter in its bypass mode, where it never asks —
+ * the behavior every ACP pane has had so far. `prompt` moves the session out
+ * of bypass so `session/request_permission` actually fires and the pane can
+ * put the decision in front of the user.
+ *
+ * Applies to NEW sessions: the policy is the session's MODE, set during the
+ * handshake, and switching it mid-session is out of scope for Phase 6.
+ */
+export const ACP_PERMISSION_POLICIES = ["auto-approve", "prompt"] as const;
+
+export type AcpPermissionPolicy = (typeof ACP_PERMISSION_POLICIES)[number];

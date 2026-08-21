@@ -33,6 +33,24 @@ export interface JsonRpcFrame {
 /** Returned by a handler that should NOT answer yet (the test answers later). */
 export const NO_REPLY = Symbol("fake-acp-child-no-reply");
 
+/**
+ * Thrown by a handler that must answer with a SPECIFIC JSON-RPC code.
+ *
+ * An ordinary `Error` becomes `-32603` (internal error), which is fine for
+ * "this blew up" but useless for the cases that are ABOUT the code — the host
+ * falls back to a fresh session on `-32002` / `-32602` and fails the startup on
+ * anything else, and a test that cannot choose the code cannot tell the two
+ * apart.
+ */
+export class FakeRequestError extends Error {
+	constructor(
+		readonly code: number,
+		message: string,
+	) {
+		super(message);
+	}
+}
+
 export type FakeHandler = (
 	params: Record<string, unknown>,
 	id: number | string | undefined,
@@ -171,6 +189,32 @@ export function fixtureToolCallSequence(
 	];
 }
 
+/**
+ * A scripted conversation for `session/load` to replay (A1).
+ *
+ * Ordinary `session/update` notifications with no history marker of any kind,
+ * because that is exactly what the adapter replays — the client cannot tell a
+ * replayed frame from a live one, which is the whole reason the router needs
+ * an event buffer.
+ */
+export function fixtureReplayHistory(): SessionUpdate[] {
+	return [
+		{
+			sessionUpdate: "user_message_chunk",
+			content: { type: "text", text: "edit beta.txt for me" },
+		},
+		{
+			sessionUpdate: "agent_message_chunk",
+			content: { type: "text", text: "Editing it now." },
+		},
+		...fixtureToolCallSequence(),
+		{
+			sessionUpdate: "agent_message_chunk",
+			content: { type: "text", text: "Done." },
+		},
+	];
+}
+
 export interface FakeAcpChildOptions {
 	/** Defaults to `undefined` so teardown never signals a real pid. */
 	pid?: number;
@@ -188,6 +232,19 @@ export interface FakeAcpChildOptions {
 	/** When false, `stdout` is null — the "spawned without piped stdio" case. */
 	pipeStdout?: boolean;
 	promptStopReason?: string;
+	/**
+	 * What `session/load` replays before it answers. Defaults to
+	 * `fixtureReplayHistory()`; `[]` loads a session with no history.
+	 */
+	loadReplay?: SessionUpdate[];
+	/**
+	 * Make `session/load` fail instead. `-32002` (resourceNotFound) and
+	 * `-32602` (invalidParams) are the two the host falls back to a fresh
+	 * session on; anything else should fail the startup.
+	 */
+	loadSessionError?: { code: number; message: string };
+	/** When false, `initialize` reports no `loadSession` capability. */
+	supportsLoadSession?: boolean;
 }
 
 class CapturingStdin extends Writable {
@@ -252,7 +309,7 @@ export class FakeAcpChild extends EventEmitter {
 		this.setHandler("initialize", () => ({
 			protocolVersion: 1,
 			agentCapabilities: {
-				loadSession: true,
+				loadSession: options.supportsLoadSession !== false,
 				promptCapabilities: {
 					image: false,
 					audio: false,
@@ -266,6 +323,23 @@ export class FakeAcpChild extends EventEmitter {
 			modes,
 			configOptions,
 		}));
+		// Replays the scripted history, THEN answers — the adapter's own order,
+		// and the reason a load can deliver a whole conversation to a client that
+		// has not finished starting up yet. `session/load` mints no id: it
+		// reopens the one it was given.
+		this.setHandler("session/load", (params) => {
+			if (options.loadSessionError) {
+				throw new FakeRequestError(
+					options.loadSessionError.code,
+					options.loadSessionError.message,
+				);
+			}
+			const sessionId = String(params.sessionId ?? this.sessionId);
+			for (const update of options.loadReplay ?? fixtureReplayHistory()) {
+				this.notify("session/update", { sessionId, update });
+			}
+			return { modes, configOptions };
+		});
 		// Same payload as `session/new`, which is what a non-destructive resume
 		// reports. A test that wants the read-back to disagree with the write
 		// overrides this handler.
@@ -415,18 +489,32 @@ export class FakeAcpChild extends EventEmitter {
 			return;
 		}
 
-		const outcome = handler(frame.params ?? {}, frame.id);
-		if (outcome === NO_REPLY) return;
 		const id = frame.id;
+		const fail = (error: unknown) => {
+			this.respondError(
+				id,
+				error instanceof FakeRequestError ? error.code : -32603,
+				error instanceof Error ? error.message : String(error),
+			);
+		};
+
+		// The handler call is INSIDE the try. Argus writes to this child's stdin
+		// synchronously from inside its own `request()`, so a handler that throws
+		// synchronously would otherwise unwind straight back out of that call —
+		// the caller would see the raw thrown object instead of a JSON-RPC error
+		// response, which is not how any real agent behaves and would make a
+		// coded-error test pass for the wrong reason.
+		let outcome: unknown;
+		try {
+			outcome = handler(frame.params ?? {}, frame.id);
+		} catch (error) {
+			fail(error);
+			return;
+		}
+		if (outcome === NO_REPLY) return;
 		void Promise.resolve(outcome).then(
 			(result) => this.respond(id, result),
-			(error: unknown) => {
-				this.respondError(
-					id,
-					-32603,
-					error instanceof Error ? error.message : String(error),
-				);
-			},
+			fail,
 		);
 	}
 }

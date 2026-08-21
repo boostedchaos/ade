@@ -18,10 +18,13 @@ import {
 	type AcpConfigOption,
 	type AcpExitInfo,
 	type AcpHost,
+	type AcpPendingElicitation,
+	type AcpPendingPermission,
 	type AcpSessionInfo,
 	type AcpSessionUpdate,
 	acpChildEnv,
 	getAcpHost,
+	type PermissionPolicy,
 } from "main/lib/acp-host";
 import { z } from "zod";
 import { publicProcedure, router } from "..";
@@ -47,7 +50,26 @@ export type AcpPaneEvent =
 			signal: string | null;
 			expected: boolean;
 	  }
-	| { type: "session_error"; message: string };
+	| { type: "session_error"; message: string }
+	/**
+	 * The agent is blocked on the user (A4/A5). Answer with
+	 * `answerPermission` / `answerElicitation`, naming the `requestId`.
+	 *
+	 * A permission request only ever appears under the `"prompt"` policy; the
+	 * default `"auto-approve"` emits nothing at all.
+	 */
+	| ({ type: "permission_request" } & AcpPendingPermission)
+	| ({ type: "elicitation_request" } & AcpPendingElicitation)
+	/**
+	 * The pane's start-up backlog overran the buffer and this many events were
+	 * dropped, oldest first (A2).
+	 *
+	 * Synthetic, and delivered FIRST so it is impossible to read the replay
+	 * that follows as complete. Silence here is the failure mode worth paying a
+	 * union member to avoid: a truncated conversation and a whole one look
+	 * identical.
+	 */
+	| { type: "events_dropped"; count: number };
 
 /**
  * What a config write actually did, as opposed to what it was asked to do.
@@ -131,6 +153,24 @@ const SAFE_ID = z
 		{ message: "Invalid id" },
 	);
 
+/**
+ * How many events a pane may bank before its subscription attaches (A2).
+ *
+ * Sized for a `session/load` replay of a long conversation, which is the only
+ * thing that can produce a large backlog: the pane starts its session before
+ * the subscription mounts, and a load replays the ENTIRE history as ordinary
+ * updates in that window. 5000 covers a very long conversation; past it the
+ * oldest go, because the newest frames are the ones that describe the state
+ * the pane is about to be in.
+ */
+const EVENT_BUFFER_CAP = 5000;
+
+/** Events banked for a pane whose subscription has not attached yet. */
+interface PaneEventBuffer {
+	events: AcpPaneEvent[];
+	dropped: number;
+}
+
 export interface AcpRouterDeps {
 	host?: AcpHost;
 	/**
@@ -140,11 +180,23 @@ export interface AcpRouterDeps {
 	 * before the spawn, so the pane shows the fix instead of a 15 s timeout.
 	 */
 	childEnv?: () => Record<string, string>;
+	/**
+	 * The permission policy a NEW session starts under, read per session so a
+	 * settings change applies without a restart (A4).
+	 *
+	 * Defaults to `"auto-approve"` — matching the settings column's own default
+	 * and Phase 2's behavior — rather than reading the database here: this
+	 * module is unit-tested without Electron, and importing the local-db module
+	 * opens the DB and runs migrations at import time. The desktop app injects
+	 * the real reader in `routers/index.ts`.
+	 */
+	permissionPolicy?: () => PermissionPolicy;
 }
 
 export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 	const host = deps.host ?? getAcpHost();
 	const childEnv = deps.childEnv ?? acpChildEnv;
+	const permissionPolicy = deps.permissionPolicy ?? (() => "auto-approve");
 
 	/**
 	 * Router-local fan-out. One event name per pane carrying the whole
@@ -170,10 +222,47 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 		onUpdate: (update: AcpSessionUpdate) => void;
 		onExit: (info: AcpExitInfo) => void;
 		onError: (err: Error) => void;
+		onPermission: (req: AcpPendingPermission) => void;
+		onElicitation: (req: AcpPendingElicitation) => void;
 	}
 	const bridges = new Map<string, HostBridge>();
 
+	/**
+	 * Per-pane event backlog, alive only until the pane's first subscription
+	 * attaches (A2).
+	 *
+	 * `AcpPane` starts its session before the subscription mounts. Live traffic
+	 * survives that window because the agent has nothing to say yet, but a
+	 * `session/load` replays the whole conversation into it — every frame of it
+	 * before anything is listening. Banking events from session start closes
+	 * that race for the load and for every future early emitter.
+	 */
+	const buffers = new Map<string, PaneEventBuffer>();
+	/**
+	 * How many `events` subscriptions each pane currently has attached.
+	 *
+	 * Buffering is only ever a stand-in for a listener that is not there yet.
+	 * A pane that subscribes BEFORE starting its session — which the router
+	 * fully supports — must not have its stream diverted into a buffer nobody
+	 * will drain, and neither must a live subscriber when a second session
+	 * starts under it after the first one died.
+	 */
+	const subscriberCounts = new Map<string, number>();
+
+	function subscriberCount(paneId: string): number {
+		return subscriberCounts.get(paneId) ?? 0;
+	}
+
 	function emitPaneEvent(paneId: string, event: AcpPaneEvent): void {
+		const buffer = buffers.get(paneId);
+		if (buffer) {
+			if (buffer.events.length >= EVENT_BUFFER_CAP) {
+				buffer.events.shift();
+				buffer.dropped++;
+			}
+			buffer.events.push(event);
+			return;
+		}
 		paneEvents.emit(`event:${paneId}`, event);
 	}
 
@@ -183,6 +272,8 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 		host.off(`update:${paneId}`, bridge.onUpdate);
 		host.off(`exit:${paneId}`, bridge.onExit);
 		host.off(`error:${paneId}`, bridge.onError);
+		host.off(`permission:${paneId}`, bridge.onPermission);
+		host.off(`elicitation:${paneId}`, bridge.onElicitation);
 		bridges.delete(paneId);
 	}
 
@@ -191,8 +282,21 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 		// every update. Detaching first also covers the case where the host
 		// already wiped our handlers on a previous session's exit.
 		detachBridge(paneId);
+		// A fresh generation gets a fresh backlog — but only when there is no
+		// listener yet. Whatever a previous session banked and nobody drained
+		// belongs to a child that is gone, and a pane that already has a
+		// subscription needs no stand-in for it.
+		if (subscriberCount(paneId) === 0) {
+			buffers.set(paneId, { events: [], dropped: 0 });
+		} else {
+			buffers.delete(paneId);
+		}
 		const bridge: HostBridge = {
 			onUpdate: (update) => emitPaneEvent(paneId, { type: "update", update }),
+			onPermission: (req) =>
+				emitPaneEvent(paneId, { type: "permission_request", ...req }),
+			onElicitation: (req) =>
+				emitPaneEvent(paneId, { type: "elicitation_request", ...req }),
 			onExit: (info) =>
 				emitPaneEvent(paneId, {
 					type: "session_exit",
@@ -209,6 +313,8 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 		host.on(`update:${paneId}`, bridge.onUpdate);
 		host.on(`exit:${paneId}`, bridge.onExit);
 		host.on(`error:${paneId}`, bridge.onError);
+		host.on(`permission:${paneId}`, bridge.onPermission);
+		host.on(`elicitation:${paneId}`, bridge.onElicitation);
 		bridges.set(paneId, bridge);
 	}
 
@@ -219,17 +325,35 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 		 * re-mounts) and a live pane short-circuits to its current info.
 		 */
 		ensureSession: publicProcedure
-			.input(z.object({ paneId: SAFE_ID, cwd: z.string().min(1) }))
+			.input(
+				z.object({
+					paneId: SAFE_ID,
+					cwd: z.string().min(1),
+					/**
+					 * A previous ACP session id to restore (A1). The whole stored
+					 * conversation replays into the event stream; an id the agent no
+					 * longer knows falls back to a new session, which the returned
+					 * `restored` field reports.
+					 */
+					resumeSessionId: z.string().min(1).optional(),
+				}),
+			)
 			.mutation(async ({ input }): Promise<AcpSessionInfo> => {
 				const existing = host.getSessionInfo(input.paneId);
 				if (existing) return existing;
 
 				// Before the spawn: updates emitted during startup are not dropped.
+				// This is also what installs the pane's event buffer, which a
+				// restore's instant replay depends on.
 				attachBridge(input.paneId);
 				return await host.createSession({
 					paneId: input.paneId,
 					cwd: input.cwd,
 					env: childEnv(),
+					permissionPolicy: permissionPolicy(),
+					...(input.resumeSessionId
+						? { resumeSessionId: input.resumeSessionId }
+						: {}),
 				});
 			}),
 
@@ -265,6 +389,56 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 			.mutation(async ({ input }) => {
 				await host.disposeSession(input.paneId);
 				detachBridge(input.paneId);
+				// The backlog dies with the pane; nothing will ever drain it now.
+				buffers.delete(input.paneId);
+				return { ok: true as const };
+			}),
+
+		/**
+		 * Answer a `permission_request` (A4).
+		 *
+		 * Throws `acp-request-not-found` for an id that is no longer pending,
+		 * which is the ordinary shape of a double-click and of an answer that
+		 * lost a race with the turn being cancelled — the caller should treat it
+		 * as "already settled", not as a failure to report.
+		 */
+		answerPermission: publicProcedure
+			.input(
+				z.object({
+					paneId: SAFE_ID,
+					requestId: z.string().min(1),
+					optionId: z.string().min(1),
+				}),
+			)
+			.mutation(({ input }) => {
+				host.answerPermission(input.paneId, input.requestId, input.optionId);
+				return { ok: true as const };
+			}),
+
+		/** Answer an `elicitation_request` (A5). Same lifecycle as above. */
+		answerElicitation: publicProcedure
+			.input(
+				z.object({
+					paneId: SAFE_ID,
+					requestId: z.string().min(1),
+					answer: z.discriminatedUnion("action", [
+						z.object({
+							action: z.literal("accept"),
+							// String and string-array only: those are the only field
+							// kinds the host will render a form for at all, so a numeric
+							// or boolean value here could not have come from one.
+							content: z.record(
+								z.string(),
+								z.union([z.string(), z.array(z.string())]),
+							),
+						}),
+						z.object({ action: z.literal("decline") }),
+						z.object({ action: z.literal("cancel") }),
+					]),
+				}),
+			)
+			.mutation(({ input }) => {
+				host.answerElicitation(input.paneId, input.requestId, input.answer);
 				return { ok: true as const };
 			}),
 
@@ -346,9 +520,31 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 			.subscription(({ input }) => {
 				return observable<AcpPaneEvent>((emit) => {
 					const onEvent = (event: AcpPaneEvent) => emit.next(event);
+
+					// Drain to the FIRST subscriber, then pass through (A2). All
+					// three steps run synchronously in this one tick — the emitter
+					// is same-thread — so no live event can slip between deleting
+					// the buffer and replaying it, and the backlog cannot arrive
+					// after something that came later.
+					const buffered = buffers.get(input.paneId);
+					buffers.delete(input.paneId);
+					subscriberCounts.set(input.paneId, subscriberCount(input.paneId) + 1);
 					paneEvents.on(`event:${input.paneId}`, onEvent);
+					if (buffered) {
+						if (buffered.dropped > 0) {
+							emit.next({ type: "events_dropped", count: buffered.dropped });
+						}
+						for (const event of buffered.events) emit.next(event);
+					}
+
 					return () => {
 						paneEvents.off(`event:${input.paneId}`, onEvent);
+						const remaining = subscriberCount(input.paneId) - 1;
+						if (remaining > 0) {
+							subscriberCounts.set(input.paneId, remaining);
+						} else {
+							subscriberCounts.delete(input.paneId);
+						}
 					};
 				});
 			}),

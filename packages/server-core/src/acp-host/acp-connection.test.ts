@@ -174,13 +174,25 @@ describe("mapSessionUpdate", () => {
 	});
 
 	it("falls back to { kind: 'unknown', raw } for a protocol kind it does not model", () => {
-		// `user_message_chunk` is a REAL protocol kind with no Phase 1 consumer,
-		// so this is the fallback an adapter can actually reach today.
+		// `plan_removed` is a REAL protocol kind with no consumer here, so this
+		// is the fallback an adapter can actually reach today.
+		// (`user_message_chunk` was this example until Phase 6 A3 mapped it.)
 		const raw = {
-			sessionUpdate: "user_message_chunk",
-			content: { type: "text", text: "typed by the user" },
+			sessionUpdate: "plan_removed",
+			planId: "plan-1",
 		} satisfies SessionUpdate;
 		expect(mapSessionUpdate(raw)).toEqual({ kind: "unknown", raw });
+	});
+
+	it("maps user_message_chunk (A3)", () => {
+		// The user side of a `session/load` replay. Unmapped through Phase 5,
+		// which made a replayed conversation render only its agent half.
+		expect(
+			mapSessionUpdate({
+				sessionUpdate: "user_message_chunk",
+				content: { type: "text", text: "typed by the user" },
+			}),
+		).toEqual({ kind: "user_message_chunk", text: "typed by the user" });
 	});
 
 	it("falls back to { kind: 'unknown', raw } for a kind a future adapter invents", () => {

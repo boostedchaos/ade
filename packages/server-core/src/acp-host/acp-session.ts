@@ -1,17 +1,25 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import type {
 	AvailableCommand,
+	CreateElicitationRequest,
+	InitializeResponse,
+	PermissionOption,
 	SessionConfigOption,
 	SessionModeState,
 } from "@agentclientprotocol/sdk";
 import { treeKillWithEscalation } from "../tree-kill";
-import { AcpConnection, type AcpSessionParams } from "./acp-connection";
+import {
+	AcpConnection,
+	type AcpSessionParams,
+	isSessionLoadFallbackError,
+} from "./acp-connection";
 import {
 	getAcpBinaryPath,
 	getAcpExecPath,
 	spawnAcpChildEnv,
 } from "./binary-resolver";
 import { ConfigOptionCache, MODEL_CONFIG_ID } from "./config-options";
+import { normalizeElicitationRequest } from "./elicitation";
 import { acpError } from "./errors";
 import {
 	autoApprovePermissionHandler,
@@ -19,13 +27,18 @@ import {
 } from "./permission";
 import type {
 	AcpConfigSnapshot,
+	AcpElicitationAnswer,
+	AcpElicitationOutcome,
 	AcpExitInfo,
+	AcpPendingElicitation,
+	AcpPendingPermission,
+	AcpPermissionOutcome,
+	AcpPermissionRequest,
 	AcpPromptResult,
 	AcpSessionInfo,
 	AcpSessionOptions,
 	AcpSessionState,
 	AcpSessionUpdate,
-	PermissionHandler,
 	PermissionPolicy,
 	SpawnProcess,
 } from "./types";
@@ -75,6 +88,51 @@ export interface AcpSessionHandlers {
 	onUpdate: (update: AcpSessionUpdate) => void;
 	onError: (err: Error) => void;
 	onExit: (info: AcpExitInfo) => void;
+	/**
+	 * A permission request is waiting on a human (A4). Only ever called under
+	 * the `"prompt"` policy.
+	 *
+	 * Optional so an owner that cannot present one is not forced to declare it
+	 * — but a session running the `"prompt"` policy without this handler has
+	 * nobody to answer, and cancels each request rather than hanging the turn.
+	 */
+	onPermissionRequest?: (req: AcpPendingPermission) => void;
+	/** Same contract, for `elicitation/create` (A5). */
+	onElicitationRequest?: (req: AcpPendingElicitation) => void;
+}
+
+/**
+ * A request parked on a human's answer.
+ *
+ * Deliberately holds only a `resolve`: every way one of these can end — the
+ * user answering, a turn cancel, the session dying — is expressible as a
+ * protocol outcome, and settling with one keeps the agent's own request
+ * resolving normally instead of failing as a client error. There is no timer;
+ * a permission prompt legitimately waits as long as the human does.
+ */
+interface PendingRequest<T> {
+	resolve: (outcome: T) => void;
+}
+
+interface PendingPermissionRequest
+	extends PendingRequest<AcpPermissionOutcome> {
+	/** Declared options, so an answer naming an unlisted one is refused here. */
+	options: PermissionOption[];
+}
+
+interface PendingElicitationRequest
+	extends PendingRequest<AcpElicitationOutcome> {
+	/** Declared field keys, for the same reason. */
+	fieldKeys: Set<string>;
+}
+
+/** `ToolCall.name` is never set on this wire; the real name is in `_meta`. */
+function readToolName(req: AcpPermissionRequest): string | undefined {
+	const claudeCode = (
+		req.toolCall._meta as { claudeCode?: unknown } | null | undefined
+	)?.claudeCode;
+	const toolName = (claudeCode as { toolName?: unknown } | undefined)?.toolName;
+	return typeof toolName === "string" && toolName ? toolName : undefined;
 }
 
 function withTimeout<T>(
@@ -130,9 +188,8 @@ export class AcpSession {
 	private readonly spawnProcess: SpawnProcess;
 	private readonly env: Record<string, string> | undefined;
 	private readonly permissionPolicy: PermissionPolicy;
+	private readonly resumeSessionId: string | undefined;
 	private readonly configRpcTimeoutMs: number;
-	private readonly permissionHandler: PermissionHandler =
-		autoApprovePermissionHandler;
 	private readonly handlers: AcpSessionHandlers;
 	private readonly configCache = new ConfigOptionCache();
 	/**
@@ -156,7 +213,20 @@ export class AcpSession {
 	/** Exactly what went out with `session/new`; `resume()` resends it. */
 	private sessionParams: AcpSessionParams | null = null;
 	private modes: SessionModeState | null = null;
+	/** "replayed" only once a `session/load` has actually been accepted (A1). */
+	private restored: AcpSessionInfo["restored"] = "fresh";
 	private state: AcpSessionState = "starting";
+	/**
+	 * Requests parked on a human, by the id this session minted for them.
+	 *
+	 * The wire gives neither `session/request_permission` nor
+	 * `elicitation/create` an id of its own, so the answer would otherwise have
+	 * nothing to name. Ids are unique within a session; the pane id the caller
+	 * already holds scopes them the rest of the way.
+	 */
+	private pendingPermissions = new Map<string, PendingPermissionRequest>();
+	private pendingElicitations = new Map<string, PendingElicitationRequest>();
+	private nextRequestSeq = 1;
 	private stderrTail: string[] = [];
 	private stderrPartial = "";
 
@@ -183,6 +253,7 @@ export class AcpSession {
 		this.spawnProcess = options.spawnProcess ?? spawn;
 		this.env = options.env;
 		this.permissionPolicy = options.permissionPolicy ?? "auto-approve";
+		this.resumeSessionId = options.resumeSessionId;
 		this.configRpcTimeoutMs =
 			options.configRpcTimeoutMs ?? CONFIG_RPC_TIMEOUT_MS;
 		this.handlers = handlers;
@@ -217,7 +288,8 @@ export class AcpSession {
 			callbacks: {
 				onSessionUpdate: (update) => this.handleSessionUpdate(update),
 				onConfigOptions: (options) => this.handleConfigOptions(options),
-				onPermissionRequest: (req) => this.permissionHandler(req),
+				onPermissionRequest: (req) => this.handlePermissionRequest(req),
+				onElicitationRequest: (req) => this.handleElicitationRequest(req),
 				onClosed: (error) => {
 					if (DEBUG_ACP && error) {
 						console.log(`${this.logPrefix} ACP connection closed:`, error);
@@ -298,25 +370,89 @@ export class AcpSession {
 	private async handshake(): Promise<void> {
 		const connection = this.requireConnection();
 
-		await connection.initialize();
-		// Built once and kept: `resume()` has to resend these values unchanged
-		// or the adapter replaces the live session (see `AcpSessionParams`).
+		const initialized = await connection.initialize();
+		// Built once and kept: `resume()` and `session/load` both have to resend
+		// these values unchanged or the adapter replaces the live session (see
+		// `AcpSessionParams`).
 		this.sessionParams = { cwd: this.cwd, mcpServers: [] };
-		const session = await connection.newSession(this.sessionParams);
 
-		this.acpSessionId = session.sessionId;
-		this.modes = session.modes ?? null;
-		this.reseedConfig(session.configOptions);
+		// A load that succeeds has already replayed the whole conversation by
+		// the time it answers, so this must not run before the update handlers
+		// are wired — they are, from `AcpConnection.open` above.
+		if (!(await this.tryLoadSession(connection, initialized))) {
+			const session = await connection.newSession(this.sessionParams);
+			this.acpSessionId = session.sessionId;
+			this.modes = session.modes ?? null;
+			this.reseedConfig(session.configOptions);
+			this.restored = "fresh";
+		}
+
+		const sessionId = this.acpSessionId;
+		if (!sessionId) {
+			throw acpError(
+				"acp-spawn-failed",
+				`claude-agent-acp for pane ${this.paneId} completed the handshake without a session id`,
+			);
+		}
 
 		// Set the mode explicitly rather than trusting the adapter's default to
 		// stay put: in bypass mode it never consults `canUseTool`, so the policy
-		// lives in the mode, not in the callback (Phase 0 findings).
+		// lives in the mode, not in the callback (Phase 0 findings). A loaded
+		// session gets the same treatment — its stored mode is whatever the last
+		// run left behind, not what this run's policy asks for.
 		const modeId = resolveModeIdForPolicy(this.permissionPolicy, this.modes);
 		if (modeId && modeId !== this.modes?.currentModeId) {
-			await connection.setMode(session.sessionId, modeId);
+			await connection.setMode(sessionId, modeId);
 			if (this.modes) {
 				this.modes = { ...this.modes, currentModeId: modeId };
 			}
+		}
+	}
+
+	/**
+	 * `session/load` the stored conversation, or report that we must start over.
+	 *
+	 * Returns false — never throws — for every ordinary reason a restore cannot
+	 * happen: nothing to restore, an agent that cannot load, an id it has
+	 * forgotten, a `cwd` that is gone. The caller then builds a fresh session in
+	 * the same handshake, so the pane gets a working session either way and
+	 * `restored` is what tells it which it got.
+	 */
+	private async tryLoadSession(
+		connection: AcpConnection,
+		initialized: InitializeResponse,
+	): Promise<boolean> {
+		const sessionId = this.resumeSessionId;
+		const params = this.sessionParams;
+		if (!sessionId || !params) return false;
+
+		// The agent declares whether it can load at all. Trying anyway would buy
+		// a `methodNotFound`, which is NOT one of the fallback codes and would
+		// therefore fail the whole startup rather than degrading to a new session.
+		if (initialized.agentCapabilities?.loadSession !== true) {
+			console.warn(
+				`${this.logPrefix} agent does not support session/load; starting a fresh session`,
+			);
+			return false;
+		}
+
+		try {
+			const response = await connection.loadSession(sessionId, params);
+			// `session/load` reopens an id rather than minting one, so the id we
+			// asked for IS the session's id — the response carries no other.
+			this.acpSessionId = sessionId;
+			this.modes = response.modes ?? null;
+			this.reseedConfig(response.configOptions);
+			this.restored = "replayed";
+			return true;
+		} catch (error) {
+			if (!isSessionLoadFallbackError(error)) throw error;
+			console.warn(
+				`${this.logPrefix} could not restore session ${sessionId} ` +
+					`(${error instanceof Error ? error.message : String(error)}); ` +
+					`starting a fresh session`,
+			);
+			return false;
 		}
 	}
 
@@ -361,7 +497,64 @@ export class AcpSession {
 			configOptions: this.configCache.list(),
 			configSeq: this.configSeq,
 			availableCommands: copyCommands(this.availableCommands),
+			restored: this.restored,
 		};
+	}
+
+	/**
+	 * Answer a parked permission request (A4).
+	 *
+	 * The option is validated against what the adapter actually declared, the
+	 * same way `setMode` and `setConfigOption` gate their writes: an id the
+	 * request never offered is a caller bug, and sending it would put a value
+	 * on the wire that nothing here can predict the handling of.
+	 */
+	answerPermission(requestId: string, optionId: string): void {
+		const pending = this.pendingPermissions.get(requestId);
+		if (!pending) {
+			throw acpError(
+				"acp-request-not-found",
+				`no pending permission request "${requestId}" for pane ${this.paneId}`,
+			);
+		}
+		if (!pending.options.some((option) => option.optionId === optionId)) {
+			throw acpError(
+				"acp-invalid-request-answer",
+				`option "${optionId}" was not offered by permission request "${requestId}" ` +
+					`(declared: ${pending.options.map((option) => option.optionId).join(", ")})`,
+			);
+		}
+		this.pendingPermissions.delete(requestId);
+		pending.resolve({ outcome: "selected", optionId });
+	}
+
+	/** Answer a parked elicitation (A5). Same gate, against the form's fields. */
+	answerElicitation(requestId: string, answer: AcpElicitationAnswer): void {
+		const pending = this.pendingElicitations.get(requestId);
+		if (!pending) {
+			throw acpError(
+				"acp-request-not-found",
+				`no pending elicitation request "${requestId}" for pane ${this.paneId}`,
+			);
+		}
+		if (answer.action === "accept") {
+			const unknown = Object.keys(answer.content).filter(
+				(key) => !pending.fieldKeys.has(key),
+			);
+			if (unknown.length > 0) {
+				throw acpError(
+					"acp-invalid-request-answer",
+					`elicitation "${requestId}" has no field(s) ${unknown.join(", ")} ` +
+						`(declared: ${Array.from(pending.fieldKeys).join(", ")})`,
+				);
+			}
+		}
+		this.pendingElicitations.delete(requestId);
+		pending.resolve(
+			answer.action === "accept"
+				? { action: "accept", content: answer.content }
+				: { action: answer.action },
+		);
 	}
 
 	async prompt(text: string): Promise<AcpPromptResult> {
@@ -398,6 +591,10 @@ export class AcpSession {
 		const sessionId = this.acpSessionId;
 		if (!connection || !sessionId) return;
 
+		// Before the wire cancel, so a request parked on a human cannot outlive
+		// the turn that raised it — the pane's card would otherwise stay
+		// answerable with nothing left to answer.
+		this.settlePendingRequests();
 		await this.racingDeath(connection.cancel(sessionId));
 	}
 
@@ -549,6 +746,10 @@ export class AcpSession {
 		this.disposed = true;
 		this.state = "terminating";
 
+		// First, so `hasInFlightWork` below sees a settled picture and nothing is
+		// still waiting on a human once the connection starts coming down.
+		this.settlePendingRequests();
+
 		this.armKillTimer();
 
 		const connection = this.connection;
@@ -667,6 +868,7 @@ export class AcpSession {
 			`claude-agent-acp for pane ${this.paneId} exited (code ${code}, signal ${signal}) mid-turn`,
 		);
 		this.failInFlight(error);
+		this.settlePendingRequests();
 		this.connection?.close();
 		this.handlers.onError(error);
 		this.finalize({ code, signal, expected: false });
@@ -692,6 +894,100 @@ export class AcpSession {
 	// =========================================================================
 	// Internals
 	// =========================================================================
+
+	/**
+	 * `session/request_permission` (A4).
+	 *
+	 * The `auto-approve` path is untouched — same handler, same answer, no
+	 * event — because in bypass mode the adapter should never call this at all,
+	 * and if it ever does the behavior must still match the policy.
+	 */
+	private handlePermissionRequest(
+		req: AcpPermissionRequest,
+	): Promise<AcpPermissionOutcome> {
+		if (this.permissionPolicy === "auto-approve") {
+			return autoApprovePermissionHandler(req);
+		}
+
+		const notify = this.handlers.onPermissionRequest;
+		if (!notify) {
+			// Nobody can answer, so parking this would hang the turn forever.
+			console.warn(
+				`${this.logPrefix} permission policy is "prompt" but no handler is registered; cancelling`,
+			);
+			return Promise.resolve({ outcome: "cancelled" });
+		}
+
+		const requestId = `perm-${this.nextRequestSeq++}`;
+		const options = [...req.options];
+		const pending = new Promise<AcpPermissionOutcome>((resolve) => {
+			this.pendingPermissions.set(requestId, { resolve, options });
+		});
+
+		const toolName = readToolName(req);
+		notify({
+			requestId,
+			title: req.toolCall.title ?? req.toolCall.toolCallId,
+			...(toolName ? { toolName } : {}),
+			options,
+		});
+		return pending;
+	}
+
+	/**
+	 * `elicitation/create` (A5).
+	 *
+	 * A form this client cannot draw is DECLINED, never left hanging and never
+	 * answered with a JSON-RPC error. `decline` is the protocol's own "the user
+	 * did not answer this": the adapter folds it into empty answers and lets the
+	 * turn continue (`elicitation.js:167-173`), where an error response would
+	 * read to the agent as a broken client.
+	 */
+	private handleElicitationRequest(
+		req: CreateElicitationRequest,
+	): Promise<AcpElicitationOutcome> {
+		const notify = this.handlers.onElicitationRequest;
+		const form = notify ? normalizeElicitationRequest(req) : null;
+		if (!notify || !form) {
+			if (DEBUG_ACP) {
+				console.log(
+					`${this.logPrefix} declining elicitation (mode ${req.mode}): ` +
+						`${notify ? "form shape is not renderable" : "no handler registered"}`,
+				);
+			}
+			return Promise.resolve({ action: "decline" });
+		}
+
+		const requestId = `elicit-${this.nextRequestSeq++}`;
+		const pending = new Promise<AcpElicitationOutcome>((resolve) => {
+			this.pendingElicitations.set(requestId, {
+				resolve,
+				fieldKeys: new Set(form.fields.map((field) => field.key)),
+			});
+		});
+
+		notify({ requestId, message: req.message, form });
+		return pending;
+	}
+
+	/**
+	 * End every parked request, because the thing that would have carried the
+	 * answer back is going away (turn cancel, teardown, or the child dying).
+	 *
+	 * Settles rather than rejects: both protocols have a first-class outcome for
+	 * "the human did not answer", and using it keeps the agent's own request
+	 * resolving normally instead of failing as a client error on the way out.
+	 */
+	private settlePendingRequests(): void {
+		for (const pending of this.pendingPermissions.values()) {
+			pending.resolve({ outcome: "cancelled" });
+		}
+		this.pendingPermissions.clear();
+		for (const pending of this.pendingElicitations.values()) {
+			pending.resolve({ action: "cancel" });
+		}
+		this.pendingElicitations.clear();
+	}
 
 	/**
 	 * A `config_option_update` is the only unsolicited truth signal we get about

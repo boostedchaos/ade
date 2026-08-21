@@ -111,6 +111,14 @@ export interface AcpTranscript {
 	openIndex: number | null;
 	/** Same, for the thinking entry consecutive thought chunks append to. */
 	openThinkingIndex: number | null;
+	/**
+	 * Same, for the user entry consecutive `user_message_chunk`s append to (A3).
+	 *
+	 * Only a replay produces these — a live turn's user text is appended by
+	 * `appendUserPrompt` when the user presses send, and the adapter does not
+	 * echo it back (`acp-agent.js:2657-2664`).
+	 */
+	openUserIndex: number | null;
 	/** `toolCallId` → index into `entries`, so an update correlates in O(1). */
 	toolCallIdToEntry: Record<string, number>;
 	/** The whole plan, replaced by every `plan` frame. Null until one arrives. */
@@ -138,6 +146,7 @@ export function emptyTranscript(): AcpTranscript {
 		entries: [],
 		openIndex: null,
 		openThinkingIndex: null,
+		openUserIndex: null,
 		toolCallIdToEntry: {},
 		plan: null,
 		usage: null,
@@ -173,7 +182,7 @@ export function appendUserPrompt(
 	state: AcpTranscript,
 	text: string,
 ): AcpTranscript {
-	const withUser = withEntry(state, { role: "user", text });
+	const withUser = withEntry(closeUser(state), { role: "user", text });
 	const withAssistant = withEntry(withUser.state, {
 		role: "assistant",
 		text: "",
@@ -191,13 +200,16 @@ export function reduceAcpEvent(
 		case "update":
 			return reduceUpdate(state, event.update);
 		case "turn_end":
-			return closeOpen(closeThinking(state), event.stopReason);
+			return closeOpen(closeUser(closeThinking(state)), event.stopReason);
 		case "turn_error":
-			return appendDivider(closeOpen(closeThinking(state)), event.message);
+			return appendDivider(
+				closeOpen(closeUser(closeThinking(state))),
+				event.message,
+			);
 		case "session_exit":
 			return {
 				...appendDivider(
-					closeOpen(closeThinking(state)),
+					closeOpen(closeUser(closeThinking(state))),
 					event.expected
 						? "Session closed."
 						: `Session ended — exit code ${event.code ?? "unknown"}${
@@ -218,7 +230,10 @@ export function reduceAcpEvent(
 				toolCallIdToEntry: {},
 			};
 		case "session_error":
-			return appendDivider(closeOpen(closeThinking(state)), event.message);
+			return appendDivider(
+				closeOpen(closeUser(closeThinking(state))),
+				event.message,
+			);
 		default:
 			return state;
 	}
@@ -228,8 +243,20 @@ function appendDivider(state: AcpTranscript, text: string): AcpTranscript {
 	return withEntry(state, { role: "divider", text }).state;
 }
 
-function reduceUpdate(state: AcpTranscript, update: AcpUpdate): AcpTranscript {
+function reduceUpdate(
+	incoming: AcpTranscript,
+	update: AcpUpdate,
+): AcpTranscript {
+	// Anything that is not more user text ends the user entry, so a later
+	// replayed user turn opens a fresh one instead of appending across whatever
+	// the agent did in between. Done here rather than per-case so a kind added
+	// later cannot forget it.
+	const state =
+		update.kind === "user_message_chunk" ? incoming : closeUser(incoming);
+
 	switch (update.kind) {
+		case "user_message_chunk":
+			return appendUserText(state, update.text);
 		case "agent_message_chunk":
 			return appendAssistantText(closeThinking(state), update.text);
 		case "agent_thought_chunk":
@@ -314,6 +341,37 @@ function appendThinking(state: AcpTranscript, text: string): AcpTranscript {
 function closeThinking(state: AcpTranscript): AcpTranscript {
 	if (state.openThinkingIndex === null) return state;
 	return { ...state, openThinkingIndex: null };
+}
+
+/**
+ * Consecutive `user_message_chunk`s append to one entry, exactly the way
+ * assistant text does (A3).
+ *
+ * This is how a `session/load` replay reconstructs the user's half of the
+ * conversation: the frames are ordinary updates carrying no marker, so the
+ * reducer cannot tell a replayed turn from a live one — and does not need to.
+ */
+function appendUserText(state: AcpTranscript, text: string): AcpTranscript {
+	if (state.openUserIndex === null) {
+		// Close the assistant and thinking entries first, for the same reason
+		// `appendThinking` does: text still flowing into an earlier open entry
+		// would render below an entry that arrived after it.
+		const closed = closeThinking(closeOpen(state));
+		const opened = withEntry(closed, { role: "user", text });
+		return { ...opened.state, openUserIndex: opened.index };
+	}
+
+	const entries = state.entries.map((entry, index) =>
+		index === state.openUserIndex && entry.role === "user"
+			? { ...entry, text: entry.text + text }
+			: entry,
+	);
+	return { ...state, entries };
+}
+
+function closeUser(state: AcpTranscript): AcpTranscript {
+	if (state.openUserIndex === null) return state;
+	return { ...state, openUserIndex: null };
 }
 
 /**

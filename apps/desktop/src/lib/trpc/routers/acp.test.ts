@@ -32,6 +32,7 @@ function info(paneId: string, state: AcpSessionInfo["state"]): AcpSessionInfo {
 		configOptions: [],
 		configSeq: 1,
 		availableCommands: [],
+		restored: "fresh",
 	};
 }
 
@@ -42,8 +43,13 @@ function info(paneId: string, state: AcpSessionInfo["state"]): AcpSessionInfo {
  */
 class FakeAcpHost extends EventEmitter {
 	sessions = new Map<string, AcpSessionInfo>();
-	createCalls: { paneId: string; cwd: string; env?: Record<string, string> }[] =
-		[];
+	createCalls: {
+		paneId: string;
+		cwd: string;
+		env?: Record<string, string>;
+		permissionPolicy?: string;
+		resumeSessionId?: string;
+	}[] = [];
 	promptCalls: { paneId: string; text: string }[] = [];
 	cancelCalls: string[] = [];
 	disposeCalls: string[] = [];
@@ -94,6 +100,8 @@ class FakeAcpHost extends EventEmitter {
 		paneId: string;
 		cwd: string;
 		env?: Record<string, string>;
+		permissionPolicy?: string;
+		resumeSessionId?: string;
 	}): Promise<AcpSessionInfo> {
 		this.createCalls.push(options);
 		const existing = this.sessions.get(options.paneId);
@@ -132,6 +140,8 @@ class FakeAcpHost extends EventEmitter {
 		this.removeAllListeners(`update:${paneId}`);
 		this.removeAllListeners(`exit:${paneId}`);
 		this.removeAllListeners(`error:${paneId}`);
+		this.removeAllListeners(`permission:${paneId}`);
+		this.removeAllListeners(`elicitation:${paneId}`);
 	}
 
 	/** Simulate the child dying, host-side, in the real order. */
@@ -861,5 +871,159 @@ describe("canonicalization vs substitution (A4)", () => {
 
 		expect(result.applied.verified).toBe(true);
 		expect(result.applied.canonicalized).toBe(false);
+	});
+});
+
+// =============================================================================
+// Phase 6 Lane A
+// =============================================================================
+
+describe("event buffer (A2)", () => {
+	it("delivers everything emitted before the subscription attached", async () => {
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+
+		// The real order: AcpPane starts the session, THEN mounts the
+		// subscription. A session/load replays its whole history in that window.
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+		host.emit("update:pane-1", {
+			kind: "user_message_chunk",
+			text: "do the thing",
+		});
+		host.emit("update:pane-1", { kind: "agent_message_chunk", text: "done" });
+
+		const { events } = await subscribe(appRouter, "pane-1");
+
+		expect(events).toEqual([
+			{
+				type: "update",
+				update: { kind: "user_message_chunk", text: "do the thing" },
+			},
+			{ type: "update", update: { kind: "agent_message_chunk", text: "done" } },
+		]);
+	});
+
+	it("passes through once drained, in one stream and in order", async () => {
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+		host.emit("update:pane-1", { kind: "agent_message_chunk", text: "first" });
+		const { events } = await subscribe(appRouter, "pane-1");
+		host.emit("update:pane-1", { kind: "agent_message_chunk", text: "second" });
+
+		expect(
+			events.map((event) =>
+				event.type === "update" && "text" in event.update
+					? event.update.text
+					: event.type,
+			),
+		).toEqual(["first", "second"]);
+	});
+
+	it("reports what it dropped rather than truncating silently", async () => {
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		// Two past the cap. A quiet truncation is the failure worth catching:
+		// a partial conversation and a whole one look identical.
+		for (let index = 0; index < 5002; index++) {
+			host.emit("update:pane-1", {
+				kind: "agent_message_chunk",
+				text: `chunk-${index}`,
+			});
+		}
+
+		const { events } = await subscribe(appRouter, "pane-1");
+
+		expect(events[0]).toEqual({ type: "events_dropped", count: 2 });
+		expect(events).toHaveLength(5001);
+		// Oldest go first, so what survives is the state the pane is about to be
+		// in rather than how it started.
+		expect(events[1]).toEqual({
+			type: "update",
+			update: { kind: "agent_message_chunk", text: "chunk-2" },
+		});
+	});
+
+	it("does not divert the stream of a pane that subscribed first", async () => {
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+
+		const { events } = await subscribe(appRouter, "pane-1");
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+		host.emit("update:pane-1", { kind: "agent_message_chunk", text: "live" });
+
+		// Buffering exists only to stand in for a listener that is not there.
+		// Installing one under a live subscriber would starve it.
+		expect(events).toHaveLength(1);
+	});
+});
+
+describe("permission and elicitation (A4/A5)", () => {
+	it("passes the policy through to the session, per session", async () => {
+		const host = new FakeAcpHost();
+		let policy: "auto-approve" | "prompt" = "auto-approve";
+		const appRouter = createAcpRouter({
+			// biome-ignore lint/suspicious/noExplicitAny: same narrow fake as makeRouter
+			host: host as any,
+			childEnv: () => ({}),
+			permissionPolicy: () => policy,
+		});
+		const caller = appRouter.createCaller({}) as Caller;
+
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+		// Read per session, so a settings change lands without a restart.
+		policy = "prompt";
+		await caller.ensureSession({ paneId: "pane-2", cwd: "/repo" });
+
+		expect(host.createCalls.map((call) => call.permissionPolicy)).toEqual([
+			"auto-approve",
+			"prompt",
+		]);
+	});
+
+	it("forwards a blocked request to the pane", async () => {
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+		const { events } = await subscribe(appRouter, "pane-1");
+
+		host.emit("permission:pane-1", {
+			requestId: "perm-1",
+			title: "Write beta.txt",
+			options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
+		});
+		host.emit("elicitation:pane-1", {
+			requestId: "elicit-1",
+			message: "Which one?",
+			form: { fields: [] },
+		});
+
+		expect(events.map((event) => event.type)).toEqual([
+			"permission_request",
+			"elicitation_request",
+		]);
+		expect(events[0]).toMatchObject({ requestId: "perm-1" });
+	});
+});
+
+describe("ensureSession restore (A1)", () => {
+	it("passes a stored session id through, and omits it when absent", async () => {
+		const host = new FakeAcpHost();
+		const { caller } = makeCaller(host);
+
+		await caller.ensureSession({
+			paneId: "pane-1",
+			cwd: "/repo",
+			resumeSessionId: "acp-session-old",
+		});
+		await caller.ensureSession({ paneId: "pane-2", cwd: "/repo" });
+
+		expect(host.createCalls.map((call) => call.resumeSessionId)).toEqual([
+			"acp-session-old",
+			undefined,
+		]);
 	});
 });

@@ -2,6 +2,8 @@ import type { ChildProcess, SpawnOptions } from "node:child_process";
 import type {
 	AvailableCommand,
 	Cost,
+	CreateElicitationResponse,
+	PermissionOption,
 	PlanEntry,
 	RequestPermissionRequest,
 	RequestPermissionResponse,
@@ -9,6 +11,7 @@ import type {
 	ToolCall,
 	ToolCallUpdate,
 } from "@agentclientprotocol/sdk";
+import type { AcpElicitationForm } from "./elicitation";
 
 // =============================================================================
 // Session updates
@@ -21,12 +24,22 @@ import type {
  * Payload shapes are the adapter's own, taken from
  * `@agentclientprotocol/sdk`'s generated schema rather than hand-transcribed.
  * Any kind not listed here — including protocol kinds this phase has no
- * consumer for (`user_message_chunk`, `plan_update`, `plan_removed`) and any
- * kind a future adapter version adds — arrives as `{ kind: "unknown", raw }`
- * so a version bump cannot crash the host.
+ * consumer for (`plan_update`, `plan_removed`) and any kind a future adapter
+ * version adds — arrives as `{ kind: "unknown", raw }` so a version bump
+ * cannot crash the host.
  */
 export type AcpSessionUpdate =
 	| { kind: "agent_message_chunk"; text: string }
+	/**
+	 * The user's own turn, echoed by the agent (Phase 6 A3).
+	 *
+	 * On a `session/load` replay this is the only source of the user side of
+	 * the conversation. During a LIVE turn the adapter deliberately does not
+	 * send one for an ordinary text prompt (`acp-agent.js:2657-2664` skips
+	 * string / single-text-block user messages), so this does not double up
+	 * with the prompt the pane appended locally.
+	 */
+	| { kind: "user_message_chunk"; text: string }
 	| { kind: "agent_thought_chunk"; text: string }
 	| { kind: "tool_call"; toolCall: ToolCall }
 	| { kind: "tool_call_update"; toolCall: ToolCallUpdate }
@@ -111,6 +124,46 @@ export type PermissionHandler = (
 	req: AcpPermissionRequest,
 ) => Promise<AcpPermissionOutcome>;
 
+/**
+ * A permission request waiting on a human (A4).
+ *
+ * `requestId` is minted by `AcpSession`, not by the protocol: the wire's
+ * `session/request_permission` carries no id of its own, and the answer has to
+ * name WHICH pending request it answers. It is unique per session, and the
+ * pane id the caller already holds scopes it the rest of the way.
+ */
+export interface AcpPendingPermission {
+	requestId: string;
+	/** The adapter's human-readable tool title, e.g. "Write beta.txt". */
+	title: string;
+	/** `_meta.claudeCode.toolName` when the adapter supplied it. */
+	toolName?: string;
+	options: PermissionOption[];
+}
+
+/** An elicitation waiting on a human (A5). Same id discipline as above. */
+export interface AcpPendingElicitation {
+	requestId: string;
+	/** The agent's prose question. For one AskUserQuestion this IS the question. */
+	message: string;
+	form: AcpElicitationForm;
+}
+
+/**
+ * What a caller sends back for an elicitation.
+ *
+ * Narrower than the protocol's `CreateElicitationResponse` on purpose: only
+ * the string and string-array content values are accepted, because those are
+ * the only field kinds `normalizeElicitationRequest` will render (a numeric or
+ * boolean form is declined before it ever reaches a human).
+ */
+export type AcpElicitationAnswer =
+	| { action: "accept"; content: Record<string, string | string[]> }
+	| { action: "decline" }
+	| { action: "cancel" };
+
+export type AcpElicitationOutcome = CreateElicitationResponse;
+
 // =============================================================================
 // Session options and info
 // =============================================================================
@@ -128,6 +181,15 @@ export interface AcpSessionOptions {
 	cwd: string;
 	/** Defaults to `"auto-approve"`. */
 	permissionPolicy?: PermissionPolicy;
+	/**
+	 * Resume a previous conversation instead of starting an empty one (A1).
+	 *
+	 * When set, the handshake calls `session/load` with this id, which replays
+	 * the whole stored history back through `session/update` before answering.
+	 * An id the agent no longer knows falls back to a fresh `session/new` in
+	 * the same handshake — see `AcpSessionInfo.restored`.
+	 */
+	resumeSessionId?: string;
 	/** Test seam; defaults to `node:child_process`'s `spawn`. */
 	spawnProcess?: SpawnProcess;
 	/**
@@ -176,6 +238,17 @@ export interface AcpSessionInfo {
 	 * way to learn them. Empty until the first notification.
 	 */
 	availableCommands: AvailableCommand[];
+	/**
+	 * Whether this session carries a previous conversation (A1).
+	 *
+	 * ALWAYS present, and `"fresh"` for an ordinary `session/new` — the field
+	 * is not optional so a consumer cannot forget to distinguish the two. Only
+	 * a `session/load` that the agent actually accepted reports `"replayed"`;
+	 * a `resumeSessionId` the agent rejected falls back to a new session and
+	 * reports `"fresh"`, which is what lets the pane say "previous session
+	 * could not be restored" instead of quietly pretending it was.
+	 */
+	restored: "replayed" | "fresh";
 }
 
 // =============================================================================
@@ -197,4 +270,6 @@ export interface AcpHostEvents {
 	[key: `update:${string}`]: (update: AcpSessionUpdate) => void;
 	[key: `exit:${string}`]: (info: AcpExitInfo) => void;
 	[key: `error:${string}`]: (err: Error) => void;
+	[key: `permission:${string}`]: (req: AcpPendingPermission) => void;
+	[key: `elicitation:${string}`]: (req: AcpPendingElicitation) => void;
 }

@@ -37,7 +37,14 @@ export type AcpErrorCode =
 	/** The ACP server answered a request with a JSON-RPC error. */
 	| "acp-rpc-error"
 	/** A per-call RPC budget elapsed with no answer from the adapter. */
-	| "acp-rpc-timeout";
+	| "acp-rpc-timeout"
+	/**
+	 * An answer named a permission/elicitation request id this session has no
+	 * pending entry for — already answered, or cancelled with the turn.
+	 */
+	| "acp-request-not-found"
+	/** An answer named an option or field the request never declared. */
+	| "acp-invalid-request-answer";
 
 /** Build a coded Error. The code is the message prefix, followed by `: `. */
 export function acpError(code: AcpErrorCode, message: string): Error {

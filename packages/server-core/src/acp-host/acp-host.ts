@@ -3,6 +3,7 @@ import { AcpSession } from "./acp-session";
 import { acpError } from "./errors";
 import type {
 	AcpConfigSnapshot,
+	AcpElicitationAnswer,
 	AcpPromptResult,
 	AcpSessionInfo,
 	AcpSessionOptions,
@@ -137,6 +138,12 @@ export class AcpHost extends EventEmitter {
 				console.error(`[AcpHost] session error for ${paneId}: ${err.message}`);
 				this.emit(`error:${paneId}`, err);
 			},
+			onPermissionRequest: (req) => {
+				this.emit(`permission:${paneId}`, req);
+			},
+			onElicitationRequest: (req) => {
+				this.emit(`elicitation:${paneId}`, req);
+			},
 			onExit: (info) => {
 				const registered = this.sessions.get(paneId) === session;
 				if (registered) {
@@ -189,6 +196,28 @@ export class AcpHost extends EventEmitter {
 		this.removeAllListeners(`update:${paneId}`);
 		this.removeAllListeners(`exit:${paneId}`);
 		this.removeAllListeners(`error:${paneId}`);
+		this.removeAllListeners(`permission:${paneId}`);
+		this.removeAllListeners(`elicitation:${paneId}`);
+	}
+
+	/**
+	 * Answer a request the pane raised for a human (A4/A5).
+	 *
+	 * Throws `acp-session-not-found` for a pane with no session and
+	 * `acp-request-not-found` for an id that is no longer pending — which
+	 * includes the ordinary races: a second click, and an answer arriving after
+	 * the turn was cancelled.
+	 */
+	answerPermission(paneId: string, requestId: string, optionId: string): void {
+		this.requireSession(paneId).answerPermission(requestId, optionId);
+	}
+
+	answerElicitation(
+		paneId: string,
+		requestId: string,
+		answer: AcpElicitationAnswer,
+	): void {
+		this.requireSession(paneId).answerElicitation(requestId, answer);
 	}
 
 	/**

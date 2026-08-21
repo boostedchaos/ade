@@ -12,7 +12,11 @@
  */
 
 export type { AcpSessionParams } from "./acp-connection";
-export { mapSessionUpdate, UNSTAMPED_CONFIG_SEQ } from "./acp-connection";
+export {
+	isSessionLoadFallbackError,
+	mapSessionUpdate,
+	UNSTAMPED_CONFIG_SEQ,
+} from "./acp-connection";
 export { AcpHost, getAcpHost, resolveMaxConcurrentAcpSpawns } from "./acp-host";
 export {
 	ACP_STRIPPED_HOOK_ENV_VARS,
@@ -23,6 +27,12 @@ export {
 	spawnAcpChildEnv,
 } from "./binary-resolver";
 export { MODEL_CONFIG_ID } from "./config-options";
+export type {
+	AcpElicitationField,
+	AcpElicitationForm,
+	AcpElicitationOption,
+} from "./elicitation";
+export { normalizeElicitationRequest } from "./elicitation";
 export type { AcpErrorCode } from "./errors";
 export { acpError } from "./errors";
 export {
@@ -33,8 +43,12 @@ export {
 export type {
 	AcpConfigOption,
 	AcpConfigSnapshot,
+	AcpElicitationAnswer,
+	AcpElicitationOutcome,
 	AcpExitInfo,
 	AcpHostEvents,
+	AcpPendingElicitation,
+	AcpPendingPermission,
 	AcpPermissionOutcome,
 	AcpPermissionRequest,
 	AcpPromptResult,

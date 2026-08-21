@@ -47,6 +47,9 @@ export const DEFAULT_USE_COMPACT_TERMINAL_ADD_BUTTON = true;
 export const DEFAULT_TELEMETRY_ENABLED = true;
 export const DEFAULT_SHOW_RESOURCE_MONITOR = false;
 export const DEFAULT_OPEN_LINKS_IN_APP = false;
+// Default: ACP agent sessions run in the adapter's bypass mode and are never
+// interrupted for permission — the behavior every ACP pane has had so far.
+export const DEFAULT_ACP_PERMISSION_POLICY = "auto-approve" as const;
 
 // External links (documentation, help resources, etc.)
 export const EXTERNAL_LINKS = {

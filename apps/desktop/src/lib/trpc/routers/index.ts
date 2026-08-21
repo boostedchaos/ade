@@ -23,7 +23,7 @@ import { createPortsRouter } from "./ports";
 import { createProjectsRouter } from "./projects";
 import { createResourceMetricsRouter } from "./resource-metrics";
 import { createRingtoneRouter } from "./ringtone";
-import { createSettingsRouter } from "./settings";
+import { createSettingsRouter, readAcpPermissionPolicy } from "./settings";
 import { createSyncRouter } from "./sync";
 import { createTeamDashboardRouter } from "./team-dashboard";
 import { createTerminalRouter } from "./terminal";
@@ -34,7 +34,10 @@ import { createWorkspacesRouter } from "./workspaces";
 
 export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 	return router({
-		acp: createAcpRouter(),
+		// The policy reader is injected rather than imported by the ACP router:
+		// that module is unit-tested without Electron, and reading settings means
+		// importing local-db, which opens the DB at import time.
+		acp: createAcpRouter({ permissionPolicy: readAcpPermissionPolicy }),
 		browser: createBrowserRouter(),
 		browserHistory: createBrowserHistoryRouter(),
 		auth: createAuthRouter(),
