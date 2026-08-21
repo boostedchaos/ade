@@ -17,6 +17,8 @@ import {
 	extractPaneIdsFromLayout,
 } from "renderer/stores/tabs/utils";
 import { useTheme } from "renderer/stores/theme";
+import type { PaneType } from "shared/tabs-types";
+import { AcpPane } from "./AcpPane";
 import { BrowserPane } from "./BrowserPane";
 import { DevToolsPane } from "./DevToolsPane";
 import { FileViewerPane } from "./FileViewerPane";
@@ -64,8 +66,11 @@ export function TabView({ tab }: TabViewProps) {
 			string,
 			{
 				tabId: string;
-				type: string;
+				// The real union, not `string`: the exhaustiveness check in
+				// `renderPane` is only a check if the discriminant is narrowable.
+				type: PaneType;
 				devtools?: { targetPaneId: string };
+				acp?: { cwd: string };
 			}
 		> = {};
 		for (const paneId of layoutPaneIds) {
@@ -75,6 +80,7 @@ export function TabView({ tab }: TabViewProps) {
 					tabId: pane.tabId,
 					type: pane.type,
 					devtools: pane.devtools,
+					acp: pane.acp,
 				};
 			}
 		}
@@ -185,7 +191,18 @@ export function TabView({ tab }: TabViewProps) {
 			}
 
 			// Route devtools panes
-			if (paneInfo.type === "devtools" && paneInfo.devtools) {
+			if (paneInfo.type === "devtools") {
+				if (!paneInfo.devtools) {
+					// Narrowing on the sub-state used to live in the branch
+					// CONDITION, which quietly sent a devtools pane with missing
+					// state to the terminal fallback — and defeated the
+					// exhaustiveness check, since `"devtools"` stayed in the union.
+					return (
+						<div className="flex h-full w-full items-center justify-center text-muted-foreground text-xs">
+							DevTools pane has no target
+						</div>
+					);
+				}
 				return (
 					<DevToolsPane
 						paneId={paneId}
@@ -199,22 +216,68 @@ export function TabView({ tab }: TabViewProps) {
 				);
 			}
 
-			// Default: terminal panes
+			// Route ACP (agent conversation) panes
+			if (paneInfo.type === "acp") {
+				if (!paneInfo.acp?.cwd) {
+					// The cwd IS the session's sandbox root. Rendering a session in
+					// the wrong directory is worse than rendering this.
+					return (
+						<div className="flex h-full w-full items-center justify-center text-muted-foreground text-xs">
+							ACP pane has no workspace directory
+						</div>
+					);
+				}
+				return (
+					<AcpPane
+						paneId={paneId}
+						path={path}
+						tabId={tab.id}
+						cwd={paneInfo.acp.cwd}
+						splitPaneAuto={splitPaneAuto}
+						removePane={removePane}
+						setFocusedPane={setFocusedPane}
+					/>
+				);
+			}
+
+			// Terminal panes — an EXPLICIT branch, not the fallback it used to be.
+			if (paneInfo.type === "terminal") {
+				return (
+					<TabPane
+						paneId={paneId}
+						path={path}
+						tabId={tab.id}
+						workspaceId={tab.workspaceId}
+						splitPaneAuto={splitPaneAuto}
+						splitPaneHorizontal={splitPaneHorizontal}
+						splitPaneVertical={splitPaneVertical}
+						removePane={removePane}
+						setFocusedPane={setFocusedPane}
+						availableTabs={workspaceTabs}
+						onMoveToTab={(targetTabId) => movePaneToTab(paneId, targetTabId)}
+						onMoveToNewTab={() => movePaneToNewTab(paneId)}
+					/>
+				);
+			}
+
+			/**
+			 * Two independent guards against the silent-terminal-fallback trap.
+			 *
+			 * The `never` assignment is a BUILD failure: add a member to
+			 * `PaneType` and forget its renderer, and typecheck says so. The
+			 * placeholder is a RUNTIME failure that is visible: stale persisted
+			 * state, or a type added behind a cast, renders a named error rather
+			 * than silently spawning a terminal in the agent's worktree.
+			 */
+			const exhaustive: never = paneInfo.type;
+			console.error(
+				`[TabView] Unknown pane type "${String(exhaustive)}" for pane ${paneId}`,
+			);
 			return (
-				<TabPane
-					paneId={paneId}
-					path={path}
-					tabId={tab.id}
-					workspaceId={tab.workspaceId}
-					splitPaneAuto={splitPaneAuto}
-					splitPaneHorizontal={splitPaneHorizontal}
-					splitPaneVertical={splitPaneVertical}
-					removePane={removePane}
-					setFocusedPane={setFocusedPane}
-					availableTabs={workspaceTabs}
-					onMoveToTab={(targetTabId) => movePaneToTab(paneId, targetTabId)}
-					onMoveToNewTab={() => movePaneToNewTab(paneId)}
-				/>
+				<div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground text-xs">
+					<div>Unknown pane type: {String(exhaustive)}</div>
+					<div className="opacity-70">{paneId}</div>
+				</div>
 			);
 		},
 		[

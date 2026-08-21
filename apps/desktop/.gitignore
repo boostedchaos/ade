@@ -12,6 +12,8 @@
 /.native-modules
 # staged win32-x64 native binaries (produced by scripts/prepare-win-natives.ts)
 /.win32-natives
+# staged claude-agent-acp tree (produced by scripts/stage-acp-adapter.ts)
+/.acp-adapter
 
 # stale compiled bundles (real output lives in /dist)
 /index.js

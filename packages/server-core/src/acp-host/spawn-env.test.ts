@@ -171,3 +171,73 @@ describe("AcpSession spawn", () => {
 		expect(env?.PATH).toBeTruthy();
 	});
 });
+
+/**
+ * D5's disjointness guarantee, asserted rather than inherited.
+ *
+ * ACP panes write their own `setPaneStatus` in-band. The OTHER writer is the
+ * HTTP hooks path, which the hook templates key on `SUPERSET_PANE_ID` (see
+ * `agent-setup/templates/notify-hook.template.mjs`) — a variable the TERMINAL
+ * stack injects into the session it creates. If that variable reaches the ACP
+ * child, the Claude Code running under the adapter reports every turn to the
+ * hooks server under SOMEONE ELSE'S pane id, and two writers fight over one
+ * pane's status.
+ *
+ * The design assumed this could not happen because acp-host passes no such
+ * `env`. That assumption was WRONG in one real configuration: `buildSafeEnv`
+ * allowlists the whole `SUPERSET_` PREFIX, so any of these vars present in the
+ * host process's own environment is inherited verbatim — which is exactly the
+ * case when Argus is launched from inside an Argus terminal pane (dev runs).
+ * Hence an explicit strip, applied AFTER the caller overlay so widening the
+ * child env later cannot reintroduce it.
+ */
+describe("hook-identity env disjointness (D5)", () => {
+	it("strips an INHERITED SUPERSET_PANE_ID (allowlisted by prefix)", () => {
+		const env = spawnAcpChildEnv("node", undefined, {
+			PATH: "/usr/bin",
+			SUPERSET_PANE_ID: "pane-outer",
+			SUPERSET_TAB_ID: "tab-outer",
+			SUPERSET_WORKSPACE_ID: "ws-outer",
+		});
+		expect(env.SUPERSET_PANE_ID).toBeUndefined();
+		expect(env.SUPERSET_TAB_ID).toBeUndefined();
+		expect(env.SUPERSET_WORKSPACE_ID).toBeUndefined();
+	});
+
+	it("strips them even when a CALLER passes them deliberately", () => {
+		const env = spawnAcpChildEnv(
+			"node",
+			{ SUPERSET_PANE_ID: "pane-acp" },
+			{ PATH: "/usr/bin" },
+		);
+		expect(env.SUPERSET_PANE_ID).toBeUndefined();
+	});
+
+	it("leaves other SUPERSET_ vars alone", () => {
+		const env = spawnAcpChildEnv("node", undefined, {
+			PATH: "/usr/bin",
+			SUPERSET_ACP_DEBUG: "1",
+		});
+		expect(env.SUPERSET_ACP_DEBUG).toBe("1");
+	});
+
+	it("reaches the real child env, not only the helper", async () => {
+		const child = new FakeAcpChild();
+		const calls: SpawnCall[] = [];
+		const session = new AcpSession(
+			{
+				paneId: "pane-hooks",
+				cwd: process.cwd(),
+				spawnProcess: recordingSpawn(child, calls),
+				env: { SUPERSET_PANE_ID: "pane-outer" },
+			},
+			{ onUpdate: () => {}, onError: () => {}, onExit: () => {} },
+		);
+
+		await session.start();
+		await session.dispose();
+
+		const env = calls[0]?.options.env as Record<string, string> | undefined;
+		expect(env?.SUPERSET_PANE_ID).toBeUndefined();
+	});
+});

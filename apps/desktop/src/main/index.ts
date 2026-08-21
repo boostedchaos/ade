@@ -24,6 +24,7 @@ import {
 	PROTOCOL_SCHEME,
 } from "shared/constants";
 import { getWorkspaceName } from "shared/env.shared";
+import { getAcpHost } from "./lib/acp-host";
 import { backfillAgentMemory } from "./lib/agent-memory-backfill";
 import { stopAgentSessionTracking } from "./lib/agent-sessions";
 import { setupAgentHooks } from "./lib/agent-setup";
@@ -184,6 +185,16 @@ async function gracefulShutdown(): Promise<void> {
 			await stopControlPlane();
 		} catch (error) {
 			console.error("[main] Control plane shutdown step failed:", error);
+		}
+
+		// Every live ACP adapter child, through Phase 1's teardown ladder
+		// (stdin EOF → SIGTERM → SIGKILL). Same-process main means there is no
+		// orphan window between renderer death and host teardown — but there IS
+		// one if nothing runs this, because the children outlive the app.
+		try {
+			await getAcpHost().disposeAll();
+		} catch (error) {
+			console.error("[main] ACP host shutdown step failed:", error);
 		}
 
 		// Stop the stuck-state sweep before the DB closes — a sweep landing

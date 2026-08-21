@@ -1,5 +1,6 @@
 import type { BrowserWindow } from "electron";
 import { router } from "..";
+import { createAcpRouter } from "./acp";
 import { createAgentSessionsRouter } from "./agent-sessions";
 import { createAttentionRouter } from "./attention";
 import { createAuthRouter } from "./auth";
@@ -33,6 +34,7 @@ import { createWorkspacesRouter } from "./workspaces";
 
 export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 	return router({
+		acp: createAcpRouter(),
 		browser: createBrowserRouter(),
 		browserHistory: createBrowserHistoryRouter(),
 		auth: createAuthRouter(),

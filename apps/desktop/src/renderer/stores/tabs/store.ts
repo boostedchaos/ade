@@ -7,6 +7,7 @@ import { acknowledgedStatus } from "shared/tabs-types";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { movePaneToNewTab, movePaneToTab } from "./actions/move-pane";
+import { migrateTabsV8ToV9, TABS_STORE_VERSION } from "./migrations/v9-acp";
 import type {
 	AddFileViewerPaneOptions,
 	AddTabWithMultiplePanesOptions,
@@ -17,6 +18,8 @@ import type {
 import {
 	buildMultiPaneLayout,
 	type CreatePaneOptions,
+	createAcpPane,
+	createAcpTabWithPane,
 	createBrowserPane,
 	createBrowserTabWithPane,
 	createDevToolsPane,
@@ -34,6 +37,7 @@ import {
 	resolveActiveTabIdForWorkspace,
 	resolveFileViewerMode,
 } from "./utils";
+import { disposeAcpForPane } from "./utils/acp-cleanup";
 import { killTerminalForPane } from "./utils/terminal-cleanup";
 
 /**
@@ -249,6 +253,11 @@ export const useTabsStore = create<TabsStore>()(
 						if (pane?.type === "terminal") {
 							killTerminalForPane(paneId);
 						}
+						// ACP panes own a `claude-agent-acp` child; same sweep, same
+						// reason. Mirrored at every `killTerminalForPane` call site.
+						if (pane?.type === "acp") {
+							disposeAcpForPane(paneId);
+						}
 					}
 
 					const newPanes = { ...state.panes };
@@ -422,6 +431,9 @@ export const useTabsStore = create<TabsStore>()(
 						if (pane && pane.tabId === tabId) {
 							if (pane.type === "terminal") {
 								killTerminalForPane(paneId);
+							}
+							if (pane.type === "acp") {
+								disposeAcpForPane(paneId);
 							}
 							delete newPanes[paneId];
 						}
@@ -815,6 +827,9 @@ export const useTabsStore = create<TabsStore>()(
 						if (state.panes[id]?.type === "terminal") {
 							killTerminalForPane(id);
 						}
+						if (state.panes[id]?.type === "acp") {
+							disposeAcpForPane(id);
+						}
 					}
 
 					// Remove all panes from layout
@@ -879,6 +894,22 @@ export const useTabsStore = create<TabsStore>()(
 								[paneId]: { ...pane, isNew: false },
 							},
 						};
+					});
+				},
+
+				setAcpSessionId: (paneId, acpSessionId) => {
+					const state = get();
+					const pane = state.panes[paneId];
+					// Guarded on `pane.acp` rather than on `pane.type`: the field is
+					// what the id belongs to, and a pane that has lost its acp state
+					// has nowhere to put it.
+					if (!pane?.acp || pane.acp.acpSessionId === acpSessionId) return;
+
+					set({
+						panes: {
+							...state.panes,
+							[paneId]: { ...pane, acp: { ...pane.acp, acpSessionId } },
+						},
 					});
 				},
 
@@ -1228,6 +1259,20 @@ export const useTabsStore = create<TabsStore>()(
 							if (sourcePane.type !== "webview") return null;
 							newPane = createDevToolsPane(tabId, sourcePaneId);
 							break;
+						case "acp": {
+							// The session's cwd IS the agent's worktree. Inherit it from
+							// the source pane rather than defaulting to anything: a
+							// session opened in the wrong directory is worse than one
+							// that fails to open.
+							const acpCwd =
+								options.cwd ??
+								sourcePane.acp?.cwd ??
+								sourcePane.cwd ??
+								sourcePane.initialCwd;
+							if (!acpCwd) return null;
+							newPane = createAcpPane(tabId, acpCwd);
+							break;
+						}
 					}
 
 					const path = options.path;
@@ -1336,6 +1381,51 @@ export const useTabsStore = create<TabsStore>()(
 
 					set(moveResult.result);
 					return moveResult.newTabId;
+				},
+
+				// ACP (agent conversation) operations
+				addAcpTab: (workspaceId: string, cwd: string) => {
+					const state = get();
+
+					const { tab, pane } = createAcpTabWithPane(
+						workspaceId,
+						cwd,
+						state.tabs,
+					);
+
+					const currentActiveId = state.activeTabIds[workspaceId];
+					const historyStack = state.tabHistoryStacks[workspaceId] || [];
+					const newHistoryStack = currentActiveId
+						? [
+								currentActiveId,
+								...historyStack.filter((id) => id !== currentActiveId),
+							]
+						: historyStack;
+
+					set({
+						tabs: [...state.tabs, tab],
+						panes: { ...state.panes, [pane.id]: pane },
+						activeTabIds: {
+							...state.activeTabIds,
+							[workspaceId]: tab.id,
+						},
+						focusedPaneIds: {
+							...state.focusedPaneIds,
+							[tab.id]: pane.id,
+						},
+						tabHistoryStacks: {
+							...state.tabHistoryStacks,
+							[workspaceId]: newHistoryStack,
+						},
+					});
+
+					posthog.capture("panel_opened", {
+						panel_type: "acp",
+						workspace_id: workspaceId,
+						pane_id: pane.id,
+					});
+
+					return { tabId: tab.id, paneId: pane.id };
 				},
 
 				// Browser operations
@@ -1853,7 +1943,7 @@ export const useTabsStore = create<TabsStore>()(
 			}),
 			{
 				name: "tabs-storage",
-				version: 8,
+				version: TABS_STORE_VERSION,
 				storage: trpcTabsStorage,
 				migrate: (persistedState, version) => {
 					const state = persistedState as TabsState;
@@ -1932,6 +2022,9 @@ export const useTabsStore = create<TabsStore>()(
 								}
 							}
 						}
+					}
+					if (version < 9) {
+						return migrateTabsV8ToV9(state);
 					}
 					return state;
 				},

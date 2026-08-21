@@ -71,6 +71,12 @@ export interface SplitPaneWithTypeOptions {
 	url?: string;
 	/** Required for `file-viewer`; the action returns null without it. */
 	filePath?: string;
+	/**
+	 * Required for `acp` unless the source pane already carries one; the action
+	 * returns null without it. This is the agent's worktree, and also the ACP
+	 * filesystem sandbox root.
+	 */
+	cwd?: string;
 }
 
 /**
@@ -136,6 +142,12 @@ export interface TabsStore extends TabsState {
 	setFocusedPane: (tabId: string, paneId: string) => void;
 	markPaneAsUsed: (paneId: string) => void;
 	setPaneStatus: (paneId: string, status: PaneStatus) => void;
+	/**
+	 * Record the ACP-minted session id on an `"acp"` pane. Persisted for Phase
+	 * 6's resume; Phase 2 writes it and never reads it back. No-op for a pane
+	 * that is not an ACP pane.
+	 */
+	setAcpSessionId: (paneId: string, acpSessionId: string) => void;
 	setPaneName: (paneId: string, name: string) => void;
 	/** Set the user-chosen pane title (via cmd+I rename). Pass undefined or empty
 	 * string to clear and fall back to the auto name. */
@@ -191,6 +203,13 @@ export interface TabsStore extends TabsState {
 	// Move operations
 	movePaneToTab: (paneId: string, targetTabId: string) => void;
 	movePaneToNewTab: (paneId: string) => string;
+
+	// ACP (agent conversation) operations
+	/** New tab holding one ACP pane rooted at `cwd` (the agent's worktree). */
+	addAcpTab: (
+		workspaceId: string,
+		cwd: string,
+	) => { tabId: string; paneId: string };
 
 	// Browser operations
 	addBrowserTab: (

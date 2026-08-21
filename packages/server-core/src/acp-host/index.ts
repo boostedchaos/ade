@@ -14,6 +14,7 @@
 export { mapSessionUpdate } from "./acp-connection";
 export { AcpHost, getAcpHost, resolveMaxConcurrentAcpSpawns } from "./acp-host";
 export {
+	ACP_STRIPPED_HOOK_ENV_VARS,
 	getAcpBinaryPath,
 	getAcpExecPath,
 	setAcpBinaryPathResolver,

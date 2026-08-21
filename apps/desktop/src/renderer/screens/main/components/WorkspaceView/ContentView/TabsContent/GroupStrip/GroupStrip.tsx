@@ -35,6 +35,7 @@ export function GroupStrip() {
 	const { addTab } = useTabsWithPresets();
 	const { spawnAgentSession } = useAgentSession();
 	const addBrowserTab = useTabsStore((s) => s.addBrowserTab);
+	const addAcpTab = useTabsStore((s) => s.addAcpTab);
 	const renameTab = useTabsStore((s) => s.renameTab);
 	const removeTab = useTabsStore((s) => s.removeTab);
 	const setActiveTab = useTabsStore((s) => s.setActiveTab);
@@ -205,6 +206,13 @@ export function GroupStrip() {
 		addBrowserTab(activeWorkspaceId);
 	};
 
+	// The session's cwd is the workspace's worktree — the agent's own Argus
+	// worktree, which is the whole point of the pane. No worktree, no entry.
+	const handleAddAcp = useCallback(() => {
+		if (!activeWorkspaceId || !workspace?.worktreePath) return;
+		addAcpTab(activeWorkspaceId, workspace.worktreePath);
+	}, [activeWorkspaceId, workspace?.worktreePath, addAcpTab]);
+
 	const handleAddNote = useCallback(async () => {
 		if (!activeWorkspaceId || !workspace?.project?.mainRepoPath) return;
 		try {
@@ -342,6 +350,7 @@ export function GroupStrip() {
 			onAddShell={handleAddShell}
 			onAddBrowser={handleAddBrowser}
 			onAddNote={handleAddNote}
+			onAddAcp={workspace?.worktreePath ? handleAddAcp : undefined}
 			onToggleCompactAddButton={(enabled) =>
 				setUseCompactTerminalAddButton.mutate({ enabled })
 			}

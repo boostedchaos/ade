@@ -63,6 +63,27 @@ export function getAcpExecPath(): string {
 }
 
 /**
+ * Environment variables that identify a pane to the HTTP hooks server.
+ *
+ * The agent hook templates read these (`agent-setup/templates/*.template.*`)
+ * and POST them to the notifications server, which turns them into a
+ * `setPaneStatus` write for that pane. The TERMINAL stack injects them
+ * deliberately; the ACP stack must never carry them, because an ACP pane is
+ * its own status writer (in-band, renderer-side) and a hook arriving under a
+ * pane id gives that pane a second, uncoordinated writer.
+ *
+ * They are stripped rather than merely "not added": `buildSafeEnv` allowlists
+ * the whole `SUPERSET_` PREFIX, so any of these present in the HOST process's
+ * environment is inherited verbatim — which is exactly what happens when Argus
+ * itself is launched from inside an Argus terminal pane.
+ */
+export const ACP_STRIPPED_HOOK_ENV_VARS = [
+	"SUPERSET_PANE_ID",
+	"SUPERSET_TAB_ID",
+	"SUPERSET_WORKSPACE_ID",
+] as const;
+
+/**
  * Environment for the adapter child.
  *
  * Three things have to be true at once, and the pre-fix code got all three
@@ -90,6 +111,11 @@ export function spawnAcpChildEnv(
 	};
 	if (execPath === process.execPath) {
 		merged.ELECTRON_RUN_AS_NODE = "1";
+	}
+	// 4. Last, so neither the inherited environment NOR a caller that widens
+	//    `env` later can hand the adapter a hooks identity (see above).
+	for (const name of ACP_STRIPPED_HOOK_ENV_VARS) {
+		delete merged[name];
 	}
 	return merged;
 }

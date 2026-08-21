@@ -12,7 +12,8 @@ export type PaneType =
 	| "terminal"
 	| "webview"
 	| "file-viewer"
-	| "devtools";
+	| "devtools"
+	| "acp";
 
 /**
  * Pane status for agent lifecycle indicators
@@ -147,6 +148,7 @@ export interface Pane {
 	fileViewer?: FileViewerState; // For file-viewer panes
 	browser?: BrowserPaneState; // For browser (webview) panes
 	devtools?: DevToolsPaneState; // For devtools panes
+	acp?: AcpPaneState; // For ACP (agent conversation) panes
 	terminalProfileId?: string; // Terminal color profile override
 }
 
@@ -185,6 +187,26 @@ export interface BrowserPaneState {
 	isLoading: boolean;
 	error?: BrowserLoadError | null;
 	viewport?: ViewportPreset | null;
+}
+
+/**
+ * ACP (agent conversation) pane-specific properties.
+ *
+ * Deliberately tiny. What persists is enough to reopen the pane AS an ACP pane
+ * in the right directory; the transcript does not, because writing every
+ * streamed chunk into a `persist`-backed store would rewrite storage on every
+ * token. Durable transcripts are Phase 6's problem, via `loadSession`, where
+ * the CLI already owns the history.
+ */
+export interface AcpPaneState {
+	/** Workspace root the session runs in; also the `fs/*` sandbox root. */
+	cwd: string;
+	/**
+	 * ACP-minted session id of the LAST session this pane ran. Persisted for
+	 * Phase 6 resume; Phase 2 WRITES it and never reads it back — every mount
+	 * creates a fresh session.
+	 */
+	acpSessionId?: string;
 }
 
 /**

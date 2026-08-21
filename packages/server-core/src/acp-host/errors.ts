@@ -10,6 +10,14 @@
 export type AcpErrorCode =
 	/** `getAcpBinaryPath()` called with no resolver registered. */
 	| "acp-binary-unresolved"
+	/**
+	 * No Claude Code executable could be located for `CLAUDE_CODE_EXECUTABLE`.
+	 * Raised by the HOST APP's resolver (the desktop shim), not by this module:
+	 * the adapter is bundled without the SDK's vendored per-platform CLI, so the
+	 * user's own installed `claude` is the runtime and its absence has to name
+	 * itself rather than surface as a spawn failure 15 s later.
+	 */
+	| "acp-claude-not-found"
 	/** Spawn error, or the child exited before `initialize` completed. */
 	| "acp-spawn-failed"
 	/** `initialize` / `session/new` exceeded ACP_STARTUP_TIMEOUT_MS. */

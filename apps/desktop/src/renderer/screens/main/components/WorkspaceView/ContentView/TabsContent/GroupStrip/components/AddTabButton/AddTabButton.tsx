@@ -9,7 +9,7 @@ import {
 } from "@superset/ui/dropdown-menu";
 import { BsTerminalPlus } from "react-icons/bs";
 import { HiMiniChevronDown } from "react-icons/hi2";
-import { LuFileText, LuPlus } from "react-icons/lu";
+import { LuFileText, LuMessagesSquare, LuPlus } from "react-icons/lu";
 import { TbWorld } from "react-icons/tb";
 import { HotkeyMenuShortcut } from "renderer/components/HotkeyMenuShortcut";
 import { NewTabDropZone } from "../../NewTabDropZone";
@@ -23,6 +23,12 @@ interface AddTabButtonProps {
 	onAddShell?: () => void;
 	onAddBrowser: () => void;
 	onAddNote: () => void;
+	/**
+	 * Optional: an ACP (agent conversation) session. Optional because the
+	 * workspace must have a worktree path to root the session in — the button
+	 * is absent rather than present-and-broken when it does not.
+	 */
+	onAddAcp?: () => void;
 	onToggleCompactAddButton: (enabled: boolean) => void;
 }
 
@@ -34,6 +40,7 @@ export function AddTabButton({
 	onAddShell,
 	onAddBrowser,
 	onAddNote,
+	onAddAcp,
 	onToggleCompactAddButton,
 }: AddTabButtonProps) {
 	const showBigAddButton = !useCompactAddButton;
@@ -91,6 +98,15 @@ export function AddTabButton({
 					)}
 				</div>
 				<DropdownMenuContent align="end" className="w-56">
+					{onAddAcp && (
+						<>
+							<DropdownMenuItem onClick={onAddAcp} className="gap-2">
+								<LuMessagesSquare className="size-4" />
+								<span>ACP Session</span>
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+						</>
+					)}
 					{onAddShell && (
 						<>
 							<DropdownMenuItem onClick={onAddShell} className="gap-2">

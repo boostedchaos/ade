@@ -234,6 +234,19 @@ export function createConfig(target: BuildTarget = "default"): Configuration {
 				from: "../../packages/cli/dist/index.mjs",
 				to: "cli/index.mjs",
 			},
+			// The `claude-agent-acp` adapter and its runtime tree, staged by
+			// `scripts/stage-acp-adapter.ts` (symlinks dereferenced, and WITHOUT
+			// the SDK's 246 MB vendored per-platform Claude Code — Argus drives
+			// the user's own install via CLAUDE_CODE_EXECUTABLE). Placed in
+			// resources rather than the asar so the spawned child script and all
+			// its `require`s are plain files that Node's sibling resolution finds
+			// — no asar patching, no `asarUnpack`. Resolved at runtime by
+			// `main/lib/acp-host/index.ts`.
+			{
+				from: ".acp-adapter/node_modules",
+				to: "node_modules",
+				filter: ["**/*"],
+			},
 			// Bundled agent skills. agent-setup/ade-workspace-skill.ts resolves
 			// <resourcesPath>/skills/<name>/SKILL.md first, repo root second; a
 			// packaged build has no repo root, so omitting this makes the skill

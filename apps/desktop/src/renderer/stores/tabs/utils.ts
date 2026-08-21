@@ -6,6 +6,7 @@ import {
 } from "shared/changes-types";
 import { hasRenderedPreview, isImageFile } from "shared/file-types";
 import type {
+	AcpPaneState,
 	BrowserPaneState,
 	DevToolsPaneState,
 	DiffLayout,
@@ -286,6 +287,53 @@ export const createDevToolsPane = (
 		name: "DevTools",
 		devtools,
 	};
+};
+
+/**
+ * Creates a new ACP (agent conversation) pane.
+ *
+ * `cwd` is the workspace root the session runs in — the agent's own Argus
+ * worktree, which is the whole point of the pane — and doubles as the ACP
+ * filesystem sandbox root. It is required, not defaulted: a session opened in
+ * the wrong directory is worse than one that fails to open.
+ */
+export const createAcpPane = (tabId: string, cwd: string): Pane => {
+	const id = generateId("pane");
+	const acp: AcpPaneState = { cwd };
+	return {
+		id,
+		tabId,
+		type: "acp",
+		name: "ACP Session",
+		status: "idle",
+		acp,
+	};
+};
+
+/**
+ * Creates a new tab with an ACP pane atomically
+ */
+export const createAcpTabWithPane = (
+	workspaceId: string,
+	cwd: string,
+	existingTabs: Tab[] = [],
+): { tab: Tab; pane: Pane } => {
+	const tabId = generateId("tab");
+	const pane = createAcpPane(tabId, cwd);
+
+	const workspaceTabs = existingTabs.filter(
+		(t) => t.workspaceId === workspaceId,
+	);
+
+	const tab: Tab = {
+		id: tabId,
+		name: `Agent ${workspaceTabs.filter((t) => t.name.startsWith("Agent")).length + 1}`,
+		workspaceId,
+		layout: pane.id,
+		createdAt: Date.now(),
+	};
+
+	return { tab, pane };
 };
 
 /**
