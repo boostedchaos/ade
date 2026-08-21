@@ -12,6 +12,7 @@ import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useAttention } from "renderer/stores/attention/useAttention";
 import { useAppHotkey } from "renderer/stores/hotkeys";
 import { useRenamePaneStore } from "renderer/stores/rename-pane-store";
+import type { AgentSessionView } from "renderer/stores/tabs/acp-flip";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import { useAgentSession } from "renderer/stores/tabs/useAgentSession";
 import { useTabsWithPresets } from "renderer/stores/tabs/useTabsWithPresets";
@@ -171,23 +172,46 @@ export function GroupStrip() {
 		[workspace?.project?.mainRepoPath, logSessionMutation],
 	);
 
-	// The "+" defaults to spawning the agent's runtime CLI session (falls back to
-	// a plain shell when the workspace has no runtime).
-	const handleAddGroup = async () => {
-		if (!activeWorkspaceId) return;
-		const result = await spawnAgentSession({
-			id: activeWorkspaceId,
-			name: workspace?.name ?? null,
-			runtime: workspace?.runtime ?? null,
-			worktreePath: workspace?.worktreePath ?? null,
-		});
-		if (result) {
-			const tab = useTabsStore
-				.getState()
-				.tabs.find((t) => t.id === result.tabId);
-			if (tab) logSession(tab.name || "Terminal", "created");
-		}
-	};
+	// The "+" defaults to spawning the agent session. Which VIEW that is —
+	// ACP conversation or terminal — is `spawnAgentSession`'s call (B3); this
+	// handler passes the workspace and nothing else, so the rule lives in one
+	// place. `view` forces the terminal path for the explicit opt-out item.
+	const addAgentSession = useCallback(
+		async (view?: AgentSessionView) => {
+			if (!activeWorkspaceId) return;
+			const result = await spawnAgentSession(
+				{
+					id: activeWorkspaceId,
+					name: workspace?.name ?? null,
+					runtime: workspace?.runtime ?? null,
+					worktreePath: workspace?.worktreePath ?? null,
+				},
+				view ? { view } : undefined,
+			);
+			if (result) {
+				const tab = useTabsStore
+					.getState()
+					.tabs.find((t) => t.id === result.tabId);
+				if (tab) logSession(tab.name || "Terminal", "created");
+			}
+		},
+		[
+			activeWorkspaceId,
+			workspace?.name,
+			workspace?.runtime,
+			workspace?.worktreePath,
+			spawnAgentSession,
+			logSession,
+		],
+	);
+
+	const handleAddGroup = useCallback(() => {
+		void addAgentSession();
+	}, [addAgentSession]);
+
+	const handleAddAgentTerminal = useCallback(() => {
+		void addAgentSession("terminal");
+	}, [addAgentSession]);
 
 	// Explicit plain-shell tab, independent of the agent runtime.
 	const handleAddShell = () => {
@@ -347,6 +371,7 @@ export function GroupStrip() {
 			onDropToNewTab={movePaneToNewTab}
 			isLastPaneInTab={checkIsLastPaneInTab}
 			onAddTerminal={handleAddGroup}
+			onAddAgentTerminal={handleAddAgentTerminal}
 			onAddShell={handleAddShell}
 			onAddBrowser={handleAddBrowser}
 			onAddNote={handleAddNote}

@@ -1,5 +1,7 @@
 import {
+	ACP_DEFAULT_VIEWS,
 	ACP_PERMISSION_POLICIES,
+	type AcpDefaultView,
 	type AcpPermissionPolicy,
 	BRANCH_PREFIX_MODES,
 	EXECUTION_MODES,
@@ -26,6 +28,7 @@ import {
 	setProviderKey,
 } from "main/lib/provider-keys";
 import {
+	DEFAULT_ACP_DEFAULT_VIEW,
 	DEFAULT_ACP_PERMISSION_POLICY,
 	DEFAULT_AUTO_APPLY_DEFAULT_PRESET,
 	DEFAULT_CONFIRM_ON_QUIT,
@@ -72,6 +75,22 @@ export function readAcpPermissionPolicy(): AcpPermissionPolicy {
 		return row?.acpPermissionPolicy ?? DEFAULT_ACP_PERMISSION_POLICY;
 	} catch {
 		return DEFAULT_ACP_PERMISSION_POLICY;
+	}
+}
+
+/**
+ * What a "+"-created agent session opens as (Phase 6 B4).
+ *
+ * Same read discipline as `readAcpPermissionPolicy` above: read per launch so
+ * a change applies to the next session without a restart, and fall back to the
+ * default on any read failure rather than letting an unreadable row decide.
+ */
+export function readAcpDefaultView(): AcpDefaultView {
+	try {
+		const row = localDb.select().from(settings).get();
+		return row?.acpDefaultView ?? DEFAULT_ACP_DEFAULT_VIEW;
+	} catch {
+		return DEFAULT_ACP_DEFAULT_VIEW;
 	}
 }
 
@@ -442,6 +461,29 @@ export const createSettingsRouter = () => {
 					.onConflictDoUpdate({
 						target: settings.id,
 						set: { acpPermissionPolicy: input.policy },
+					})
+					.run();
+
+				return { success: true };
+			}),
+
+		getAcpDefaultView: publicProcedure.query(
+			(): AcpDefaultView => readAcpDefaultView(),
+		),
+
+		/**
+		 * The global default only. The explicit "ACP session" and "Agent session
+		 * (terminal)" menu items open what they name regardless of this.
+		 */
+		setAcpDefaultView: publicProcedure
+			.input(z.object({ view: z.enum(ACP_DEFAULT_VIEWS) }))
+			.mutation(({ input }) => {
+				localDb
+					.insert(settings)
+					.values({ id: 1, acpDefaultView: input.view })
+					.onConflictDoUpdate({
+						target: settings.id,
+						set: { acpDefaultView: input.view },
 					})
 					.run();
 

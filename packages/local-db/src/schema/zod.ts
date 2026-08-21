@@ -198,3 +198,17 @@ export type FileOpenMode = (typeof FILE_OPEN_MODES)[number];
 export const ACP_PERMISSION_POLICIES = ["auto-approve", "prompt"] as const;
 
 export type AcpPermissionPolicy = (typeof ACP_PERMISSION_POLICIES)[number];
+
+/**
+ * What a "+"-created agent session opens as (Phase 6 B3/B4).
+ *
+ * `acp` is the default: a Claude Code agent session in a worktree opens as an
+ * ACP conversation pane. `terminal` is the global escape hatch that restores
+ * the pre-Phase-6 behavior everywhere — the CLI in a PTY.
+ *
+ * Only the DEFAULT is stored. Both explicit menu items (ACP session, agent
+ * session in a terminal) ignore this and open what they name.
+ */
+export const ACP_DEFAULT_VIEWS = ["acp", "terminal"] as const;
+
+export type AcpDefaultView = (typeof ACP_DEFAULT_VIEWS)[number];

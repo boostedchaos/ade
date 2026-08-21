@@ -50,6 +50,9 @@ export const DEFAULT_OPEN_LINKS_IN_APP = false;
 // Default: ACP agent sessions run in the adapter's bypass mode and are never
 // interrupted for permission — the behavior every ACP pane has had so far.
 export const DEFAULT_ACP_PERMISSION_POLICY = "auto-approve" as const;
+// Default: a Claude Code agent session in a worktree opens as an ACP
+// conversation pane (Phase 6 B3). "terminal" restores the old behavior.
+export const DEFAULT_ACP_DEFAULT_VIEW = "acp" as const;
 
 // External links (documentation, help resources, etc.)
 export const EXTERNAL_LINKS = {

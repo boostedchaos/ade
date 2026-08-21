@@ -1,4 +1,9 @@
-import type { BranchPrefixMode, FileOpenMode } from "@superset/local-db";
+import type {
+	AcpDefaultView,
+	AcpPermissionPolicy,
+	BranchPrefixMode,
+	FileOpenMode,
+} from "@superset/local-db";
 import { Input } from "@superset/ui/input";
 import { Label } from "@superset/ui/label";
 import {
@@ -62,6 +67,14 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 	);
 	const showOpenLinksInApp = isItemVisible(
 		SETTING_ITEM_ID.BEHAVIOR_OPEN_LINKS_IN_APP,
+		visibleItems,
+	);
+	const showAcpDefaultView = isItemVisible(
+		SETTING_ITEM_ID.BEHAVIOR_ACP_DEFAULT_VIEW,
+		visibleItems,
+	);
+	const showAcpPermissionPolicy = isItemVisible(
+		SETTING_ITEM_ID.BEHAVIOR_ACP_PERMISSION_POLICY,
 		visibleItems,
 	);
 
@@ -300,6 +313,53 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 		},
 	);
 
+	// Phase 6 B4. Both follow the `LinkBehaviorSetting` idiom — optimistic
+	// write into the query cache, rolled back on error, invalidated on settle —
+	// so the select never snaps back to the old value for a round trip.
+	const { data: acpDefaultView, isLoading: isAcpDefaultViewLoading } =
+		electronTrpc.settings.getAcpDefaultView.useQuery();
+	const setAcpDefaultView = electronTrpc.settings.setAcpDefaultView.useMutation(
+		{
+			onMutate: async ({ view }) => {
+				await utils.settings.getAcpDefaultView.cancel();
+				const previous = utils.settings.getAcpDefaultView.getData();
+				utils.settings.getAcpDefaultView.setData(undefined, view);
+				return { previous };
+			},
+			onError: (_err, _vars, context) => {
+				if (context?.previous !== undefined) {
+					utils.settings.getAcpDefaultView.setData(undefined, context.previous);
+				}
+			},
+			onSettled: () => {
+				utils.settings.getAcpDefaultView.invalidate();
+			},
+		},
+	);
+
+	const { data: acpPermissionPolicy, isLoading: isAcpPermissionPolicyLoading } =
+		electronTrpc.settings.getAcpPermissionPolicy.useQuery();
+	const setAcpPermissionPolicy =
+		electronTrpc.settings.setAcpPermissionPolicy.useMutation({
+			onMutate: async ({ policy }) => {
+				await utils.settings.getAcpPermissionPolicy.cancel();
+				const previous = utils.settings.getAcpPermissionPolicy.getData();
+				utils.settings.getAcpPermissionPolicy.setData(undefined, policy);
+				return { previous };
+			},
+			onError: (_err, _vars, context) => {
+				if (context?.previous !== undefined) {
+					utils.settings.getAcpPermissionPolicy.setData(
+						undefined,
+						context.previous,
+					);
+				}
+			},
+			onSettled: () => {
+				utils.settings.getAcpPermissionPolicy.invalidate();
+			},
+		});
+
 	const previewPrefix =
 		resolveBranchPrefix({
 			mode: branchPrefix?.mode ?? "none",
@@ -509,6 +569,67 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 							}
 							disabled={isOpenLinksInAppLoading || setOpenLinksInApp.isPending}
 						/>
+					</div>
+				)}
+
+				{showAcpDefaultView && (
+					<div className="flex items-center justify-between">
+						<div className="space-y-0.5">
+							<Label className="text-sm font-medium">
+								Agent sessions open as
+							</Label>
+							<p className="text-xs text-muted-foreground">
+								How a new Claude Code agent session opens. Other runtimes, and
+								agents with no worktree, always open in a terminal.
+							</p>
+						</div>
+						<Select
+							value={acpDefaultView ?? "acp"}
+							onValueChange={(value) =>
+								setAcpDefaultView.mutate({ view: value as AcpDefaultView })
+							}
+							disabled={isAcpDefaultViewLoading || setAcpDefaultView.isPending}
+						>
+							<SelectTrigger className="w-[180px]">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="acp">ACP conversation</SelectItem>
+								<SelectItem value="terminal">Terminal</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+				)}
+
+				{showAcpPermissionPolicy && (
+					<div className="flex items-center justify-between">
+						<div className="space-y-0.5">
+							<Label className="text-sm font-medium">ACP permission mode</Label>
+							<p className="text-xs text-muted-foreground">
+								Whether an ACP agent session asks before running a tool that
+								needs permission. Applies to new sessions — a session already
+								running keeps the mode it started with.
+							</p>
+						</div>
+						<Select
+							value={acpPermissionPolicy ?? "auto-approve"}
+							onValueChange={(value) =>
+								setAcpPermissionPolicy.mutate({
+									policy: value as AcpPermissionPolicy,
+								})
+							}
+							disabled={
+								isAcpPermissionPolicyLoading || setAcpPermissionPolicy.isPending
+							}
+						>
+							<SelectTrigger className="w-[180px]">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="auto-approve">Auto-approve</SelectItem>
+								<SelectItem value="prompt">Ask me</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 				)}
 

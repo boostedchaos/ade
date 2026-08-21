@@ -10,7 +10,9 @@ import { type AcpPaneLifecycle, AcpStatusLine } from "./AcpStatusLine";
 import { AcpUsageMeter } from "./AcpUsageMeter";
 import { useAcpCommandsStore } from "./commands";
 import { useAcpControlBarStore } from "./controlBar";
+import { restoreNotice, shouldResumeSession } from "./restore";
 import {
+	type AcpRequestOutcome,
 	type AcpTranscript,
 	emptyTranscript,
 	useAcpTranscriptStore,
@@ -62,17 +64,20 @@ export function AcpPane({
 	);
 	const applyEvent = useAcpTranscriptStore((s) => s.apply);
 	const promptSent = useAcpTranscriptStore((s) => s.promptSent);
+	const settleRequest = useAcpTranscriptStore((s) => s.settleRequest);
 	const applyControlBarEvent = useAcpControlBarStore((s) => s.apply);
 	const applyCommandsEvent = useAcpCommandsStore((s) => s.apply);
 	const seedCommands = useAcpCommandsStore((s) => s.seed);
 	const seedControlBar = useAcpControlBarStore((s) => s.seed);
 	const controlBarMounted = useAcpControlBarStore((s) => s.mounted);
 	const setAcpSessionId = useTabsStore((s) => s.setAcpSessionId);
-	const { onPromptSent, onEvent } = useAcpPaneStatus(paneId);
+	const { onPromptSent, onRequestAnswered, onEvent } = useAcpPaneStatus(paneId);
 
 	const [lifecycle, setLifecycle] = useState<AcpPaneLifecycle>("starting");
 	const [error, setError] = useState<string | null>(null);
 	const [isBusy, setIsBusy] = useState(false);
+	/** The one-line "restored previous session" strip, until dismissed (B1). */
+	const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
 
 	// `mutate` destructured at the call site, not the mutation object: react-query
 	// returns a NEW object every render, so a memoized callback closing over the
@@ -83,6 +88,10 @@ export function AcpPane({
 	const cancelMutation = electronTrpc.acp.cancel.useMutation();
 	const { mutate: readConfigMutate } =
 		electronTrpc.acp.readConfig.useMutation();
+	const { mutate: answerPermissionMutate } =
+		electronTrpc.acp.answerPermission.useMutation();
+	const { mutate: answerElicitationMutate } =
+		electronTrpc.acp.answerElicitation.useMutation();
 
 	// Ref, not state: the subscription callback must see the latest handlers
 	// without re-subscribing (a re-subscribe drops events mid-stream).
@@ -102,12 +111,36 @@ export function AcpPane({
 	const startSession = useCallback(() => {
 		setLifecycle("starting");
 		setError(null);
+		setRestoreMessage(null);
+
+		// Read from the stores rather than from a subscribed value: this runs on
+		// mount and from the "New session" button, and a stale closure over
+		// either one would ask to replay a conversation that is already on
+		// screen. The guard is what stops a mosaic remount double-replaying (B1).
+		const storedSessionId =
+			useTabsStore.getState().panes[paneId]?.acp?.acpSessionId;
+		const resumeSessionId = shouldResumeSession({
+			storedSessionId,
+			transcriptEntryCount: useAcpTranscriptStore.getState().get(paneId).entries
+				.length,
+		})
+			? (storedSessionId ?? null)
+			: null;
+
 		ensureSessionMutate(
-			{ paneId, cwd },
+			{ paneId, cwd, ...(resumeSessionId ? { resumeSessionId } : {}) },
 			{
 				onSuccess: (info) => {
 					setLifecycle("ready");
-					// Written for Phase 6's resume. Phase 2 never reads it back.
+					setRestoreMessage(
+						restoreNotice({
+							requestedSessionId: resumeSessionId,
+							restored: info.restored,
+						}),
+					);
+					// The id of the session that is actually live now — which is a NEW
+					// one whenever the restore fell back, so the next mount does not
+					// ask for the dead one again.
 					setAcpSessionId(paneId, info.acpSessionId);
 					// The cached list first, so the bar is populated immediately, then
 					// a wire read-back: a session this pane is re-attaching to may have
@@ -204,6 +237,79 @@ export function AcpPane({
 		},
 	);
 
+	/**
+	 * Settle the card, ring the status, then put the answer on the wire.
+	 *
+	 * Optimistic on purpose: the buttons have to stop being clickable on the
+	 * click, not a round trip later. `acp-request-not-found` — the ordinary
+	 * shape of a double-click and of an answer that lost a race with a cancel —
+	 * corrects the card rather than raising an error, which is what the
+	 * `unavailable` outcome exists for.
+	 */
+	const settleAndSend = useCallback(
+		(
+			requestId: string,
+			optimistic: AcpRequestOutcome,
+			send: (onError: (error: { message: string }) => void) => void,
+		) => {
+			settleRequest(paneId, requestId, optimistic);
+			onRequestAnswered();
+			send((mutationError) =>
+				settleRequest(paneId, requestId, {
+					kind: "unavailable",
+					reason: mutationError.message,
+				}),
+			);
+		},
+		[paneId, settleRequest, onRequestAnswered],
+	);
+
+	const handleAnswerPermission = useCallback(
+		(requestId: string, optionId: string, label: string) => {
+			settleAndSend(
+				requestId,
+				{ kind: "answered", summary: label },
+				(onError) =>
+					answerPermissionMutate({ paneId, requestId, optionId }, { onError }),
+			);
+		},
+		[paneId, settleAndSend, answerPermissionMutate],
+	);
+
+	const handleAcceptElicitation = useCallback(
+		(
+			requestId: string,
+			content: Record<string, string | string[]>,
+			summary: string,
+		) => {
+			settleAndSend(
+				requestId,
+				// An accept with nothing in it is still an accept the agent asked
+				// for; the summary is what the CARD shows, and it must not claim a
+				// choice that was not made.
+				{ kind: "answered", summary: summary || "(no answer given)" },
+				(onError) =>
+					answerElicitationMutate(
+						{ paneId, requestId, answer: { action: "accept", content } },
+						{ onError },
+					),
+			);
+		},
+		[paneId, settleAndSend, answerElicitationMutate],
+	);
+
+	const handleDeclineElicitation = useCallback(
+		(requestId: string) => {
+			settleAndSend(requestId, { kind: "declined" }, (onError) =>
+				answerElicitationMutate(
+					{ paneId, requestId, answer: { action: "decline" } },
+					{ onError },
+				),
+			);
+		},
+		[paneId, settleAndSend, answerElicitationMutate],
+	);
+
 	const handleSend = (text: string) => {
 		promptSent(paneId, text);
 		onPromptSent();
@@ -260,10 +366,19 @@ export function AcpPane({
 			)}
 		>
 			<div className="flex h-full w-full flex-col">
+				{restoreMessage && (
+					<AcpRestoreStrip
+						message={restoreMessage}
+						onDismiss={() => setRestoreMessage(null)}
+					/>
+				)}
 				<div className="min-h-0 flex-1">
 					<AcpMessageList
 						entries={transcript.entries}
 						isStreaming={lifecycle === "streaming"}
+						onAcceptElicitation={handleAcceptElicitation}
+						onAnswerPermission={handleAnswerPermission}
+						onDeclineElicitation={handleDeclineElicitation}
 						plan={transcript.plan}
 					/>
 				</div>
@@ -282,5 +397,33 @@ export function AcpPane({
 				/>
 			</div>
 		</BasePaneWindow>
+	);
+}
+
+/**
+ * The restore result, inline and dismissable (B1).
+ *
+ * Inline rather than the terminal's `RestoredModeOverlay`: this is a fact
+ * about the conversation below it, and an overlay would cover the very
+ * transcript it is describing.
+ */
+function AcpRestoreStrip({
+	message,
+	onDismiss,
+}: {
+	message: string;
+	onDismiss: () => void;
+}) {
+	return (
+		<div className="flex min-h-6 items-center gap-2 border-border/60 border-b bg-muted/30 px-3 py-1 text-muted-foreground text-xs">
+			<span className="min-w-0 flex-1 truncate">{message}</span>
+			<button
+				className="shrink-0 rounded px-1 hover:bg-accent hover:text-foreground"
+				onClick={onDismiss}
+				type="button"
+			>
+				Dismiss
+			</button>
+		</div>
 	);
 }

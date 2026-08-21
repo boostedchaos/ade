@@ -31,6 +31,8 @@ export const SETTING_ITEM_ID = {
 	BEHAVIOR_RESOURCE_MONITOR: "behavior-resource-monitor",
 	BEHAVIOR_WORKTREE_LOCATION: "behavior-worktree-location",
 	BEHAVIOR_OPEN_LINKS_IN_APP: "behavior-open-links-in-app",
+	BEHAVIOR_ACP_DEFAULT_VIEW: "behavior-acp-default-view",
+	BEHAVIOR_ACP_PERMISSION_POLICY: "behavior-acp-permission-policy",
 
 	TERMINAL_PRESETS: "terminal-presets",
 	TERMINAL_QUICK_ADD: "terminal-quick-add",
@@ -501,6 +503,42 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 			"chat",
 			"terminal",
 			"url",
+		],
+	},
+	{
+		id: SETTING_ITEM_ID.BEHAVIOR_ACP_DEFAULT_VIEW,
+		section: "behavior",
+		title: "Agent sessions open as",
+		description:
+			"Open a Claude Code agent session as an ACP conversation or in a terminal",
+		keywords: [
+			"agent",
+			"session",
+			"acp",
+			"conversation",
+			"terminal",
+			"claude",
+			"default",
+			"view",
+			"pane",
+		],
+	},
+	{
+		id: SETTING_ITEM_ID.BEHAVIOR_ACP_PERMISSION_POLICY,
+		section: "behavior",
+		title: "ACP permission mode",
+		description:
+			"Whether an ACP agent session asks before running a tool that needs permission",
+		keywords: [
+			"acp",
+			"permission",
+			"approve",
+			"auto-approve",
+			"ask",
+			"prompt",
+			"agent",
+			"tool",
+			"bypass",
 		],
 	},
 	{

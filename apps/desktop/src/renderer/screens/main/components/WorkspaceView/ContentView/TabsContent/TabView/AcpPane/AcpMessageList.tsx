@@ -1,10 +1,20 @@
 import { useEffect, useRef } from "react";
 import { AcpPlanPanel } from "./AcpPlanPanel";
+import { AcpRequestCard, type AcpRequestCardProps } from "./AcpRequestCard";
 import { AcpThinkingBlock } from "./AcpThinkingBlock";
 import { AcpToolCard } from "./AcpToolCard";
 import type { AcpEntry, AcpPlanEntry } from "./transcript";
 
-interface AcpMessageListProps {
+/**
+ * The answer callbacks the request cards need (B2), passed straight through.
+ * Named off the card's own props so the two cannot drift.
+ */
+type AcpRequestHandlers = Pick<
+	AcpRequestCardProps,
+	"onAnswerPermission" | "onAcceptElicitation" | "onDeclineElicitation"
+>;
+
+interface AcpMessageListProps extends AcpRequestHandlers {
 	entries: AcpEntry[];
 	/** True while a turn is streaming; drives the stick-to-bottom behaviour. */
 	isStreaming: boolean;
@@ -23,6 +33,9 @@ export function AcpMessageList({
 	entries,
 	isStreaming,
 	plan,
+	onAnswerPermission,
+	onAcceptElicitation,
+	onDeclineElicitation,
 }: AcpMessageListProps) {
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -62,7 +75,13 @@ export function AcpMessageList({
 					className="min-h-0 flex-1 overflow-y-auto px-3 py-2 text-base"
 				>
 					{entries.map((entry) => (
-						<AcpMessage key={entry.id} entry={entry} />
+						<AcpMessage
+							entry={entry}
+							key={entry.id}
+							onAcceptElicitation={onAcceptElicitation}
+							onAnswerPermission={onAnswerPermission}
+							onDeclineElicitation={onDeclineElicitation}
+						/>
 					))}
 					{isStreaming && !hasOpenAssistantEntry(entries) && <AcpThinkingRow />}
 					<div ref={bottomRef} />
@@ -100,9 +119,16 @@ function AcpThinkingRow() {
 	);
 }
 
-function AcpMessage({ entry }: { entry: AcpEntry }) {
+function AcpMessage({
+	entry,
+	...handlers
+}: { entry: AcpEntry } & AcpRequestHandlers) {
 	if (entry.role === "tool") {
 		return <AcpToolCard call={entry.call} />;
+	}
+
+	if (entry.role === "request") {
+		return <AcpRequestCard entry={entry} {...handlers} />;
 	}
 
 	if (entry.role === "thinking") {

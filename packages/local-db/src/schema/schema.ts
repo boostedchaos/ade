@@ -2,6 +2,7 @@ import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 
 import type {
+	AcpDefaultView,
 	AcpPermissionPolicy,
 	AgentRuntime,
 	BranchPrefixMode,
@@ -204,6 +205,8 @@ export const settings = sqliteTable("settings", {
 	acpPermissionPolicy: text(
 		"acp_permission_policy",
 	).$type<AcpPermissionPolicy>(),
+	// What a "+"-created agent session opens as. Null = the default, "acp".
+	acpDefaultView: text("acp_default_view").$type<AcpDefaultView>(),
 	// Provider API keys, each encrypted with electron safeStorage and stored as a
 	// base64 blob keyed by provider id (e.g. "openrouter"). Never plaintext; the
 	// decrypted value is only ever read in the main process, never sent to the renderer.

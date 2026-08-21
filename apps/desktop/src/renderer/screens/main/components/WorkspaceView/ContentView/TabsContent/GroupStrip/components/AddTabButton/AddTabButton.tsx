@@ -18,7 +18,17 @@ interface AddTabButtonProps {
 	useCompactAddButton: boolean;
 	onDropToNewTab: (paneId: string) => void;
 	isLastPaneInTab: (paneId: string) => boolean;
+	/**
+	 * The default agent session. Since Phase 6 (B3) this opens an ACP
+	 * conversation for a Claude Code agent with a worktree, and a terminal for
+	 * everything else — the branch lives in `spawnAgentSession`, not here.
+	 */
 	onAddTerminal: () => void;
+	/**
+	 * Optional: the same agent session, forced onto the TERMINAL path. The
+	 * per-launch opt-out from the flip above, next to the global setting.
+	 */
+	onAddAgentTerminal?: () => void;
 	/** Optional: open a plain shell tab, independent of the agent runtime. */
 	onAddShell?: () => void;
 	onAddBrowser: () => void;
@@ -37,6 +47,7 @@ export function AddTabButton({
 	onDropToNewTab,
 	isLastPaneInTab,
 	onAddTerminal,
+	onAddAgentTerminal,
 	onAddShell,
 	onAddBrowser,
 	onAddNote,
@@ -99,14 +110,18 @@ export function AddTabButton({
 				</div>
 				<DropdownMenuContent align="end" className="w-56">
 					{onAddAcp && (
-						<>
-							<DropdownMenuItem onClick={onAddAcp} className="gap-2">
-								<LuMessagesSquare className="size-4" />
-								<span>ACP Session</span>
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-						</>
+						<DropdownMenuItem onClick={onAddAcp} className="gap-2">
+							<LuMessagesSquare className="size-4" />
+							<span>ACP Session</span>
+						</DropdownMenuItem>
 					)}
+					{onAddAgentTerminal && (
+						<DropdownMenuItem onClick={onAddAgentTerminal} className="gap-2">
+							<BsTerminalPlus className="size-4" />
+							<span>Agent session (terminal)</span>
+						</DropdownMenuItem>
+					)}
+					{(onAddAcp || onAddAgentTerminal) && <DropdownMenuSeparator />}
 					{onAddShell && (
 						<>
 							<DropdownMenuItem onClick={onAddShell} className="gap-2">

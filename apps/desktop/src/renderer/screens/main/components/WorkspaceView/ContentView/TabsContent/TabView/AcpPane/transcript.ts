@@ -30,12 +30,30 @@ export type AcpPlanEntry = Extract<
 export type AcpCost = Extract<AcpUpdate, { kind: "usage_update" }>["cost"];
 export type AcpToolCallContent = NonNullable<AcpToolCall["content"]>[number];
 
+/**
+ * The two blocked-on-a-human requests (B2), taken off the pane-event union for
+ * the same reason the update shapes are: the host owns these types and a
+ * re-import would let the two drift.
+ */
+type AcpPermissionEvent = Extract<AcpPaneEvent, { type: "permission_request" }>;
+type AcpElicitationEvent = Extract<
+	AcpPaneEvent,
+	{ type: "elicitation_request" }
+>;
+export type AcpPermissionOption = AcpPermissionEvent["options"][number];
+export type AcpElicitationForm = AcpElicitationEvent["form"];
+export type AcpElicitationField = AcpElicitationForm["fields"][number];
+export type AcpElicitationOption = NonNullable<
+	AcpElicitationField["options"]
+>[number];
+
 export type AcpEntryRole =
 	| "user"
 	| "assistant"
 	| "divider"
 	| "tool"
-	| "thinking";
+	| "thinking"
+	| "request";
 
 export interface AcpTextEntry {
 	id: string;
@@ -88,12 +106,61 @@ export interface AcpThinkingEntry {
 	text: string;
 }
 
-export type AcpEntry = AcpTextEntry | AcpToolEntry | AcpThinkingEntry;
+/**
+ * The agent is blocked on the user, in the scrollback where it happened (B2).
+ *
+ * Permission and elicitation are one entry type rather than two because the
+ * card's whole lifecycle — appear pending, disable on answer, show what was
+ * chosen, go stale when the session dies — is identical for both, and only the
+ * body differs.
+ */
+export interface AcpRequestState {
+	requestId: string;
+	kind: "permission" | "elicitation";
+	/** The tool's title, or the agent's prose question. */
+	title: string;
+	/** Permission only: `_meta.claudeCode.toolName`, when supplied. */
+	toolName?: string;
+	/** Permission only. */
+	options?: AcpPermissionOption[];
+	/** Elicitation only. */
+	form?: AcpElicitationForm;
+}
+
+/**
+ * How a request stopped waiting.
+ *
+ * `unavailable` is the case worth a member of its own: the request was settled
+ * by something OTHER than this user — a cancelled turn, a dead session, a
+ * double-click that lost the race — and the card must say so rather than sit
+ * enabled offering a button that can no longer do anything.
+ */
+export type AcpRequestOutcome =
+	| { kind: "answered"; summary: string }
+	| { kind: "declined" }
+	| { kind: "unavailable"; reason: string };
+
+export interface AcpRequestEntry {
+	id: string;
+	role: "request";
+	request: AcpRequestState;
+	/** Null while it still waits on the user. */
+	outcome: AcpRequestOutcome | null;
+	/** Never set; see `AcpToolEntry.text`. */
+	text?: undefined;
+}
+
+export type AcpEntry =
+	| AcpTextEntry
+	| AcpToolEntry
+	| AcpThinkingEntry
+	| AcpRequestEntry;
 
 type AcpEntryInput =
 	| Omit<AcpTextEntry, "id">
 	| Omit<AcpToolEntry, "id">
-	| Omit<AcpThinkingEntry, "id">;
+	| Omit<AcpThinkingEntry, "id">
+	| Omit<AcpRequestEntry, "id">;
 
 export interface AcpUsage {
 	used: number;
@@ -121,6 +188,8 @@ export interface AcpTranscript {
 	openUserIndex: number | null;
 	/** `toolCallId` → index into `entries`, so an update correlates in O(1). */
 	toolCallIdToEntry: Record<string, number>;
+	/** Same, for `requestId` → the permission/elicitation card that carries it. */
+	requestIdToEntry: Record<string, number>;
 	/** The whole plan, replaced by every `plan` frame. Null until one arrives. */
 	plan: AcpPlanEntry[] | null;
 	/** The latest `usage_update`. */
@@ -148,6 +217,7 @@ export function emptyTranscript(): AcpTranscript {
 		openThinkingIndex: null,
 		openUserIndex: null,
 		toolCallIdToEntry: {},
+		requestIdToEntry: {},
 		plan: null,
 		usage: null,
 		lastCost: null,
@@ -208,13 +278,16 @@ export function reduceAcpEvent(
 			);
 		case "session_exit":
 			return {
-				...appendDivider(
-					closeOpen(closeUser(closeThinking(state))),
-					event.expected
-						? "Session closed."
-						: `Session ended — exit code ${event.code ?? "unknown"}${
-								event.signal ? ` (${event.signal})` : ""
-							}`,
+				...settleAllPending(
+					appendDivider(
+						closeOpen(closeUser(closeThinking(state))),
+						event.expected
+							? "Session closed."
+							: `Session ended — exit code ${event.code ?? "unknown"}${
+									event.signal ? ` (${event.signal})` : ""
+								}`,
+					),
+					"Session ended before this was answered.",
 				),
 				// Everything scoped to the child that just died goes with it. The
 				// plan is its plan (D4); `usage`/`lastCost` are per-SESSION by the
@@ -228,15 +301,119 @@ export function reduceAcpEvent(
 				usage: null,
 				lastCost: null,
 				toolCallIdToEntry: {},
+				// Settled above, then dropped for the same reason: the next
+				// session mints request ids from its own counter, and a surviving
+				// entry would let `req-1` reopen a card above the divider.
+				requestIdToEntry: {},
 			};
 		case "session_error":
+			return settleAllPending(
+				appendDivider(
+					closeOpen(closeUser(closeThinking(state))),
+					event.message,
+				),
+				"Session ended before this was answered.",
+			);
+		case "permission_request":
+			return appendRequest(state, {
+				requestId: event.requestId,
+				kind: "permission",
+				title: event.title,
+				options: event.options,
+				...(event.toolName ? { toolName: event.toolName } : {}),
+			});
+		case "elicitation_request":
+			return appendRequest(state, {
+				requestId: event.requestId,
+				kind: "elicitation",
+				title: event.message,
+				form: event.form,
+			});
+		case "events_dropped":
+			// A divider, not a silent drop: a truncated conversation and a whole
+			// one look identical, and this is the only thing that says which one
+			// the user is reading.
 			return appendDivider(
-				closeOpen(closeUser(closeThinking(state))),
-				event.message,
+				state,
+				`${event.count} ${event.count === 1 ? "event" : "events"} dropped`,
 			);
 		default:
 			return state;
 	}
+}
+
+/**
+ * A new blocked-on-a-human card, at the bottom of the scrollback.
+ *
+ * Closes the open text entries first, for the reason `appendThinking` does:
+ * assistant text still flowing into an earlier entry would otherwise render
+ * BELOW a card that arrived before it.
+ */
+function appendRequest(
+	state: AcpTranscript,
+	request: AcpRequestState,
+): AcpTranscript {
+	const existing = state.requestIdToEntry[request.requestId];
+	// Ids are minted per session by `AcpSession`, so a duplicate is a re-delivery
+	// (a buffer drain racing a live emit), never a second question.
+	if (existing !== undefined) return state;
+
+	const closed = closeThinking(closeUser(closeOpen(state)));
+	const opened = withEntry(closed, { role: "request", request, outcome: null });
+	return {
+		...opened.state,
+		requestIdToEntry: {
+			...opened.state.requestIdToEntry,
+			[request.requestId]: opened.index,
+		},
+	};
+}
+
+/**
+ * Record how one request was settled.
+ *
+ * First-wins for an answer — the first click is the one that reached the agent
+ * — with ONE exception: an `unavailable` outcome always wins, because it is
+ * the wire reporting that the answer did NOT land (a cancelled turn, a dead
+ * session, a double-click that lost the race). The pane answers optimistically
+ * so the buttons disable immediately, and that optimism must be correctable by
+ * the only thing that knows better.
+ */
+export function settleRequest(
+	state: AcpTranscript,
+	requestId: string,
+	outcome: AcpRequestOutcome,
+): AcpTranscript {
+	const index = state.requestIdToEntry[requestId];
+	if (index === undefined) return state;
+	const entry = state.entries[index];
+	if (entry?.role !== "request") return state;
+	if (entry.outcome && outcome.kind !== "unavailable") return state;
+
+	const entries = state.entries.map((candidate, at) =>
+		at === index && candidate.role === "request"
+			? { ...candidate, outcome }
+			: candidate,
+	);
+	return { ...state, entries };
+}
+
+/**
+ * Every still-pending card goes stale when the session dies: the host rejects
+ * the wire requests on teardown, so the buttons cannot do anything any more
+ * and a card that still offers them is lying about what a click will do.
+ */
+function settleAllPending(state: AcpTranscript, reason: string): AcpTranscript {
+	let next = state;
+	for (const [requestId, index] of Object.entries(state.requestIdToEntry)) {
+		// PENDING only. `unavailable` outruns an existing outcome by design
+		// (above), which would otherwise rewrite a card the user really did
+		// answer into one that never got through.
+		const entry = state.entries[index];
+		if (entry?.role !== "request" || entry.outcome) continue;
+		next = settleRequest(next, requestId, { kind: "unavailable", reason });
+	}
+	return next;
 }
 
 function appendDivider(state: AcpTranscript, text: string): AcpTranscript {
@@ -465,6 +642,12 @@ interface AcpTranscriptStore {
 	get: (paneId: string) => AcpTranscript;
 	apply: (paneId: string, event: AcpPaneEvent) => void;
 	promptSent: (paneId: string, text: string) => void;
+	/** Record how a permission/elicitation card stopped waiting (B2). */
+	settleRequest: (
+		paneId: string,
+		requestId: string,
+		outcome: AcpRequestOutcome,
+	) => void;
 	clear: (paneId: string) => void;
 }
 
@@ -493,6 +676,17 @@ export const useAcpTranscriptStore = create<AcpTranscriptStore>((set, get) => ({
 				[paneId]: appendUserPrompt(
 					state.byPane[paneId] ?? emptyTranscript(),
 					text,
+				),
+			},
+		})),
+	settleRequest: (paneId, requestId, outcome) =>
+		set((state) => ({
+			byPane: {
+				...state.byPane,
+				[paneId]: settleRequest(
+					state.byPane[paneId] ?? emptyTranscript(),
+					requestId,
+					outcome,
 				),
 			},
 		})),
