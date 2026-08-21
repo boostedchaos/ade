@@ -1,0 +1,1024 @@
+[
+ {
+  "kind": "available_commands_update",
+  "commands": [
+   {
+    "name": "agent-reach",
+    "description": "MUST USE when user wants to 调研/research/搜索/search/查/找/look up anything on the internet — e.g. 全网调研 X / 帮我调研一下 X / 查一下 X / 搜搜 X / 看看大家怎么评价 X / X 上有什么讨论 / research this topic。\nAlso MUST USE when user mentions any platform or shares any URL/链接: 小红书/xiaohongshu/xhs, Twitter/推特/X, B站/bilibili, Reddit, V2EX, LinkedIn/领英/招聘/求职/jobs, YouTube, GitHub code search, 小宇宙播客, 雪球/股票行情, RSS feeds, or any web URL.\n13 platforms, multi-backend routing (OpenCLI / per-platform CLIs / APIs). Zero config for 6 channels. Run `agent-reach doctor --json` to see which backend serves each platform right now.\nNOT for: 写报告/数据分析/翻译等内容加工（本 skill 只负责从互联网获取内容）； 发帖/评论/点赞等写操作；已有专门 skill 的平台（先用专门 skill）。\n【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。 分类：search / social (小红书/推特/B站/V2EX/Reddit) / career(LinkedIn) / dev(github) / web(网页/文章/RSS) / video(YouTube/B站/播客)。 (user)",
+    "input": null
+   },
+   {
+    "name": "bro",
+    "description": "Restate the last message in plain human language, with no jargon. (user)",
+    "input": null
+   },
+   {
+    "name": "claim-check",
+    "description": "Truth-test arguments, articles, papers, and hot takes. Use when the user says \"claim-check this\", \"is this true\", \"analyze the claims\", \"find the fallacies\", \"what predictions does this make\", \"is this even falsifiable\", or shares content whose accuracy they doubt. Modes - claims (evidence for/against + rating), fallacies (logical fallacy audit), predictions (extract testable predictions), falsifiability (can this be proven wrong). (user)",
+    "input": null
+   },
+   {
+    "name": "fable-orchestration",
+    "description": "How to prompt Claude Fable 5 so it ORCHESTRATES a build correctly and cheaply — Fable as the architect/advisor that plans and delegates while Opus 5 does the token-heavy execution. Covers the two wiring patterns (advisor mode + architect-and-delegate), effort-level routing as the cost lever, parallel subagents, verification loops, and the failure modes that silently reroute Fable to Opus or tank its output. Use whenever setting up or prompting a Fable-driven pipeline (e.g. the Damon / agent-harness build), or when someone says \"prompt Fable,\" \"Fable orchestration,\" \"advisor mode,\" \"route Fable to Opus,\" \"Fable as the architect,\" or \"make Fable delegate.\" (user)",
+    "input": null
+   },
+   {
+    "name": "firecrawl",
+    "description": "Search, scrape, and interact with the web via the Firecrawl CLI. Use this skill whenever the user wants to search the web, find articles, research a topic, look something up online, scrape a webpage, grab content from a URL, get data from a website, crawl documentation, download a site, or interact with pages that need clicks or logins. Also use when they say \"fetch this page\", \"pull the content from\", \"get the page at https://\", or reference external websites. This provides real-time web search with full page content and interact capabilities — beyond what Claude can do natively with built-in tools. Do NOT trigger for local file operations, git commands, deployments, or code editing tasks. (user)",
+    "input": null
+   },
+   {
+    "name": "firecrawl-scrape",
+    "description": "Extract clean markdown from any URL, including JavaScript-rendered SPAs. Use this skill whenever the user provides a URL and wants its content, says \"scrape\", \"grab\", \"fetch\", \"pull\", \"get the page\", \"extract from this URL\", or \"read this webpage\". Handles JS-rendered pages, multiple concurrent URLs, and returns LLM-optimized markdown. Use this instead of WebFetch for any webpage content extraction. (user)",
+    "input": null
+   },
+   {
+    "name": "firecrawl-search",
+    "description": "Web search with full page content extraction. Use this skill whenever the user asks to search the web, find articles, research a topic, look something up, find recent news, discover sources, or says \"search for\", \"find me\", \"look up\", \"what are people saying about\", or \"find articles about\". Returns real search results with optional full-page markdown — not just snippets. Provides capabilities beyond Claude's built-in WebSearch. (user)",
+    "input": null
+   },
+   {
+    "name": "graphify",
+    "description": "Use for any question about a codebase, its architecture, file relationships, or project content — especially when graphify-out/ exists, where the question should be treated as a graphify query first. Turns any input (code, docs, papers, images, videos) into a persistent knowledge graph with god nodes, community detection, and query/path/explain tools. (user)",
+    "input": null
+   },
+   {
+    "name": "grill-me",
+    "description": "Interview the user relentlessly about a plan, design, or topic, checkpointing every answer to a brainstorm file so nothing is lost. Use when the user wants to stress-test a plan, get grilled on a design, run a brainstorm or discovery session, extract what's in their head into a doc, or says \"grill me\". (user)",
+    "input": null
+   },
+   {
+    "name": "harness-upgrade",
+    "description": "Propose improvements to Kyle's Claude Code harness from vendor release notes, or harvest techniques from a single URL/video. Use when the user says \"harness upgrade\", \"what's new in Claude Code\", \"any harness improvements\", \"check for updates to my setup\", or \"harvest <url>\" / \"anything worth stealing from <url>\". Modes - upgrade (poll sources, diff, propose up to 3 changes), harvest <url> (extract techniques from one source, report-only). Never auto-applies anything. (user)",
+    "input": null
+   },
+   {
+    "name": "last30days",
+    "description": "Research what people actually say about any topic in the last 30 days. Pulls posts and engagement from Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and the web. Includes a doctor health check to diagnose broken or missing sources. (user)",
+    "input": {
+     "hint": "last30days nvidia earnings reaction | last30days AI video tools | last30days what users want in react"
+    }
+   },
+   {
+    "name": "loop-library",
+    "description": "Find, compare, adapt, and design repeatable AI-agent loops with explicit triggers, actions, verification, stopping conditions, guardrails, and handoffs. Use when a user asks for a loop, recurring agent workflow, automation cadence, iterative improvement process, an existing Loop Library recommendation, or help turning an outcome into a bounded copy-ready loop through a short question-led design session. (user)",
+    "input": null
+   },
+   {
+    "name": "opus-sol-orchestration",
+    "description": "How to run a cross-vendor pipeline with a Claude model (Opus 5 by default, or Fable per fable-orchestration) as the ORCHESTRATOR and GPT-5.6 sol via headless `codex exec` in its two remaining roles - tight-brief external reviewer and overflow worker when Claude quota is genuinely exhausted (its subscription is a separate pool). Since Opus 5 (2026-07-24) beat sol on execution benchmarks, sol is NO LONGER the default executor; Opus 5 subagents are, with Sonnet 5 as the cheap mechanical-fan-out tier for stretching budget you still have. Covers when sol still earns a run, the work-order format it needs (it fails on ambiguity), the codex exec wiring (sandboxing, scratch-dir git-init for writes, auto-approve), and mandatory verification of everything sol returns. Use whenever setting up or prompting an Opus+Codex pipeline, or when someone says \"opus-sol,\" \"Codex as worker,\" \"delegate to sol,\" \"sol review,\" \"cross-vendor orchestration,\" or \"Opus orchestrates Codex.\" (user)",
+    "input": null
+   },
+   {
+    "name": "plaud-browse",
+    "description": "Browse, list, or paginate through Plaud recordings. Use when the user says 'what recordings do I have', 'show my recent recordings', 'list my recordings', or asks to see the most recent uploads. (user)",
+    "input": null
+   },
+   {
+    "name": "plaud-digest",
+    "description": "Summarize multiple Plaud recordings into a digest. Use when the user says 'weekly report', 'digest of this month', 'what meetings did I have this week', 'recap of last quarter', or asks to roll up multiple recordings into one overview. (user)",
+    "input": null
+   },
+   {
+    "name": "plaud-export",
+    "description": "Push Plaud content or a generated artifact to Notion, Slack, HubSpot, Linear, Gmail, or a custom webhook. Use when the user says 'save to Notion', 'post to Slack', 'send to webhook', 'file this in HubSpot', or asks to deliver recording content to an external system. (user)",
+    "input": null
+   },
+   {
+    "name": "plaud-find",
+    "description": "Find a specific Plaud recording by name keyword, date range, or topic. Use when the user says 'find the Weekly Sync', 'the meeting from Monday', 'the call about Q2', 'recordings last week', or describes what they're looking for rather than listing. (user)",
+    "input": null
+   },
+   {
+    "name": "plaud-followup",
+    "description": "Turn a Plaud recording into a follow-up email, thank-you note, action-item list, SOAP note, or meeting brief. Use when the user says 'draft follow-up', 'what were the action items', 'send thank-you email', 'turn this into a SOAP note', 'write the recap', or names an artifact to generate from a recording. (user)",
+    "input": null
+   },
+   {
+    "name": "plaud-read",
+    "description": "Read the transcript, AI summary, notes, or download audio for a specific Plaud recording. Use when the user says 'show the transcript', 'summarize this', 'what was said', 'get audio', 'the notes from', or names a specific recording to dig into. Also covers extracting structured fields from a recording. (user)",
+    "input": null
+   },
+   {
+    "name": "plaud-shared",
+    "description": "First read before any Plaud operation. Auth flow, error handling, output conventions, token refresh. Use when the user mentions Plaud for the first time in a session, or when any other Plaud skill is invoked. (user)",
+    "input": null
+   },
+   {
+    "name": "session-handoff",
+    "description": "Use when the user says \"session handoff\", \"wrap up session\", \"hand off\", \"handoff summary\", or wants a structured end-of-session summary before clearing context. Produces a chat-only handoff covering decisions, shipped changes, key files, running state, verification steps, deferrals, and open questions so a fresh agent can continue seamlessly. (user)",
+    "input": null
+   },
+   {
+    "name": "site-audit",
+    "description": "Use when auditing a website or web app for accessibility, performance, or security improvements, especially when you want an evidence-based findings report (severity, evidence, fix) plus an independent second-model (Codex) cross-check, and want to review the plan before any changes are made. (user)",
+    "input": null
+   },
+   {
+    "name": "storm-research",
+    "description": "Use when someone asks to run Storm Research, use the storm-research skill, run the STORM method on a topic, says \"storm research this\" / \"storm report on X\" / \"give me a STORM briefing on X\", or wants a multi-perspective, citation-verified HTML research briefing on a topic. Runs a 4-phase pipeline: five expert lenses (Practitioner, Academic and Skeptic always, plus two chosen to fit the topic — Economist/Historian for market topics, Personal Record/Treating Clinician for a topic about the reader's own body) -> contradiction map -> synthesized HTML report -> adversarial peer review + primary-source verification. Best for topics where multiple viewpoints and fact-checked claims matter; overkill for a simple factual lookup. (user)",
+    "input": {
+     "hint": "[topic to research]"
+    }
+   },
+   {
+    "name": "triad",
+    "description": "Use when a task demands peer-reviewed, high-stakes output. Runs a closed three-model council locally — this Claude Code session is the Conductor (Opus 4.8), DeepSeek V4 Pro is the Worker and Gemini 3.1 Pro is the Critic, both called over OpenRouter — until an exact SHIP verdict. Trigger with /triad or \"run the Triad on X\". (user)",
+    "input": null
+   },
+   {
+    "name": "wikiaudit",
+    "description": "Use when auditing the KEW Brain wiki's CONTENT — factual accuracy, cross-page contradictions, stale/superseded claims, value-propagation gaps (a number updated on one page but not its dependents), clinical-safety claims, and provenance/attribution honesty. The deep adversarial pass that goes beyond the mechanical/structural LINT. Triggers: \"wikiaudit\", \"/wikiaudit\", \"content audit\", \"audit the wiki\", \"deep wiki review\". NOT for markdownlint/structural checks (use LINT) or single-source ingest. (user)",
+    "input": null
+   },
+   {
+    "name": "wisdom",
+    "description": "Extract the valuable parts of long content — YouTube transcripts, articles, podcasts, papers, capture-inbox items. Use when the user says \"extract wisdom\", \"what's worth keeping from this\", \"summarize this video/article\", \"is this worth my time\", \"rate this content\", or drops a long transcript/URL and wants the essence. Modes - wisdom (full extraction), core (one-sentence core message), 5-levels (descending summary), rate (consume-or-skip verdict). (user)",
+    "input": null
+   },
+   {
+    "name": "wrap-up",
+    "description": "End-of-session project hygiene — after finishing (or pausing) work, reconcile the three things that drift while you build: project docs (README/CHANGELOG/STATE and other record-of-record docs in the repo you worked in), structured memory (~/.claude/memory/ topic & domain files + the memory.md index), and CLAUDE.md rules (global or project). Use this whenever the user says \"wrap up\", \"wrap up the project\", \"tidy up\", \"session cleanup\", \"update the docs and memory\", \"reorganize memory\", \"record what we did\", \"we're done here\", or runs /wrap-up — and proactively offer it after a substantial chunk of work concludes even if they don't name it. This skill WRITES and COMMITS changes; it is not the chat-only session-handoff summary. (user)",
+    "input": null
+   },
+   {
+    "name": "deep-research",
+    "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+    "input": null
+   },
+   {
+    "name": "claude-mem:do",
+    "description": "(claude-mem) Execute a phased implementation plan using subagents. Use when asked to execute, run, or carry out a plan — especially one created by make-plan.",
+    "input": null
+   },
+   {
+    "name": "claude-mem:knowledge-agent",
+    "description": "(claude-mem) Build and query AI-powered knowledge bases from claude-mem observations. Use when users want to create focused \"brains\" from their observation history, ask questions about past work patterns, or compile expertise on specific topics.",
+    "input": null
+   },
+   {
+    "name": "claude-mem:make-plan",
+    "description": "(claude-mem) Create a detailed, phased implementation plan with documentation discovery. Use when asked to plan a feature, task, or multi-step implementation — especially before executing with do.",
+    "input": null
+   },
+   {
+    "name": "claude-mem:mem-search",
+    "description": "(claude-mem) Search claude-mem's persistent cross-session memory database. Use when user asks \"did we already solve this?\", \"how did we do X last time?\", or needs work from previous sessions.",
+    "input": null
+   },
+   {
+    "name": "claude-mem:pathfinder",
+    "description": "(claude-mem) Map a codebase into feature-grouped flowcharts, identify duplicated concerns across features, and propose a unified architecture. Use when asked to \"find the ideal path,\" unify duplicated systems, or audit architecture before a refactor. Emits a proposed unified flowchart plus per-system /make-plan prompts.",
+    "input": null
+   },
+   {
+    "name": "claude-mem:smart-explore",
+    "description": "(claude-mem) Token-optimized structural code search using tree-sitter AST parsing. Use instead of reading full files when you need to understand code structure, find functions, or explore a codebase efficiently.",
+    "input": null
+   },
+   {
+    "name": "claude-mem:timeline-report",
+    "description": "(claude-mem) Generate a \"Journey Into [Project]\" narrative report analyzing a project's entire development history from claude-mem's timeline. Use when asked for a timeline report, project history analysis, development journey, or full project report.",
+    "input": null
+   },
+   {
+    "name": "claude-mem:claude-code-plugin-release",
+    "description": "(claude-mem) Automated semantic versioning and release workflow for Claude Code plugins. Handles version increments across package.json, marketplace.json, plugin.json manifests, npm publishing (so `npx claude-mem@X.Y.Z` resolves), build verification, git tagging, GitHub releases, and changelog generation.",
+    "input": null
+   },
+   {
+    "name": "frontend-design:frontend-design",
+    "description": "(frontend-design) Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.",
+    "input": null
+   },
+   {
+    "name": "document-skills:xlsx",
+    "description": "(document-skills) Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .xltx, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved.",
+    "input": null
+   },
+   {
+    "name": "document-skills:docx",
+    "description": "(document-skills) Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files) or Word templates (.dotx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.dotx', or requests to produce professional documents with formatting like tables of contents, headings, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx or .dotx files, inserting or replacing images in documents, performing find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file, use this skill. Do NOT use for PDFs, spreadsheets, Google Docs, or general coding tasks unrelated to document generation.",
+    "input": null
+   },
+   {
+    "name": "document-skills:pptx",
+    "description": "(document-skills) Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations; reading, parsing, or extracting text from any .pptx or .potx file (even if the extracted content will be used elsewhere, like in an email or summary); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates (.potx), layouts, speaker notes, or comments. Trigger whenever the user mentions \"deck,\" \"slides,\" \"presentation,\" or references a .pptx or .potx filename, regardless of what they plan to do with the content afterward. If a .pptx or .potx file needs to be opened, created, or touched, use this skill.",
+    "input": null
+   },
+   {
+    "name": "document-skills:pdf",
+    "description": "(document-skills) Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.",
+    "input": null
+   },
+   {
+    "name": "claude-api:claude-api",
+    "description": "(claude-api) Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+    "input": null
+   },
+   {
+    "name": "impeccable:impeccable",
+    "description": "(impeccable) Use when the user wants to design, redesign, shape, critique, audit, polish, clarify, distill, harden, optimize, adapt, animate, colorize, extract, or otherwise improve a frontend interface. Covers websites, landing pages, dashboards, product UI, app shells, components, forms, settings, onboarding, and empty states. Handles UX review, visual hierarchy, information architecture, cognitive load, accessibility, performance, responsive behavior, theming, anti-patterns, typography, fonts, spacing, layout, alignment, color, motion, micro-interactions, UX copy, error states, edge cases, i18n, and reusable design systems or tokens. Also use for bland designs that need to become bolder or more delightful, loud designs that should become quieter, live browser iteration on UI elements, or ambitious visual effects that should feel technically extraordinary. Not for backend-only or non-UI tasks.",
+    "input": {
+     "hint": "[craft|shape · audit|critique · animate|bolder|colorize|delight|layout|overdrive|quieter|typeset · adapt|clarify|distill · harden|onboard|optimize|polish · init|document|extract|live] [target]"
+    }
+   },
+   {
+    "name": "unifi-network:firewall-auditor",
+    "description": "(unifi-network) Audit UniFi firewall policies for conflicts, redundancies, security gaps, and best practices. Use when asked to review firewall rules, check for security issues, audit network policies, or optimize firewall configuration.",
+    "input": null
+   },
+   {
+    "name": "unifi-network:firewall-manager",
+    "description": "(unifi-network) Manage UniFi firewall policies using natural language — create, modify, and review firewall rules, content filters, and traffic policies. Use when asked to block traffic, create firewall rules, manage content filtering, set up time-based access controls, or review firewall configuration.",
+    "input": null
+   },
+   {
+    "name": "unifi-network:network-health-check",
+    "description": "(unifi-network) Run a UniFi network health check — diagnose device status, connectivity issues, firmware updates, and system health. Use when asked to check network health, find what's down, diagnose connectivity issues, or get a network status summary.",
+    "input": null
+   },
+   {
+    "name": "unifi-network:unifi-network",
+    "description": "(unifi-network) How to manage UniFi network infrastructure — devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, and statistics. Use this skill when the user mentions UniFi, Ubiquiti, network management, WiFi configuration, firewall rules, port forwarding, VPN, QoS, bandwidth, traffic flows, connected clients, network devices, or any UniFi networking task.",
+    "input": null
+   },
+   {
+    "name": "unifi-network:unifi-network-setup",
+    "description": "(unifi-network) Configure the UniFi Network MCP server for Claude Code, Codex, or OpenClaw — set controller host, credentials, and permissions",
+    "input": null
+   },
+   {
+    "name": "unifi-protect:security-digest",
+    "description": "(unifi-protect) Generate a security digest summarizing events across UniFi Protect cameras, Access door events, and Network firewall activity. Use when asked about what happened overnight, security summary, event digest, recent activity, or reviewing camera and access events.",
+    "input": null
+   },
+   {
+    "name": "unifi-protect:unifi-protect",
+    "description": "(unifi-protect) How to manage UniFi Protect cameras and NVR — view cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, Known Faces, license plates, and the Alarm Manager. Use this skill when the user mentions UniFi cameras, security cameras, NVR, recordings, motion detection, person detection, vehicle search, face recognition, Known Faces, license plates, snapshots, RTSP streams, floodlights, sensors, chimes, arming/disarming the alarm, or any UniFi Protect task.",
+    "input": null
+   },
+   {
+    "name": "unifi-protect:unifi-protect-setup",
+    "description": "(unifi-protect) Configure the UniFi Protect MCP server for Claude Code, Codex, or OpenClaw — set NVR host, credentials, and permissions",
+    "input": null
+   },
+   {
+    "name": "obsidian:defuddle",
+    "description": "(obsidian) Extract clean markdown content from web pages using Defuddle CLI, removing clutter and navigation to save tokens. Use instead of WebFetch when the user provides a URL to read or analyze, for online documentation, articles, blog posts, or any standard web page. Do NOT use for URLs ending in .md — those are already markdown, use WebFetch directly.",
+    "input": null
+   },
+   {
+    "name": "obsidian:json-canvas",
+    "description": "(obsidian) Create and edit JSON Canvas files (.canvas) with nodes, edges, groups, and connections. Use when working with .canvas files, creating visual canvases, mind maps, flowcharts, or when the user mentions Canvas files in Obsidian.",
+    "input": null
+   },
+   {
+    "name": "obsidian:obsidian-bases",
+    "description": "(obsidian) Create and edit Obsidian Bases (.base files) with views, filters, formulas, and summaries. Use when working with .base files, creating database-like views of notes, or when the user mentions Bases, table views, card views, filters, or formulas in Obsidian.",
+    "input": null
+   },
+   {
+    "name": "obsidian:obsidian-cli",
+    "description": "(obsidian) Interact with Obsidian vaults using the Obsidian CLI to read, create, search, and manage notes, tasks, properties, and more. Also supports plugin and theme development with commands to reload plugins, run JavaScript, capture errors, take screenshots, and inspect the DOM. Use when the user asks to interact with their Obsidian vault, manage notes, search vault content, perform vault operations from the command line, or develop and debug Obsidian plugins and themes.",
+    "input": null
+   },
+   {
+    "name": "obsidian:obsidian-markdown",
+    "description": "(obsidian) Create and edit Obsidian Flavored Markdown with wikilinks, embeds, callouts, properties, and other Obsidian-specific syntax. Use when working with .md files in Obsidian, or when the user mentions wikilinks, callouts, frontmatter, tags, embeds, or Obsidian notes.",
+    "input": null
+   },
+   {
+    "name": "design-sync",
+    "description": "Push a React design system to claude.ai/design. This runs a converter that bundles the real component code (from Storybook or a bare package) and uploads it. Use when the user runs /design-sync or says \"sync my design system to Claude Design\".",
+    "input": {
+     "hint": "[<project hint, e.g. \"Acme DS\">]"
+    }
+   },
+   {
+    "name": "dataviz",
+    "description": "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+    "input": null
+   },
+   {
+    "name": "update-config",
+    "description": "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+    "input": null
+   },
+   {
+    "name": "verify",
+    "description": "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+    "input": null
+   },
+   {
+    "name": "debug",
+    "description": "Enable debug logging for this session and help diagnose issues",
+    "input": {
+     "hint": "[issue description]"
+    }
+   },
+   {
+    "name": "code-review",
+    "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs and reuse/simplification/efficiency cleanups at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings; ultra: deep multi-agent review in the cloud); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review. For ultra on a GitHub.com PR target, --post asks to post the finished review’s findings to the PR as a single comment from the user’s GitHub account (not a review; the launch dialog still confirms in interactive sessions, while non-interactive mode posts on the flag alone) and --no-post hides that option.",
+    "input": {
+     "hint": "[low|medium|high|xhigh|max|ultra] [--fix] [--comment] [<pr#>|<branch>|<path>]"
+    }
+   },
+   {
+    "name": "simplify",
+    "description": "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+    "input": {
+     "hint": "[<target>]"
+    }
+   },
+   {
+    "name": "batch",
+    "description": "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+    "input": {
+     "hint": "<instruction>"
+    }
+   },
+   {
+    "name": "fewer-permission-prompts",
+    "description": "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+    "input": null
+   },
+   {
+    "name": "doctor",
+    "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+    "input": null
+   },
+   {
+    "name": "loop",
+    "description": "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace.",
+    "input": {
+     "hint": "[interval] [prompt]"
+    }
+   },
+   {
+    "name": "schedule",
+    "description": "Create, update, list, or run scheduled cloud agents (routines) that execute on a cron schedule.",
+    "input": null
+   },
+   {
+    "name": "claude-api",
+    "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+    "input": null
+   },
+   {
+    "name": "run",
+    "description": "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+    "input": null
+   },
+   {
+    "name": "run-skill-generator",
+    "description": "Author or improve the run-<unit> skill — a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+    "input": null
+   },
+   {
+    "name": "agents",
+    "description": "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+    "input": null
+   },
+   {
+    "name": "auto-mode-setup",
+    "description": "Teach auto mode about your environment, plus optional rule tweaks",
+    "input": {
+     "hint": "[--request-id <uuid>] (--wizard posture=… scope=… depth=… --propose | --expect-sha256 <64-hex> --apply-file <path>)"
+    }
+   },
+   {
+    "name": "autocompact",
+    "description": "Configure the auto-compact window size",
+    "input": {
+     "hint": "[auto|<tokens>]"
+    }
+   },
+   {
+    "name": "color",
+    "description": "Set the prompt bar color for this session",
+    "input": {
+     "hint": "[red|blue|green|yellow|purple|orange|pink|cyan|default]"
+    }
+   },
+   {
+    "name": "compact",
+    "description": "Free up context by summarizing the conversation so far",
+    "input": {
+     "hint": "<optional custom summarization instructions>"
+    }
+   },
+   {
+    "name": "config",
+    "description": "Set a setting by key",
+    "input": {
+     "hint": "key=value"
+    }
+   },
+   {
+    "name": "context",
+    "description": "Show current context usage",
+    "input": null
+   },
+   {
+    "name": "effort",
+    "description": "Set effort level for model usage",
+    "input": {
+     "hint": "<low|medium|high|xhigh|max|ultracode|auto>"
+    }
+   },
+   {
+    "name": "fast",
+    "description": "Toggle fast mode (Opus 5)",
+    "input": {
+     "hint": "[on|off]"
+    }
+   },
+   {
+    "name": "heapdump",
+    "description": "Dump the JS heap to ~/Desktop",
+    "input": null
+   },
+   {
+    "name": "init",
+    "description": "Initialize a new CLAUDE.md file with codebase documentation",
+    "input": null
+   },
+   {
+    "name": "mcp",
+    "description": "Manage MCP servers",
+    "input": {
+     "hint": "[reconnect|enable|disable [<server>|all]]"
+    }
+   },
+   {
+    "name": "import",
+    "description": "Import config from another AI coding agent",
+    "input": null
+   },
+   {
+    "name": "model",
+    "description": "Set the AI model for Claude Code",
+    "input": {
+     "hint": "<model>"
+    }
+   },
+   {
+    "name": "__remote-workflow",
+    "description": "Run the workflow script delivered in this session environment (server-launched sessions only)",
+    "input": null
+   },
+   {
+    "name": "workflow-launch-exec",
+    "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+    "input": null
+   },
+   {
+    "name": "reload-skills",
+    "description": "Pick up skills added or changed on disk during this session",
+    "input": null
+   },
+   {
+    "name": "rename",
+    "description": "Rename the current conversation",
+    "input": {
+     "hint": "[name]"
+    }
+   },
+   {
+    "name": "ultrareview",
+    "description": "Start a cloud agent that finds and verifies bugs in your branch (~5-10 min, $5-$25 USD) · Runs in Claude Code on the web. See https://code.claude.com/docs/en/claude-code-on-the-web",
+    "input": null
+   },
+   {
+    "name": "security-review",
+    "description": "Complete a security review of the pending changes on the current branch",
+    "input": null
+   },
+   {
+    "name": "usage-credits",
+    "description": "Configure usage credits or request them from your admin when you hit a limit",
+    "input": null
+   },
+   {
+    "name": "extra-usage",
+    "description": "Renamed to /usage-credits",
+    "input": null
+   },
+   {
+    "name": "usage",
+    "description": "Show session cost, plan usage, and what's contributing to your limits",
+    "input": null
+   },
+   {
+    "name": "insights",
+    "description": "Generate a report analyzing your Claude Code sessions",
+    "input": null
+   },
+   {
+    "name": "recap",
+    "description": "Generate a one-line session recap now",
+    "input": null
+   },
+   {
+    "name": "goal",
+    "description": "Set a goal — keep working until the condition is met",
+    "input": null
+   },
+   {
+    "name": "design",
+    "description": "Grant or revoke Claude agent access to your Design projects",
+    "input": {
+     "hint": "consent | revoke"
+    }
+   },
+   {
+    "name": "design-consent",
+    "description": "Grant Claude agent access to your Design projects",
+    "input": null
+   },
+   {
+    "name": "design-revoke",
+    "description": "Revoke Claude agent access to your Design projects",
+    "input": null
+   },
+   {
+    "name": "list-agents",
+    "description": "List subagents and other Claude sessions you can message",
+    "input": null
+   },
+   {
+    "name": "team-onboarding",
+    "description": "Help teammates ramp on Claude Code with a guide from your usage",
+    "input": null
+   },
+   {
+    "name": "mcp:cloudflare-docs:workers-prompt-full",
+    "description": "Detailed prompt for generating Cloudflare Workers code (and other developer platform products) from https://developers.cloudflare.com/workers/prompt.txt",
+    "input": null
+   }
+  ]
+ },
+ {
+  "kind": "usage_update",
+  "used": 41371,
+  "size": 1000000,
+  "cost": null
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "I"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " will"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " read both"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " files now"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "."
+ },
+ {
+  "kind": "tool_call",
+  "toolCall": {
+   "toolCallId": "toolu_01XehiVbr3jfTfJy93JaTkfQ",
+   "title": "Read File",
+   "kind": "read",
+   "status": "pending",
+   "content": [],
+   "locations": [],
+   "rawInput": {},
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Read"
+    }
+   },
+   "sessionUpdate": "tool_call"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01XehiVbr3jfTfJy93JaTkfQ",
+   "kind": "read",
+   "title": "Read alpha.txt",
+   "content": [],
+   "locations": [
+    {
+     "path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/alpha.txt",
+     "line": 1
+    }
+   ],
+   "rawInput": {
+    "file_path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/alpha.txt"
+   },
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Read"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "tool_call",
+  "toolCall": {
+   "toolCallId": "toolu_01A87EWBLfPrqpXFSjQvrjQZ",
+   "title": "Read File",
+   "kind": "read",
+   "status": "pending",
+   "content": [],
+   "locations": [],
+   "rawInput": {},
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Read"
+    }
+   },
+   "sessionUpdate": "tool_call"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01XehiVbr3jfTfJy93JaTkfQ",
+   "_meta": {
+    "claudeCode": {
+     "toolResponse": {
+      "type": "text",
+      "file": {
+       "filePath": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/alpha.txt",
+       "content": "alpha line 1\nalpha line 2\n",
+       "numLines": 3,
+       "startLine": 1,
+       "totalLines": 3
+      }
+     },
+     "toolName": "Read"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01A87EWBLfPrqpXFSjQvrjQZ",
+   "kind": "read",
+   "title": "Read beta.txt",
+   "content": [],
+   "locations": [
+    {
+     "path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt",
+     "line": 1
+    }
+   ],
+   "rawInput": {
+    "file_path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt"
+   },
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Read"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "usage_update",
+  "used": 41674,
+  "size": 1000000,
+  "cost": null
+ },
+ {
+  "kind": "usage_update",
+  "used": 41674,
+  "size": 1000000,
+  "cost": null
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01XehiVbr3jfTfJy93JaTkfQ",
+   "status": "completed",
+   "content": [
+    {
+     "content": {
+      "text": "```\n1\talpha line 1\n2\talpha line 2\n```",
+      "type": "text"
+     },
+     "type": "content"
+    }
+   ],
+   "rawOutput": "1\talpha line 1\n2\talpha line 2\n3\t",
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Read"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01A87EWBLfPrqpXFSjQvrjQZ",
+   "_meta": {
+    "claudeCode": {
+     "toolResponse": {
+      "type": "text",
+      "file": {
+       "filePath": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt",
+       "content": "beta line 1\nbeta line 2\n",
+       "numLines": 3,
+       "startLine": 1,
+       "totalLines": 3
+      }
+     },
+     "toolName": "Read"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01A87EWBLfPrqpXFSjQvrjQZ",
+   "status": "completed",
+   "content": [
+    {
+     "content": {
+      "text": "```\n1\tbeta line 1\n2\tbeta line 2\n```",
+      "type": "text"
+     },
+     "type": "content"
+    }
+   ],
+   "rawOutput": "1\tbeta line 1\n2\tbeta line 2\n3\t",
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Read"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "usage_update",
+  "used": 42939,
+  "size": 1000000,
+  "cost": null
+ },
+ {
+  "kind": "tool_call",
+  "toolCall": {
+   "toolCallId": "toolu_01NFD4exTdJrQwepFyUTC94r",
+   "title": "Edit",
+   "kind": "edit",
+   "status": "pending",
+   "content": [],
+   "locations": [],
+   "rawInput": {},
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Edit"
+    }
+   },
+   "sessionUpdate": "tool_call"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01NFD4exTdJrQwepFyUTC94r",
+   "kind": "edit",
+   "title": "Edit beta.txt",
+   "locations": [
+    {
+     "path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt"
+    }
+   ],
+   "rawInput": {
+    "file_path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt"
+   },
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Edit"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01NFD4exTdJrQwepFyUTC94r",
+   "kind": "edit",
+   "title": "Edit beta.txt",
+   "locations": [
+    {
+     "path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt"
+    }
+   ],
+   "rawInput": {
+    "file_path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt",
+    "old_string": "beta line 2"
+   },
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Edit"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01NFD4exTdJrQwepFyUTC94r",
+   "kind": "edit",
+   "title": "Edit beta.txt",
+   "content": [
+    {
+     "path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt",
+     "oldText": "beta line 2",
+     "newText": "beta line 2 EDITED",
+     "type": "diff"
+    }
+   ],
+   "locations": [
+    {
+     "path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt"
+    }
+   ],
+   "rawInput": {
+    "replace_all": false,
+    "file_path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt",
+    "old_string": "beta line 2",
+    "new_string": "beta line 2 EDITED"
+   },
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Edit"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "usage_update",
+  "used": 43131,
+  "size": 1000000,
+  "cost": null
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01NFD4exTdJrQwepFyUTC94r",
+   "content": [
+    {
+     "path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt",
+     "oldText": "beta line 1\nbeta line 2",
+     "newText": "beta line 1\nbeta line 2 EDITED",
+     "type": "diff"
+    }
+   ],
+   "locations": [
+    {
+     "path": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt",
+     "line": 1
+    }
+   ],
+   "_meta": {
+    "claudeCode": {
+     "toolResponse": {
+      "filePath": "/private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt",
+      "oldString": "beta line 2",
+      "newString": "beta line 2 EDITED",
+      "originalFile": "beta line 1\nbeta line 2\n",
+      "structuredPatch": [
+       {
+        "oldStart": 1,
+        "oldLines": 2,
+        "newStart": 1,
+        "newLines": 2,
+        "lines": [
+         " beta line 1",
+         "-beta line 2",
+         "+beta line 2 EDITED"
+        ]
+       }
+      ],
+      "userModified": false,
+      "replaceAll": false
+     },
+     "toolName": "Edit"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "tool_call_update",
+  "toolCall": {
+   "toolCallId": "toolu_01NFD4exTdJrQwepFyUTC94r",
+   "status": "completed",
+   "rawOutput": "The file /private/tmp/claude-501/-Users-kylewelch--ade-default-agents-08cf1eec-2db5-47f6-84af-7097448251d6-worktree/29b88fd7-c995-4840-8616-001993d24e01/scratchpad/acp-p3-capture/beta.txt has been updated successfully. (file state is current in your context — no need to Read it back)",
+   "_meta": {
+    "claudeCode": {
+     "toolName": "Edit"
+    }
+   },
+   "sessionUpdate": "tool_call_update"
+  }
+ },
+ {
+  "kind": "usage_update",
+  "used": 43342,
+  "size": 1000000,
+  "cost": null
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "D"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "ON"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "E\n\nI"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " read both files."
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " Then I chang"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "ed line"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " 2 of `"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "beta.txt` to \""
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "beta line 2 ED"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": "ITED\". The edit was"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " good"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": ". You"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " do"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " not have"
+ },
+ {
+  "kind": "agent_message_chunk",
+  "text": " to do anything."
+ },
+ {
+  "kind": "usage_update",
+  "used": 43397,
+  "size": 1000000,
+  "cost": null
+ },
+ {
+  "kind": "usage_update",
+  "used": 43397,
+  "size": 1000000,
+  "cost": {
+   "amount": 0.670733,
+   "currency": "USD"
+  }
+ }
+]
