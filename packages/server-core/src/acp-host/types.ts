@@ -55,8 +55,18 @@ export type AcpSessionUpdate =
  */
 export interface AcpConfigOption {
 	id: string;
+	/** Human-readable label the adapter supplies for the control. */
+	name: string;
+	/** Optional detail; the control bar renders it as a tooltip. */
+	description?: string;
+	/**
+	 * Adapter's semantic category (`"mode"`, `"model"`, `"thought_level"`, …).
+	 * UX only, and optional — the protocol forbids depending on it for
+	 * correctness, so a consumer must handle a missing or unknown value.
+	 */
+	category?: string;
 	/** Declared legal values, from `session/new`. Empty/absent = free-form. */
-	values?: { id: string; label?: string }[];
+	values?: { id: string; label?: string; description?: string }[];
 	currentValue?: string;
 }
 

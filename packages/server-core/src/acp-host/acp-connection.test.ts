@@ -106,6 +106,7 @@ describe("mapSessionUpdate", () => {
 			options: [
 				{
 					id: "fast",
+					name: "Fast",
 					values: [
 						{ id: "true", label: "On" },
 						{ id: "false", label: "Off" },

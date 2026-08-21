@@ -13,12 +13,14 @@ import {
 	type ContentChunk,
 	client,
 	type InitializeResponse,
+	type McpServer,
 	methods,
 	type NewSessionResponse,
 	ndJsonStream,
 	PROTOCOL_VERSION,
 	type PromptResponse,
 	RequestError,
+	type ResumeSessionResponse,
 	type SessionConfigOption,
 	type SessionUpdate,
 	type SetSessionConfigOptionResponse,
@@ -177,6 +179,21 @@ export interface AcpConnectionCallbacks {
 	onClosed: (error?: unknown) => void;
 }
 
+/**
+ * The params of `session/new`, kept whole so `session/resume` can resend them
+ * unchanged.
+ *
+ * This is not tidiness. The adapter keys a live session on the fingerprint of
+ * these values: a resume whose `cwd` or `mcpServers` differs from the session's
+ * own silently tears the session down and builds a new one in its place, with
+ * no error and no notification. Anything that resumes MUST pass the object the
+ * `session/new` call was given, never a freshly-built equivalent.
+ */
+export interface AcpSessionParams {
+	cwd: string;
+	mcpServers: McpServer[];
+}
+
 export interface AcpConnectionOptions {
 	/** Bracketed log prefix supplied by the owner, e.g. `[AcpSession pane-1]`. */
 	logPrefix: string;
@@ -261,11 +278,31 @@ export class AcpConnection {
 		);
 	}
 
-	async newSession(cwd: string): Promise<NewSessionResponse> {
+	async newSession(params: AcpSessionParams): Promise<NewSessionResponse> {
 		return this.call("session/new", () =>
 			this.connection.agent.request(methods.agent.session.new, {
-				cwd,
-				mcpServers: [],
+				cwd: params.cwd,
+				mcpServers: params.mcpServers,
+			}),
+		);
+	}
+
+	/**
+	 * Re-read a live session's state. Takes the SAME params object
+	 * `newSession` was given — see `AcpSessionParams`.
+	 *
+	 * Not `session/load`: load replays the whole conversation history back
+	 * through `session/update`, which would re-render the transcript.
+	 */
+	async resumeSession(
+		sessionId: string,
+		params: AcpSessionParams,
+	): Promise<ResumeSessionResponse> {
+		return this.call("session/resume", () =>
+			this.connection.agent.request(methods.agent.session.resume, {
+				sessionId,
+				cwd: params.cwd,
+				mcpServers: params.mcpServers,
 			}),
 		);
 	}

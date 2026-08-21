@@ -1,25 +1,51 @@
 import type {
 	SessionConfigOption,
-	SessionConfigSelectOption,
 	SessionConfigSelectOptions,
 } from "@agentclientprotocol/sdk";
 import { acpError } from "./errors";
 import type { AcpConfigOption } from "./types";
 
-const BOOLEAN_VALUES: { id: string; label?: string }[] = [
+/**
+ * The one config option a caller may write a value the adapter never declared.
+ *
+ * The adapter's model list is not exhaustive and a typed id must stay
+ * reachable; every other option keeps the gate. See
+ * `AcpSession.setConfigOption`.
+ */
+export const MODEL_CONFIG_ID = "model";
+
+const BOOLEAN_VALUES: AcpConfigOption["values"] = [
 	{ id: "true", label: "On" },
 	{ id: "false", label: "Off" },
 ];
 
+/**
+ * Flatten a select's values, including the grouped form.
+ *
+ * A group's name is folded into each label as `"Group / Option"` rather than
+ * kept as structure: the control bar renders one flat list, and dropping the
+ * group name entirely would leave two identically-named options from different
+ * providers indistinguishable.
+ */
 function flattenSelectOptions(
 	options: SessionConfigSelectOptions,
-): SessionConfigSelectOption[] {
-	const flat: SessionConfigSelectOption[] = [];
+): NonNullable<AcpConfigOption["values"]> {
+	const flat: NonNullable<AcpConfigOption["values"]> = [];
 	for (const entry of options) {
 		if ("group" in entry) {
-			flat.push(...entry.options);
+			for (const option of entry.options) {
+				flat.push({
+					id: option.value,
+					label: `${entry.name} / ${option.name}`,
+					...(option.description ? { description: option.description } : {}),
+				});
+			}
 		} else {
-			flat.push(entry);
+			flat.push({
+				id: entry.value,
+				label: entry.name,
+				...(entry.description ? { description: entry.description } : {}),
+			});
 		}
 	}
 	return flat;
@@ -29,20 +55,24 @@ function flattenSelectOptions(
 export function toAcpConfigOption(
 	option: SessionConfigOption,
 ): AcpConfigOption {
+	const common = {
+		id: option.id,
+		name: option.name,
+		...(option.description ? { description: option.description } : {}),
+		...(option.category ? { category: option.category } : {}),
+	};
+
 	if (option.type === "boolean") {
 		return {
-			id: option.id,
+			...common,
 			values: BOOLEAN_VALUES,
 			currentValue: String(option.currentValue),
 		};
 	}
 
 	return {
-		id: option.id,
-		values: flattenSelectOptions(option.options).map((entry) => ({
-			id: entry.value,
-			label: entry.name,
-		})),
+		...common,
+		values: flattenSelectOptions(option.options),
 		currentValue: option.currentValue,
 	};
 }
@@ -55,10 +85,10 @@ export function toAcpConfigOption(
  * write means nothing, so the only real defense is refusing to send a value the
  * adapter never declared.
  *
- * The cache is seeded from `session/new` and reconciled by
- * `config_option_update` notifications. `session/resume` is the only verified
- * on-demand read-back and Phase 1 never resumes mid-session; a future resume
- * path MUST re-seed this cache from the `session/resume` response.
+ * The cache is seeded from `session/new`, reconciled by `config_option_update`
+ * notifications, and re-seeded by `AcpSession.resume()` — `session/resume` is
+ * the only verified on-demand read-back, and every write goes through one
+ * (Phase 4, D3).
  */
 export class ConfigOptionCache {
 	private options = new Map<string, AcpConfigOption>();

@@ -187,6 +187,10 @@ export class FakeAcpChild extends EventEmitter {
 			modes,
 			configOptions,
 		}));
+		// Same payload as `session/new`, which is what a non-destructive resume
+		// reports. A test that wants the read-back to disagree with the write
+		// overrides this handler.
+		this.setHandler("session/resume", () => ({ modes, configOptions }));
 		this.setHandler("session/set_mode", () => ({}));
 		this.setHandler("session/set_config_option", () => ({ configOptions: [] }));
 		this.setHandler("session/close", () => ({}));

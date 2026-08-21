@@ -15,6 +15,7 @@
 import { EventEmitter } from "node:events";
 import { observable } from "@trpc/server/observable";
 import {
+	type AcpConfigOption,
 	type AcpExitInfo,
 	type AcpHost,
 	type AcpSessionInfo,
@@ -47,6 +48,26 @@ export type AcpPaneEvent =
 			expected: boolean;
 	  }
 	| { type: "session_error"; message: string };
+
+/**
+ * What a config write actually did, as opposed to what it was asked to do.
+ *
+ * `actualValue` is read off the wire AFTER the write; `verified` is false when
+ * the adapter resolved the request to something else — which it does silently,
+ * with a success response, for any model id it cannot place. The renderer shows
+ * `actualValue`, never `requestedValue`.
+ */
+export interface AcpConfigApplied {
+	configId: string;
+	requestedValue: string;
+	actualValue: string | null;
+	verified: boolean;
+}
+
+export interface AcpSetConfigOptionResult {
+	configOptions: AcpConfigOption[];
+	applied: AcpConfigApplied;
+}
 
 const SAFE_ID = z
 	.string()
@@ -192,6 +213,56 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 				await host.disposeSession(input.paneId);
 				detachBridge(input.paneId);
 				return { ok: true as const };
+			}),
+
+		/**
+		 * Write one config option, then prove what landed.
+		 *
+		 * The read-back is not an optional confirmation step: `session/
+		 * set_config_option` answers success for a value it silently replaced,
+		 * so the write's own result carries no information. `allowUnlisted` is
+		 * the typed-model escape hatch and the host restricts it to the model
+		 * option (`AcpSession.setConfigOption`).
+		 */
+		setConfigOption: publicProcedure
+			.input(
+				z.object({
+					paneId: SAFE_ID,
+					configId: z.string().min(1),
+					value: z.string(),
+					allowUnlisted: z.boolean().optional(),
+				}),
+			)
+			.mutation(async ({ input }): Promise<AcpSetConfigOptionResult> => {
+				await host.setConfigOption(input.paneId, input.configId, input.value, {
+					allowUnlisted: input.allowUnlisted,
+				});
+
+				const configOptions = await host.readConfig(input.paneId);
+				const actualValue =
+					configOptions.find((option) => option.id === input.configId)
+						?.currentValue ?? null;
+
+				return {
+					configOptions,
+					applied: {
+						configId: input.configId,
+						requestedValue: input.value,
+						actualValue,
+						verified: actualValue === input.value,
+					},
+				};
+			}),
+
+		/**
+		 * On-demand config read-back. A mutation, not a query: it puts a
+		 * `session/resume` on the wire, so it must never be cached, retried or
+		 * refetched on focus the way a query is.
+		 */
+		readConfig: publicProcedure
+			.input(z.object({ paneId: SAFE_ID }))
+			.mutation(async ({ input }): Promise<AcpConfigOption[]> => {
+				return await host.readConfig(input.paneId);
 			}),
 
 		/** Remount reconciliation: "is my session still alive?" */

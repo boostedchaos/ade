@@ -11,6 +11,7 @@
  * runtime (`apps/server` runs under bun) also registers an exec-path resolver.
  */
 
+export type { AcpSessionParams } from "./acp-connection";
 export { mapSessionUpdate } from "./acp-connection";
 export { AcpHost, getAcpHost, resolveMaxConcurrentAcpSpawns } from "./acp-host";
 export {
@@ -21,6 +22,7 @@ export {
 	setAcpExecPathResolver,
 	spawnAcpChildEnv,
 } from "./binary-resolver";
+export { MODEL_CONFIG_ID } from "./config-options";
 export type { AcpErrorCode } from "./errors";
 export { acpError } from "./errors";
 export {

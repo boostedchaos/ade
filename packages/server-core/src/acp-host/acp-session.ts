@@ -4,19 +4,20 @@ import type {
 	SessionModeState,
 } from "@agentclientprotocol/sdk";
 import { treeKillWithEscalation } from "../tree-kill";
-import { AcpConnection } from "./acp-connection";
+import { AcpConnection, type AcpSessionParams } from "./acp-connection";
 import {
 	getAcpBinaryPath,
 	getAcpExecPath,
 	spawnAcpChildEnv,
 } from "./binary-resolver";
-import { ConfigOptionCache } from "./config-options";
+import { ConfigOptionCache, MODEL_CONFIG_ID } from "./config-options";
 import { acpError } from "./errors";
 import {
 	autoApprovePermissionHandler,
 	resolveModeIdForPolicy,
 } from "./permission";
 import type {
+	AcpConfigOption,
 	AcpExitInfo,
 	AcpPromptResult,
 	AcpSessionInfo,
@@ -106,6 +107,8 @@ export class AcpSession {
 	private child: ChildProcess | null = null;
 	private connection: AcpConnection | null = null;
 	private acpSessionId: string | null = null;
+	/** Exactly what went out with `session/new`; `resume()` resends it. */
+	private sessionParams: AcpSessionParams | null = null;
 	private modes: SessionModeState | null = null;
 	private state: AcpSessionState = "starting";
 	private stderrTail: string[] = [];
@@ -248,7 +251,10 @@ export class AcpSession {
 		const connection = this.requireConnection();
 
 		await connection.initialize();
-		const session = await connection.newSession(this.cwd);
+		// Built once and kept: `resume()` has to resend these values unchanged
+		// or the adapter replaces the live session (see `AcpSessionParams`).
+		this.sessionParams = { cwd: this.cwd, mcpServers: [] };
+		const session = await connection.newSession(this.sessionParams);
 
 		this.acpSessionId = session.sessionId;
 		this.modes = session.modes ?? null;
@@ -345,12 +351,31 @@ export class AcpSession {
 		await this.racingDeath(connection.cancel(sessionId));
 	}
 
-	async setConfigOption(optionId: string, value: string): Promise<void> {
+	/**
+	 * `allowUnlisted` waives the local gate, and ONLY for the model option.
+	 *
+	 * The adapter's model list is not exhaustive, so a model the caller can name
+	 * but the list omits has to stay reachable. It is tolerable only there
+	 * because a model id the adapter cannot place fuzzy-resolves to another
+	 * VALID model rather than breaking the session — and the caller's mandatory
+	 * `resume()` read-back is what turns that silent substitution into
+	 * something the user can see. Every other option id keeps the gate, where an
+	 * undeclared value has no such floor.
+	 */
+	async setConfigOption(
+		optionId: string,
+		value: string,
+		options: { allowUnlisted?: boolean } = {},
+	): Promise<void> {
 		const { connection, sessionId } = this.requireLive();
 
 		// The gate, not the server's answer: an illegal value is ACCEPTED and
 		// silently downgraded to `default`, so a green write proves nothing.
-		this.configCache.assertValid(optionId, value);
+		const unlisted =
+			options.allowUnlisted === true && optionId === MODEL_CONFIG_ID;
+		if (!unlisted) {
+			this.configCache.assertValid(optionId, value);
+		}
 
 		const wireValue = this.configCache.isBoolean(optionId)
 			? value === "true"
@@ -364,6 +389,40 @@ export class AcpSession {
 		} else {
 			this.configCache.applyLocalWrite(optionId, value);
 		}
+	}
+
+	/**
+	 * Read config state back off the wire and re-seed the cache.
+	 *
+	 * The only verified on-demand read-back this adapter offers, and the only
+	 * thing that can tell a write that landed from a write that was silently
+	 * resolved to something else. Non-destructive strictly because it resends
+	 * the recorded `session/new` params (`AcpSessionParams`).
+	 */
+	async resume(): Promise<AcpConfigOption[]> {
+		const { connection, sessionId } = this.requireLive();
+		const params = this.sessionParams;
+		if (!params) {
+			throw acpError(
+				"acp-session-disposed",
+				`ACP session for pane ${this.paneId} has no recorded session/new params`,
+			);
+		}
+
+		const response = await this.racingDeath(
+			connection.resumeSession(sessionId, params),
+		);
+
+		if (response.modes) {
+			this.modes = response.modes;
+		}
+		// Guarded, not `?? []`: an ABSENT `configOptions` means the adapter
+		// reported nothing this time, which is not the same claim as "this
+		// session has no options" and must not empty the bar.
+		if (response.configOptions) {
+			this.configCache.replaceAll(response.configOptions);
+		}
+		return this.configCache.list();
 	}
 
 	async setMode(modeId: string): Promise<void> {

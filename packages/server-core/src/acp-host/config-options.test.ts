@@ -146,6 +146,7 @@ describe("config gate over the wire", () => {
 			options: [
 				{
 					id: "model",
+					name: "Model",
 					values: [
 						{ id: "default", label: "Default" },
 						{ id: "claude-fable-5[1m]", label: "Fable" },
@@ -170,6 +171,7 @@ describe("ConfigOptionCache", () => {
 			}),
 		).toEqual({
 			id: "fast",
+			name: "Fast",
 			values: [
 				{ id: "true", label: "On" },
 				{ id: "false", label: "Off" },

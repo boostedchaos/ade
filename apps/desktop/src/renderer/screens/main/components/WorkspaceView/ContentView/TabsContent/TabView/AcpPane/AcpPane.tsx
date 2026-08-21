@@ -4,8 +4,10 @@ import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import { BasePaneWindow, PaneToolbarActions } from "../components";
 import { AcpComposer } from "./AcpComposer";
+import { AcpControlBar } from "./AcpControlBar";
 import { AcpMessageList } from "./AcpMessageList";
 import { type AcpPaneLifecycle, AcpStatusLine } from "./AcpStatusLine";
+import { useAcpControlBarStore } from "./controlBar";
 import {
 	type AcpTranscript,
 	emptyTranscript,
@@ -57,6 +59,8 @@ export function AcpPane({
 	);
 	const applyEvent = useAcpTranscriptStore((s) => s.apply);
 	const promptSent = useAcpTranscriptStore((s) => s.promptSent);
+	const applyControlBarEvent = useAcpControlBarStore((s) => s.apply);
+	const seedControlBar = useAcpControlBarStore((s) => s.seed);
 	const setAcpSessionId = useTabsStore((s) => s.setAcpSessionId);
 	const { onPromptSent, onEvent } = useAcpPaneStatus(paneId);
 
@@ -71,11 +75,13 @@ export function AcpPane({
 		electronTrpc.acp.ensureSession.useMutation();
 	const promptMutation = electronTrpc.acp.prompt.useMutation();
 	const cancelMutation = electronTrpc.acp.cancel.useMutation();
+	const { mutate: readConfigMutate } =
+		electronTrpc.acp.readConfig.useMutation();
 
 	// Ref, not state: the subscription callback must see the latest handlers
 	// without re-subscribing (a re-subscribe drops events mid-stream).
-	const handlersRef = useRef({ applyEvent, onEvent });
-	handlersRef.current = { applyEvent, onEvent };
+	const handlersRef = useRef({ applyEvent, applyControlBarEvent, onEvent });
+	handlersRef.current = { applyEvent, applyControlBarEvent, onEvent };
 
 	const startSession = useCallback(() => {
 		setLifecycle("starting");
@@ -87,6 +93,14 @@ export function AcpPane({
 					setLifecycle("ready");
 					// Written for Phase 6's resume. Phase 2 never reads it back.
 					setAcpSessionId(paneId, info.acpSessionId);
+					// The cached list first, so the bar is populated immediately, then
+					// a wire read-back: a session this pane is re-attaching to may have
+					// been reconfigured since the cache was last touched.
+					seedControlBar(paneId, info.configOptions);
+					readConfigMutate(
+						{ paneId },
+						{ onSuccess: (options) => seedControlBar(paneId, options) },
+					);
 				},
 				onError: (mutationError) => {
 					// VERBATIM: the Phase 1 codes name their own fix, and so does
@@ -97,7 +111,14 @@ export function AcpPane({
 				},
 			},
 		);
-	}, [paneId, cwd, setAcpSessionId, ensureSessionMutate]);
+	}, [
+		paneId,
+		cwd,
+		setAcpSessionId,
+		seedControlBar,
+		readConfigMutate,
+		ensureSessionMutate,
+	]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-only, by design (D6)
 	useEffect(() => {
@@ -109,6 +130,7 @@ export function AcpPane({
 		{
 			onData: (event) => {
 				handlersRef.current.applyEvent(paneId, event);
+				handlersRef.current.applyControlBarEvent(paneId, event);
 				handlersRef.current.onEvent(event);
 				switch (event.type) {
 					case "update":
@@ -183,9 +205,10 @@ export function AcpPane({
 			setFocusedPane={setFocusedPane}
 			renderToolbar={(handlers) => (
 				<div className="flex h-full w-full items-center justify-between">
-					<div className="flex h-full items-center px-2">
-						<span className="text-muted-foreground text-xs">ACP Session</span>
-					</div>
+					<AcpControlBar
+						disabled={lifecycle === "starting" || lifecycle === "dead"}
+						paneId={paneId}
+					/>
 					<PaneToolbarActions
 						splitOrientation={handlers.splitOrientation}
 						onSplitPane={handlers.onSplitPane}

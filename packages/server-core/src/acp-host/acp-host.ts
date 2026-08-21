@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { AcpSession } from "./acp-session";
 import { acpError } from "./errors";
 import type {
+	AcpConfigOption,
 	AcpPromptResult,
 	AcpSessionInfo,
 	AcpSessionOptions,
@@ -214,8 +215,20 @@ export class AcpHost extends EventEmitter {
 		paneId: string,
 		optionId: string,
 		value: string,
+		options: { allowUnlisted?: boolean } = {},
 	): Promise<void> {
-		await this.requireSession(paneId).setConfigOption(optionId, value);
+		await this.requireSession(paneId).setConfigOption(optionId, value, options);
+	}
+
+	/**
+	 * On-demand read-back of the adapter's config state, via `session/resume`.
+	 *
+	 * A caller that has just written MUST come through here: the adapter answers
+	 * success for a value it did not apply, so the wire read is the only place
+	 * the real current value exists.
+	 */
+	async readConfig(paneId: string): Promise<AcpConfigOption[]> {
+		return await this.requireSession(paneId).resume();
 	}
 
 	async setMode(paneId: string, modeId: string): Promise<void> {
