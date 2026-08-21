@@ -83,3 +83,31 @@ live, Phase 2). This phase is autocomplete UI plus the one host cache it needs.
 Argument autocomplete beyond the hint placeholder; structured command input;
 command history; fuzzy-ranking beyond prefix/substring; palette for non-ACP
 panes.
+
+## Amendments after adversarial review (2026-08-21, findings F1-F8)
+
+- **A1 (F1) — Exact match wins.** The D3 filter rule becomes: exact name match
+  first, then prefix matches, then substring — the review found four real
+  pairs in the live 103-command list ("loop"/"loop-library", "usage"/
+  "usage-credits", "design"/"design-sync", "claude-api"/its plugin twin) where
+  a fully typed name would silently accept a different command.
+- **A2 (F2) — The hint is an inline element, not the textarea placeholder.**
+  A placeholder renders only in an empty textarea, and accept always leaves
+  "/name " — so the placeholder variant renders never (and tests can't see
+  that). Render the hint as a muted inline strip adjacent to the composer
+  while the accepted command's args are still empty; clear on typing/send.
+- **A3 (F3) — The palette must fit the pane.** Every pane clips children
+  (`overflow-hidden` ancestor); a fixed 15rem panel loses its TOP rows —
+  the best matches — in short panes. Measure available space above the
+  composer on open and cap the panel's maxHeight to it (floor ~3 rows).
+- **A4 (F6) — The empty-palette message keys on session lifecycle.** "commands
+  not loaded yet" only while the session is starting/ready-pre-notification;
+  a dead/errored session says "session ended — commands unavailable". D4's
+  point is that empty and broken are distinguishable; list-length alone
+  cannot tell them apart.
+- **A5 (F4, F5, F7, F8) — mechanical fixes:** highlighted row scrolls into view
+  (`scrollIntoView({block:"nearest"})`, precedent in BrowserPane's
+  UrlSuggestions); Enter/Tab/Escape branches guard `isComposing` (precedent in
+  ai-elements prompt-input); clamp `selected` against the live matches length
+  when the list shrinks mid-open; `info()` deep-copies cached command objects
+  like ConfigOptionCache does.
