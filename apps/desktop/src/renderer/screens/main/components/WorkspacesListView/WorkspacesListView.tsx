@@ -291,7 +291,9 @@ export function WorkspacesListView() {
 							title="No agents yet"
 							description="An agent is a name, a repo, and a memory that outlives the session. Most people start with one that owns the repo they're in."
 							action={
-								<ArgusStateAction onClick={() => openNewWorkspaceModal()}>
+								<ArgusStateAction
+									onClick={() => openNewWorkspaceModal(allProjects[0]?.id)}
+								>
 									Create an agent
 								</ArgusStateAction>
 							}
