@@ -1,6 +1,7 @@
 # PLAN — ACP Pane for Argus
 
-**Status:** proposed, 2026-08-21. Not started.
+**Status:** Phase 0 **DONE and PASSED** (2026-08-21) — see `spikes/acp-phase0/FINDINGS.md`.
+Phases 1-6 not started.
 **Goal:** give Argus a rich GUI view of a Claude Code session — messages, thinking,
 tool calls, plans, a live model/effort switcher and a skills palette — without
 giving up the agent identity, git worktree and memory that Argus already owns.
@@ -110,7 +111,7 @@ it is a single argument to `session/new`.
 Each phase ends with a commit and a stated verification. A phase is not done until
 its check has been proven to *fire* (run it against a known-bad case first).
 
-### Phase 0 — Spike outside Argus (half a day)
+### Phase 0 — Spike outside Argus — DONE 2026-08-21, PASSED
 
 A standalone Node script that spawns `claude-agent-acp`, opens a session in a scratch
 repo, sends one prompt, and prints every `sessionUpdate` it receives.
@@ -154,9 +155,13 @@ correct status transitions, and the usage number moves.
 Drive `config_option_update` into a bar under the tab: **model, effort, agent,
 fast mode**. Changing one calls `setConfigOption` mid-session.
 
-**Verify:** switch to `claude-fable-5` and to effort `high` **without restarting the
-session**, and confirm the change took by reading back the next
-`config_option_update` — not by the UI's own optimistic state.
+**Verify:** switch model and effort **without restarting the session**, and confirm
+by an independent **`session/resume`** read-back. Phase 0 established two things
+that make this mandatory: `config_option_update` does **not** arrive during a
+normal turn, and an **invalid model id is accepted and silently downgrades the
+model to `default`** with no error. So the pane must validate a typed id against
+the reported option list, and a successful write proves nothing on its own.
+The real Fable id is `claude-fable-5[1m]`.
 **Must also accept a typed model id** so a model missing from the reported list is
 still reachable. This is the exact failure that killed Agent Canvas.
 
