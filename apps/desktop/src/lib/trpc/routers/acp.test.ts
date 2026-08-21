@@ -11,6 +11,7 @@
 import { describe, expect, it } from "bun:test";
 import { EventEmitter } from "node:events";
 import type {
+	AcpConfigOption,
 	AcpSessionInfo,
 	AcpSessionUpdate,
 } from "@ade/server-core/acp-host";
@@ -47,6 +48,32 @@ class FakeAcpHost extends EventEmitter {
 	promptError: Error | null = null;
 	/** Updates the fake emits before `prompt` settles. */
 	updatesDuringPrompt: AcpSessionUpdate[] = [];
+	setConfigOptionCalls: {
+		paneId: string;
+		optionId: string;
+		value: string;
+		options: { allowUnlisted?: boolean };
+	}[] = [];
+	readConfigCalls: string[] = [];
+	/** What the fake's read-back reports. The router's only source of truth. */
+	readConfigResult: AcpConfigOption[] = [];
+	/** Set to make `setConfigOption` reject (the local gate refusing a write). */
+	setConfigOptionError: Error | null = null;
+
+	async setConfigOption(
+		paneId: string,
+		optionId: string,
+		value: string,
+		options: { allowUnlisted?: boolean } = {},
+	): Promise<void> {
+		this.setConfigOptionCalls.push({ paneId, optionId, value, options });
+		if (this.setConfigOptionError) throw this.setConfigOptionError;
+	}
+
+	async readConfig(paneId: string): Promise<AcpConfigOption[]> {
+		this.readConfigCalls.push(paneId);
+		return this.readConfigResult;
+	}
 
 	createSession(options: {
 		paneId: string;
@@ -412,5 +439,197 @@ describe("cancel / dispose / state", () => {
 			paneId: "pane-1",
 			state: "ready",
 		});
+	});
+});
+
+// =============================================================================
+// Phase 4 — config write + read-back
+// =============================================================================
+
+function option(
+	id: string,
+	currentValue: string,
+	values: { id: string; label?: string }[] = [],
+): AcpConfigOption {
+	return { id, name: id, currentValue, values };
+}
+
+describe("setConfigOption", () => {
+	it("forwards paneId, configId, value and allowUnlisted to the host", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigResult = [option("model", "haiku")];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "haiku",
+			allowUnlisted: true,
+		});
+
+		expect(host.setConfigOptionCalls).toEqual([
+			{
+				paneId: "pane-1",
+				optionId: "model",
+				value: "haiku",
+				options: { allowUnlisted: true },
+			},
+		]);
+	});
+
+	it("passes allowUnlisted through as undefined when the caller omits it", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigResult = [option("effort", "high")];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "effort",
+			value: "high",
+		});
+
+		expect(host.setConfigOptionCalls[0]?.options).toEqual({
+			allowUnlisted: undefined,
+		});
+	});
+
+	it("ALWAYS reads back after the write, and returns the read-back list", async () => {
+		// Not an optional confirmation: the write's own result carries no
+		// information, so a mutation that skipped this would return a guess.
+		const host = new FakeAcpHost();
+		host.readConfigResult = [
+			option("model", "haiku", [{ id: "haiku" }]),
+			option("effort", "medium"),
+		];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "haiku",
+		});
+
+		expect(host.readConfigCalls).toEqual(["pane-1"]);
+		expect(result.configOptions).toEqual(host.readConfigResult);
+	});
+
+	it("verified:true when the read-back agrees with the request", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigResult = [option("model", "claude-fable-5[1m]")];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "claude-fable-5[1m]",
+		});
+
+		expect(result.applied).toEqual({
+			configId: "model",
+			requestedValue: "claude-fable-5[1m]",
+			actualValue: "claude-fable-5[1m]",
+			verified: true,
+		});
+	});
+
+	it("verified:false when the adapter silently resolved it elsewhere", async () => {
+		const host = new FakeAcpHost();
+		// The write was answered GREEN; the read-back says `default`.
+		host.readConfigResult = [option("model", "default")];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "fabl-5-typo",
+			allowUnlisted: true,
+		});
+
+		expect(result.applied).toEqual({
+			configId: "model",
+			requestedValue: "fabl-5-typo",
+			actualValue: "default",
+			verified: false,
+		});
+	});
+
+	it("reports actualValue null (not verified) when the option vanished", async () => {
+		// A model switch can remove `effort` outright; the read-back then has
+		// nothing to report and the write must not read as confirmed.
+		const host = new FakeAcpHost();
+		host.readConfigResult = [option("model", "haiku")];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "effort",
+			value: "high",
+		});
+
+		expect(result.applied.actualValue).toBeNull();
+		expect(result.applied.verified).toBe(false);
+	});
+
+	it("propagates the local gate's rejection and never reads back", async () => {
+		const host = new FakeAcpHost();
+		host.setConfigOptionError = new Error("acp-invalid-config-value: nope");
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		await expect(
+			caller.setConfigOption({
+				paneId: "pane-1",
+				configId: "effort",
+				value: "ludicrous",
+			}),
+		).rejects.toThrow(/acp-invalid-config-value/);
+		expect(host.readConfigCalls).toEqual([]);
+	});
+
+	it("rejects a paneId with path separators", async () => {
+		const host = new FakeAcpHost();
+		const { caller } = makeCaller(host);
+
+		await expect(
+			caller.setConfigOption({
+				paneId: "../etc",
+				configId: "model",
+				value: "haiku",
+			}),
+		).rejects.toThrow();
+		expect(host.setConfigOptionCalls).toEqual([]);
+	});
+});
+
+describe("readConfig", () => {
+	it("forwards the paneId and returns the host's list", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigResult = [
+			option("model", "default", [{ id: "default", label: "Default" }]),
+		];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const options = await caller.readConfig({ paneId: "pane-1" });
+
+		expect(host.readConfigCalls).toEqual(["pane-1"]);
+		expect(options).toEqual(host.readConfigResult);
+	});
+
+	it("hits the wire on every call — it must not be a cached query", async () => {
+		const host = new FakeAcpHost();
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		await caller.readConfig({ paneId: "pane-1" });
+		await caller.readConfig({ paneId: "pane-1" });
+
+		expect(host.readConfigCalls).toEqual(["pane-1", "pane-1"]);
 	});
 });
