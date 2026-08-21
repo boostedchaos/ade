@@ -52,7 +52,7 @@ export function AcpComposer({
 						? "Message the agent…  (Enter to send, Shift+Enter for newline)"
 						: "No live session"
 				}
-				className="min-h-[3rem] flex-1 resize-none rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
+				className="min-h-[3rem] flex-1 resize-none rounded-md border border-border bg-background px-2 py-1.5 text-base outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
 			/>
 			{isBusy ? (
 				<Button variant="outline" size="sm" onClick={onCancel}>

@@ -48,12 +48,41 @@ export function AcpMessageList({ entries, isStreaming }: AcpMessageListProps) {
 		<div
 			ref={containerRef}
 			onScroll={handleScroll}
-			className="h-full w-full overflow-y-auto px-3 py-2 text-sm"
+			className="h-full w-full overflow-y-auto px-3 py-2 text-base"
 		>
 			{entries.map((entry) => (
 				<AcpMessage key={entry.id} entry={entry} />
 			))}
+			{isStreaming && !hasOpenAssistantEntry(entries) && <AcpThinkingRow />}
 			<div ref={bottomRef} />
+		</div>
+	);
+}
+
+/**
+ * True while an assistant entry is already accumulating text — that entry draws
+ * its own caret, so the standalone thinking row would be a second indicator.
+ */
+function hasOpenAssistantEntry(entries: AcpEntry[]): boolean {
+	const last = entries[entries.length - 1];
+	return last?.role === "assistant" && last.closed === false;
+}
+
+/**
+ * The adapter does not stream token-by-token: a turn can sit silent for over a
+ * second before its first chunk arrives, and no assistant entry exists yet to
+ * carry the caret. Without this the pane looks dead for that whole window.
+ */
+function AcpThinkingRow() {
+	return (
+		<div className="mb-3">
+			<div className="mb-0.5 font-medium text-muted-foreground text-sm">
+				Agent
+			</div>
+			<div className="flex items-center gap-1.5 text-muted-foreground">
+				<span className="size-1.5 animate-pulse rounded-full bg-current" />
+				<span className="text-sm">Thinking…</span>
+			</div>
 		</div>
 	);
 }
@@ -72,7 +101,7 @@ function AcpMessage({ entry }: { entry: AcpEntry }) {
 	const isUser = entry.role === "user";
 	return (
 		<div className="mb-3">
-			<div className="mb-0.5 font-medium text-muted-foreground text-xs">
+			<div className="mb-0.5 font-medium text-muted-foreground text-sm">
 				{isUser ? "You" : "Agent"}
 			</div>
 			<div
