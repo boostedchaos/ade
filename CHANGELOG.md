@@ -8,6 +8,32 @@ were recorded only as GitHub release notes — see the
 Every entry below still says "ADE" because that is the name those versions
 shipped under. They are history and are left as written.
 
+## Unreleased
+
+### ACP panes (Phases 1–2)
+
+A session tab can now be an **ACP pane** instead of a terminal: a conversation
+view driven by the Agent Client Protocol, with the agent running as its own
+supervised subprocess.
+
+- `@ade/server-core/acp-host` — one `claude-agent-acp` child per pane, keyed by
+  `paneId`, with an injectable spawn seam, a reused `tree-kill` teardown ladder,
+  and local validation of config values (the adapter accepts an illegal value,
+  returns success and silently downgrades to `default`, so a write's own reply
+  proves nothing).
+- Desktop: an `acp` pane type, a tRPC router with a per-pane event subscription,
+  in-band pane status, and an entry point under the tab-strip `+`.
+- The adapter is staged into the installer **without** the vendored platform CLI
+  (245 MB); `CLAUDE_CODE_EXECUTABLE` points it at the Claude Code already on the
+  machine, so there is one CLI with your own hooks, skills and version.
+- Slash commands and custom skills work in an ACP pane today; an autocomplete
+  palette is still to come.
+- The renderer's pane switch is now exhaustive at compile time — an unhandled
+  pane type is a build error instead of silently rendering a terminal.
+
+Not yet included: tool-call and thinking rendering, the model/effort control
+bar, and conversation resume across a restart.
+
 ## 0.4.2 — 2026-08-12 (macOS)
 
 Note the version collision: `0.4.2` shipped twice, one day apart, as **different

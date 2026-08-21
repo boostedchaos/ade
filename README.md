@@ -66,6 +66,9 @@ Argus orchestrates coding CLIs; it does not bundle them. On the machine that run
   npm i -g opencode-ai          # optional: OpenCode runtime
   ```
 
+  Claude Code is **required** for ACP panes specifically: Argus bundles the ACP
+  adapter but not the CLI it drives, and points it at your installed `claude`.
+
 - **Node.js LTS** — runs `ade-server` (and installs the CLIs above).
 - **An OpenRouter API key** — only for the open-model sessions; entered once, in-app, encrypted at rest.
 
