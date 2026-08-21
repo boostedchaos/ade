@@ -49,6 +49,8 @@ export type ToolHeaderProps = {
 	type?: string;
 	state: ToolDisplayState;
 	className?: string;
+	/** Rendered after the title, inside the collapsed row (e.g. a name chip). */
+	children?: ReactNode;
 };
 
 function getToolDisplayName(title?: string, type?: string): string {
@@ -78,6 +80,7 @@ export const ToolHeader = ({
 	title,
 	type,
 	state,
+	children,
 	...props
 }: ToolHeaderProps) => (
 	<CollapsibleTrigger
@@ -92,6 +95,7 @@ export const ToolHeader = ({
 			<span className="truncate font-medium text-foreground">
 				{getToolDisplayName(title, type)}
 			</span>
+			{children}
 		</div>
 		<div className="ml-2 flex shrink-0 items-center gap-1.5 text-muted-foreground">
 			{getStatusIcon(state)}

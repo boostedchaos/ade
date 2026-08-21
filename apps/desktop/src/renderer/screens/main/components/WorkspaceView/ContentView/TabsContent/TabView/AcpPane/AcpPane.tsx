@@ -7,6 +7,7 @@ import { AcpComposer } from "./AcpComposer";
 import { AcpControlBar } from "./AcpControlBar";
 import { AcpMessageList } from "./AcpMessageList";
 import { type AcpPaneLifecycle, AcpStatusLine } from "./AcpStatusLine";
+import { AcpUsageMeter } from "./AcpUsageMeter";
 import { useAcpControlBarStore } from "./controlBar";
 import {
 	type AcpTranscript,
@@ -38,7 +39,8 @@ interface AcpPaneProps {
 }
 
 /**
- * The ACP conversation pane: text in, text out.
+ * The ACP conversation pane: prompt in; text, tool cards, thinking blocks,
+ * plan and usage out.
  *
  * Session creation is LAZY — on first mount, not on pane creation — because a
  * pane restored into a background tab nobody opens should not spawn an adapter
@@ -213,17 +215,27 @@ export function AcpPane({
 			removePane={removePane}
 			setFocusedPane={setFocusedPane}
 			renderToolbar={(handlers) => (
-				<div className="flex h-full w-full items-center justify-between">
+				<div className="flex h-full w-full items-center justify-between gap-2">
 					<AcpControlBar
 						disabled={lifecycle === "starting" || lifecycle === "dead"}
 						paneId={paneId}
 					/>
-					<PaneToolbarActions
-						splitOrientation={handlers.splitOrientation}
-						onSplitPane={handlers.onSplitPane}
-						onClosePane={handlers.onClosePane}
-						closeHotkeyId="CLOSE_TERMINAL"
-					/>
+					{/* Grouped so the meter sits beside the actions rather than being
+					    spread to the middle by `justify-between`. */}
+					<div className="flex shrink-0 items-center gap-2">
+						{transcript.usage && (
+							<AcpUsageMeter
+								lastCost={transcript.lastCost}
+								usage={transcript.usage}
+							/>
+						)}
+						<PaneToolbarActions
+							splitOrientation={handlers.splitOrientation}
+							onSplitPane={handlers.onSplitPane}
+							onClosePane={handlers.onClosePane}
+							closeHotkeyId="CLOSE_TERMINAL"
+						/>
+					</div>
 				</div>
 			)}
 		>
@@ -232,6 +244,7 @@ export function AcpPane({
 					<AcpMessageList
 						entries={transcript.entries}
 						isStreaming={lifecycle === "streaming"}
+						plan={transcript.plan}
 					/>
 				</div>
 				<AcpStatusLine

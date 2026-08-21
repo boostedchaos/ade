@@ -1,17 +1,29 @@
 import { useEffect, useRef } from "react";
-import type { AcpEntry } from "./transcript";
+import { AcpPlanPanel } from "./AcpPlanPanel";
+import { AcpThinkingBlock } from "./AcpThinkingBlock";
+import { AcpToolCard } from "./AcpToolCard";
+import type { AcpEntry, AcpPlanEntry } from "./transcript";
 
 interface AcpMessageListProps {
 	entries: AcpEntry[];
 	/** True while a turn is streaming; drives the stick-to-bottom behaviour. */
 	isStreaming: boolean;
+	/** The agent's plan, or null until one arrives. Pinned above the scrollback. */
+	plan: AcpPlanEntry[] | null;
 }
 
 /**
- * Plain-text scrollback. No markdown rendering and no virtualization — both
- * are Phase 3 concerns, and neither is needed to verify text in / text out.
+ * The scrollback: assistant/user text, tool cards, and thinking blocks, in
+ * arrival order.
+ *
+ * Assistant text is still plain — markdown rendering and virtualization are
+ * both known gaps, and neither blocks reading a turn.
  */
-export function AcpMessageList({ entries, isStreaming }: AcpMessageListProps) {
+export function AcpMessageList({
+	entries,
+	isStreaming,
+	plan,
+}: AcpMessageListProps) {
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	/** Only auto-scroll while the user is already at the bottom. */
@@ -36,25 +48,26 @@ export function AcpMessageList({ entries, isStreaming }: AcpMessageListProps) {
 		bottomRef.current?.scrollIntoView({ block: "end" });
 	}, [entries, isStreaming]);
 
-	if (entries.length === 0) {
-		return (
-			<div className="flex h-full w-full items-center justify-center px-6 text-center text-muted-foreground text-xs">
-				No messages yet. Type below to start the conversation.
-			</div>
-		);
-	}
-
 	return (
-		<div
-			ref={containerRef}
-			onScroll={handleScroll}
-			className="h-full w-full overflow-y-auto px-3 py-2 text-base"
-		>
-			{entries.map((entry) => (
-				<AcpMessage key={entry.id} entry={entry} />
-			))}
-			{isStreaming && !hasOpenAssistantEntry(entries) && <AcpThinkingRow />}
-			<div ref={bottomRef} />
+		<div className="flex h-full w-full flex-col">
+			{plan && plan.length > 0 && <AcpPlanPanel entries={plan} />}
+			{entries.length === 0 ? (
+				<div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-muted-foreground text-xs">
+					No messages yet. Type below to start the conversation.
+				</div>
+			) : (
+				<div
+					ref={containerRef}
+					onScroll={handleScroll}
+					className="min-h-0 flex-1 overflow-y-auto px-3 py-2 text-base"
+				>
+					{entries.map((entry) => (
+						<AcpMessage key={entry.id} entry={entry} />
+					))}
+					{isStreaming && !hasOpenAssistantEntry(entries) && <AcpThinkingRow />}
+					<div ref={bottomRef} />
+				</div>
+			)}
 		</div>
 	);
 }
@@ -88,6 +101,14 @@ function AcpThinkingRow() {
 }
 
 function AcpMessage({ entry }: { entry: AcpEntry }) {
+	if (entry.role === "tool") {
+		return <AcpToolCard call={entry.call} />;
+	}
+
+	if (entry.role === "thinking") {
+		return <AcpThinkingBlock text={entry.text} />;
+	}
+
 	if (entry.role === "divider") {
 		return (
 			<div className="my-3 flex items-center gap-2 text-muted-foreground text-xs">

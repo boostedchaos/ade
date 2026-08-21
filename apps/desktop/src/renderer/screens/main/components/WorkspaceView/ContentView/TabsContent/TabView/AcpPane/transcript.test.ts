@@ -1,5 +1,5 @@
 /**
- * The transcript reducer — the whole of Phase 2's rendering logic, as a pure
+ * The transcript reducer — the whole of the pane's rendering logic, as a pure
  * function, testable without Electron, IPC, an adapter, or a login.
  */
 
@@ -167,10 +167,11 @@ describe("session end", () => {
 	});
 });
 
-describe("kinds Phase 2 does not render", () => {
+describe("kinds nothing renders", () => {
+	// Phase 3 took `agent_thought_chunk`, `tool_call`, `tool_call_update`,
+	// `plan` and `usage_update` OUT of this list — they render now. What is left
+	// is the session metadata the pane has no view for, plus `unknown`.
 	const ignored: AcpPaneEvent[] = [
-		{ type: "update", update: { kind: "agent_thought_chunk", text: "hmm" } },
-		{ type: "update", update: { kind: "plan", entries: [] } },
 		{
 			type: "update",
 			update: { kind: "available_commands_update", commands: [] },
@@ -184,18 +185,14 @@ describe("kinds Phase 2 does not render", () => {
 			type: "update",
 			update: { kind: "session_info_update", title: null, updatedAt: null },
 		},
-		{
-			type: "update",
-			update: { kind: "usage_update", used: 1, size: 2, cost: null },
-		},
 		{ type: "update", update: { kind: "unknown", raw: { anything: true } } },
 	];
 
 	it("counts them and renders none of them", () => {
 		const state = play(ignored);
 		expect(state.entries).toHaveLength(0);
-		expect(state.ignoredKinds.agent_thought_chunk).toBe(1);
-		expect(state.ignoredKinds.usage_update).toBe(1);
+		expect(state.ignoredKinds.available_commands_update).toBe(1);
+		expect(state.ignoredKinds.current_mode_update).toBe(1);
 		// `unknown` is what a FUTURE adapter version's new kind arrives as. It
 		// must be counted, not thrown on — a version bump cannot break the pane.
 		expect(state.ignoredKinds.unknown).toBe(1);
@@ -212,7 +209,10 @@ describe("kinds Phase 2 does not render", () => {
 		const state = play(
 			[
 				chunk("real"),
-				{ type: "update", update: { kind: "agent_thought_chunk", text: "x" } },
+				{
+					type: "update",
+					update: { kind: "current_mode_update", modeId: "m" },
+				},
 				chunk(" text"),
 			],
 			opened,
