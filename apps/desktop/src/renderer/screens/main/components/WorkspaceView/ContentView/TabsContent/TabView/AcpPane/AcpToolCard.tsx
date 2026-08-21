@@ -10,8 +10,9 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@superset/ui/collapsible";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { HiChevronDown } from "react-icons/hi2";
+import { type DiffSide, hiddenLinesLabel, planDiff } from "./toolCard";
 import type { AcpToolCallContent, AcpToolCallState } from "./transcript";
 
 /**
@@ -28,7 +29,16 @@ const STATUS_DISPLAY: Record<string, ToolDisplayState> = {
 	failed: "output-error",
 };
 
-export function AcpToolCard({ call }: { call: AcpToolCallState }) {
+/**
+ * Memoised on `call`: the reducer replaces the tool state object only on a
+ * frame that named this id, so reference equality is exact — without it every
+ * card in the transcript re-renders on every streamed chunk of assistant text.
+ */
+export const AcpToolCard = memo(function AcpToolCard({
+	call,
+}: {
+	call: AcpToolCallState;
+}) {
 	const failed = call.status === "failed";
 	const [open, setOpen] = useState(false);
 
@@ -72,14 +82,14 @@ export function AcpToolCard({ call }: { call: AcpToolCallState }) {
 			</ToolContent>
 		</Tool>
 	);
-}
+});
 
 function AcpToolContentBlock({ block }: { block: AcpToolCallContent }) {
 	if (block.type === "diff") {
 		return (
 			<AcpDiffBlock
 				newText={block.newText}
-				oldText={block.oldText ?? ""}
+				oldText={block.oldText}
 				path={block.path}
 			/>
 		);
@@ -107,6 +117,10 @@ function AcpToolContentBlock({ block }: { block: AcpToolCallContent }) {
 /**
  * A minimal removed-then-added block rather than `FileDiffTool`, which brings
  * its own card header and file dropdown — a second header inside this one.
+ *
+ * Which rows exist is `planDiff`'s call, not this component's: a new file has
+ * no removed side, and a side longer than the cap ends in a count instead of
+ * thousands of nodes.
  */
 function AcpDiffBlock({
 	path,
@@ -114,31 +128,62 @@ function AcpDiffBlock({
 	newText,
 }: {
 	path: string;
-	oldText: string;
+	oldText: string | null | undefined;
 	newText: string;
 }) {
+	const { removed, added } = planDiff(oldText, newText);
+
 	return (
 		<div className="overflow-hidden rounded border border-border/60">
 			<div className="truncate border-border/60 border-b px-2 py-1 text-muted-foreground">
 				{path}
 			</div>
 			<div className="overflow-x-auto font-mono">
-				{oldText.split("\n").map((line, index) => (
-					// biome-ignore lint/suspicious/noArrayIndexKey: line position IS the identity here
-					<div className="bg-destructive/10 px-2" key={`old-${index}`}>
-						<span className="select-none text-muted-foreground">- </span>
-						{line}
-					</div>
-				))}
-				{newText.split("\n").map((line, index) => (
-					// biome-ignore lint/suspicious/noArrayIndexKey: line position IS the identity here
-					<div className="bg-primary/10 px-2" key={`new-${index}`}>
-						<span className="select-none text-muted-foreground">+ </span>
-						{line}
-					</div>
-				))}
+				{removed && (
+					<AcpDiffSide
+						className="bg-destructive/10"
+						keyPrefix="old"
+						marker="- "
+						side={removed}
+					/>
+				)}
+				<AcpDiffSide
+					className="bg-primary/10"
+					keyPrefix="new"
+					marker="+ "
+					side={added}
+				/>
 			</div>
 		</div>
+	);
+}
+
+function AcpDiffSide({
+	side,
+	marker,
+	className,
+	keyPrefix,
+}: {
+	side: DiffSide;
+	marker: string;
+	className: string;
+	keyPrefix: string;
+}) {
+	return (
+		<>
+			{side.lines.map((line, index) => (
+				// biome-ignore lint/suspicious/noArrayIndexKey: line position IS the identity here
+				<div className={`px-2 ${className}`} key={`${keyPrefix}-${index}`}>
+					<span className="select-none text-muted-foreground">{marker}</span>
+					{line}
+				</div>
+			))}
+			{side.hidden > 0 && (
+				<div className="px-2 py-1 text-muted-foreground italic">
+					{hiddenLinesLabel(side.hidden)}
+				</div>
+			)}
+		</>
 	);
 }
 

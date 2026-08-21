@@ -18,9 +18,16 @@ export function AcpUsageMeter({
 	return (
 		<Tooltip>
 			<TooltipTrigger asChild>
-				<div className="flex h-6 shrink-0 items-center rounded border border-border/60 px-2 text-muted-foreground text-xs">
+				{/* A button, not a div: the exact token counts and the session cost
+				    live ONLY in the tooltip, so a hover-only trigger puts them out of
+				    reach of the keyboard entirely. `type="button"` keeps it out of any
+				    enclosing form's submit path. */}
+				<button
+					className="flex h-6 shrink-0 items-center rounded border border-border/60 px-2 text-muted-foreground text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+					type="button"
+				>
 					{usageLabel(usage)}
-				</div>
+				</button>
 			</TooltipTrigger>
 			<TooltipContent>
 				<div>{`${usage.used.toLocaleString()} of ${usage.size.toLocaleString()} tokens`}</div>
@@ -34,7 +41,12 @@ export function AcpUsageMeter({
 export function usageLabel(usage: AcpUsage): string {
 	const head = `${formatTokens(usage.used)} / ${formatTokens(usage.size)}`;
 	if (usage.size <= 0) return head;
-	return `${head} · ${Math.round((usage.used / usage.size) * 100)}%`;
+	// Clamped: `used` is the adapter's count against a `size` it reports
+	// separately, and the two have no shared source of truth — a compaction or a
+	// stale window figure can put used past size, and "104%" of a context window
+	// reads as a bug in the pane rather than in the numbers it was handed.
+	const percent = Math.min(100, Math.round((usage.used / usage.size) * 100));
+	return `${head} · ${percent}%`;
 }
 
 /** k/M, one decimal at most, and no trailing `.0`. */

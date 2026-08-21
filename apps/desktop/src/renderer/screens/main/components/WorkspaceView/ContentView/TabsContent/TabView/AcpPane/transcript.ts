@@ -204,9 +204,18 @@ export function reduceAcpEvent(
 								event.signal ? ` (${event.signal})` : ""
 							}`,
 				),
-				// The plan belonged to the child that just died (D4). The entries
-				// stay: the divider is what separates the generations.
+				// Everything scoped to the child that just died goes with it. The
+				// plan is its plan (D4); `usage`/`lastCost` are per-SESSION by the
+				// SDK's own definition, so carrying them into a new session states
+				// the dead one's numbers as the live one's; and a surviving
+				// `toolCallIdToEntry` lets the next session's reused toolCallId merge
+				// into a card ABOVE the divider, reverting a completed card to
+				// pending. The entries and the divider STAY: the divider is what
+				// separates the generations.
 				plan: null,
+				usage: null,
+				lastCost: null,
+				toolCallIdToEntry: {},
 			};
 		case "session_error":
 			return appendDivider(closeOpen(closeThinking(state)), event.message);
@@ -351,6 +360,17 @@ function applyToolCall(
 	const existing = index === undefined ? undefined : state.entries[index];
 
 	if (existing?.role === "tool") {
+		// A FULL `tool_call` frame for an id we already have a card for is a
+		// replay, not news: the adapter announces each id exactly once, so the
+		// duplicate carries the opening frame's generic title, `pending` status
+		// and empty collections — all non-null, so merging it would revert the
+		// title, un-complete the card and wipe the content the refinements
+		// filled in. Nothing upstream sends one today; a session/load replay or
+		// an adapter bump is one step away from it. Updates are unaffected —
+		// they are how the wire keeps talking about a card, including after it
+		// completes.
+		if (!isUpdate) return state;
+
 		const entries = state.entries.map((entry, at) =>
 			at === index && entry.role === "tool"
 				? { ...entry, call: mergeToolCall(entry.call, patch) }

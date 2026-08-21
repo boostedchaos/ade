@@ -628,17 +628,10 @@ describe("D4 — plan", () => {
 		]);
 	});
 
-	it("is cleared on session_exit, while usage and lastCost survive", () => {
-		// The plan belonged to the child that died; the usage meter's figures
-		// are the last thing the user was told and must not blank themselves.
+	it("is cleared on session_exit", () => {
+		// The plan belonged to the child that died.
 		const alive = play([
 			planFrame([{ content: "one", priority: "medium", status: "pending" }]),
-			update({
-				kind: "usage_update",
-				used: 100,
-				size: 1000,
-				cost: { amount: 0.5, currency: "USD" },
-			}),
 		]);
 		const dead = play(
 			[{ type: "session_exit", code: 0, signal: null, expected: true }],
@@ -646,12 +639,6 @@ describe("D4 — plan", () => {
 		);
 
 		expect(dead.plan).toBeNull();
-		expect(dead.usage).toEqual({
-			used: 100,
-			size: 1000,
-			cost: { amount: 0.5, currency: "USD" },
-		});
-		expect(dead.lastCost).toEqual({ amount: 0.5, currency: "USD" });
 	});
 
 	it("survives turn_end — the plan outlives one turn", () => {
@@ -723,6 +710,171 @@ describe("D3 — usage and cost", () => {
 			update({ kind: "usage_update", used: 1, size: 10, cost: null }),
 		]);
 		expect(state.entries).toHaveLength(0);
+	});
+});
+
+// =============================================================================
+// F2 — session_exit ends a GENERATION, not just a plan
+// =============================================================================
+
+describe("F2 — session_exit clears the dead session's per-session state", () => {
+	const exit: AcpPaneEvent = {
+		type: "session_exit",
+		code: 0,
+		signal: null,
+		expected: true,
+	};
+
+	/** One turn's worth of tool + usage traffic, so a session has state to lose. */
+	function liveSession(): AcpTranscript {
+		return play([
+			update({
+				kind: "tool_call",
+				toolCall: { toolCallId: "t1", title: "Read File", status: "pending" },
+			}),
+			update({
+				kind: "tool_call_update",
+				toolCall: {
+					toolCallId: "t1",
+					title: "Read alpha.txt",
+					status: "completed",
+				},
+			}),
+			update({
+				kind: "usage_update",
+				used: 43397,
+				size: 1000000,
+				cost: { amount: 0.670733, currency: "USD" },
+			}),
+		]);
+	}
+
+	it("clears usage — the chip must not show the dead session's tokens", () => {
+		expect(play([exit], liveSession()).usage).toBeNull();
+	});
+
+	it("clears lastCost — the SDK defines cost as per-session", () => {
+		expect(play([exit], liveSession()).lastCost).toBeNull();
+	});
+
+	it("clears toolCallIdToEntry", () => {
+		expect(play([exit], liveSession()).toolCallIdToEntry).toEqual({});
+	});
+
+	it("gives a reused toolCallId a NEW card below the divider", () => {
+		// `fixtureToolCallSequence` uses a constant id, so any dev replay — and
+		// Phase 6 resume — reuses one across the divider. Merging into the dead
+		// session's card reverts a completed card to pending.
+		const dead = play([exit], liveSession());
+		const reborn = play(
+			[
+				update({
+					kind: "tool_call",
+					toolCall: { toolCallId: "t1", title: "Read File", status: "pending" },
+				}),
+			],
+			dead,
+		);
+
+		const cards = toolEntries(reborn);
+		expect(cards).toHaveLength(2);
+		expect(cards[0]?.call.status).toBe("completed");
+		expect(cards[0]?.call.title).toBe("Read alpha.txt");
+		expect(cards[1]?.call.status).toBe("pending");
+
+		// …and the new card sits AFTER the divider, not above it.
+		const dividerAt = reborn.entries.findIndex(
+			(entry) => entry.role === "divider",
+		);
+		const newCardAt = reborn.entries.indexOf(cards[1] as AcpEntry);
+		expect(dividerAt).toBeGreaterThan(-1);
+		expect(newCardAt).toBeGreaterThan(dividerAt);
+	});
+
+	it("keeps the entries and the divider — the transcript is the history", () => {
+		const dead = play([exit], liveSession());
+		expect(toolEntries(dead)).toHaveLength(1);
+		expect(dead.entries.some((entry) => entry.role === "divider")).toBe(true);
+	});
+});
+
+// =============================================================================
+// F3 — a duplicate full tool_call must not un-complete a card
+// =============================================================================
+
+describe("F3 — a second full tool_call for a known id", () => {
+	const completed = () =>
+		play([
+			update({
+				kind: "tool_call",
+				toolCall: { toolCallId: "t1", title: "Edit", status: "pending" },
+			}),
+			update({
+				kind: "tool_call_update",
+				toolCall: {
+					toolCallId: "t1",
+					title: "Edit beta.txt",
+					status: "completed",
+					content: [
+						{
+							type: "diff",
+							path: "/beta.txt",
+							oldText: "old",
+							newText: "new",
+						},
+					],
+				},
+			}),
+		]);
+
+	/** What a session/load replay or an adapter bump would re-send verbatim. */
+	const duplicate = update({
+		kind: "tool_call",
+		toolCall: {
+			toolCallId: "t1",
+			title: "Edit",
+			status: "pending",
+			content: [],
+			locations: [],
+		},
+	});
+
+	it("does not revert a completed card to pending", () => {
+		expect(play([duplicate], completed()).entries[0]).toMatchObject({
+			role: "tool",
+			call: { status: "completed" },
+		});
+	});
+
+	it("does not revert the refined title to the generic one", () => {
+		expect(toolEntries(play([duplicate], completed()))[0]?.call.title).toBe(
+			"Edit beta.txt",
+		);
+	});
+
+	it("does not wipe the content the refinements filled in", () => {
+		expect(
+			toolEntries(play([duplicate], completed()))[0]?.call.content,
+		).toHaveLength(1);
+	});
+
+	it("creates no second card", () => {
+		expect(toolEntries(play([duplicate], completed()))).toHaveLength(1);
+	});
+
+	it("still lets a tool_call_update refine a completed card", () => {
+		// The guard is scoped to full frames: updates are the wire's normal way
+		// to keep talking about a card, including after it completes.
+		const state = play(
+			[
+				update({
+					kind: "tool_call_update",
+					toolCall: { toolCallId: "t1", status: "failed" },
+				}),
+			],
+			completed(),
+		);
+		expect(toolEntries(state)[0]?.call.status).toBe("failed");
 	});
 });
 
