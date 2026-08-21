@@ -13,7 +13,7 @@
     },
     "apps/desktop": {
       "name": "@ade/desktop",
-      "version": "0.4.0",
+      "version": "0.4.2",
       "dependencies": {
         "@ade/server-core": "workspace:*",
         "@ai-sdk/react": "^3.0.0",
@@ -463,6 +463,9 @@
       "bin": {
         "ade": "./src/index.ts",
       },
+      "dependencies": {
+        "@superset/shared": "workspace:*",
+      },
       "devDependencies": {
         "@superset/typescript": "workspace:*",
         "bun-types": "^1.3.1",
@@ -581,6 +584,7 @@
       "name": "@ade/server-core",
       "version": "0.1.0",
       "dependencies": {
+        "@agentclientprotocol/sdk": "1.3.0",
         "@superset/local-db": "workspace:*",
         "@superset/shared": "workspace:*",
         "@xterm/addon-serialize": "0.15.0-beta.148",
@@ -739,6 +743,8 @@
     "@ade/server-core": ["@ade/server-core@workspace:packages/server-core"],
 
     "@ade/webui": ["@ade/webui@workspace:apps/webui"],
+
+    "@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@1.3.0", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-i3h/efaeuMUFAO1HSfo97QZQnnvMd7wWBYtBsdL6UMZg3a78sk3Ffya5Xu7C7tYsXomXoDXJBAzQF2PcFKAhIQ=="],
 
     "@ai-sdk/anthropic": ["@ai-sdk/anthropic@3.0.49", "", { "dependencies": { "@ai-sdk/provider": "3.0.8", "@ai-sdk/provider-utils": "4.0.15" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-EU/odEtJeqAWY9gRgCBQEK3m1p9nXPdGuvy4XF4q5TFJqUD+x5ykGUpJUL7Eo+pzXddHP+VyP8yW12FpB9EsYA=="],
 

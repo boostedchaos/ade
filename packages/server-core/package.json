@@ -5,6 +5,10 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		"./acp-host": {
+			"types": "./src/acp-host/index.ts",
+			"default": "./src/acp-host/index.ts"
+		},
 		"./terminal": {
 			"types": "./src/terminal/index.ts",
 			"default": "./src/terminal/index.ts"
@@ -36,6 +40,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@agentclientprotocol/sdk": "1.3.0",
 		"@superset/local-db": "workspace:*",
 		"@superset/shared": "workspace:*",
 		"@xterm/addon-serialize": "0.15.0-beta.148",
