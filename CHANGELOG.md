@@ -10,6 +10,23 @@ shipped under. They are history and are left as written.
 
 ## Unreleased
 
+### ACP rich rendering (Phase 3)
+
+The ACP pane now renders the full session stream instead of text only: tool
+calls become collapsible cards (status icon, refined title, diff/text content,
+raw input; failed cards auto-expand once), thinking arrives in a collapsed
+"Thinking" block rendered as plain text like the rest of the agent's prose, the
+agent's plan shows as a pinned "Plan · n/m done" strip, and a usage chip in the
+toolbar tracks context tokens live (cost in its tooltip at turn end). The
+reducer merges sparse tool updates latest-wins (collections replace; a
+duplicate full frame for a known card is ignored), clears per-session state —
+usage, cost, tool-card index — when the session exits, caps rendered diffs at
+200 lines per side, and skips the removed side for new-file diffs. Ground truth
+came from a captured live wire stream (`planning/spikes/acp-phase3-capture/`);
+the deterministic gate replays those 43 frames verbatim in the test suite.
+Observed and designed for: tools go pending → completed with no in_progress,
+and thinking can be legitimately absent on current models.
+
 ### ACP control bar (Phase 4)
 
 The ACP pane's toolbar now carries a live control bar — model, effort, fast
