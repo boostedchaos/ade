@@ -61,6 +61,7 @@ export function AcpPane({
 	const promptSent = useAcpTranscriptStore((s) => s.promptSent);
 	const applyControlBarEvent = useAcpControlBarStore((s) => s.apply);
 	const seedControlBar = useAcpControlBarStore((s) => s.seed);
+	const controlBarMounted = useAcpControlBarStore((s) => s.mounted);
 	const setAcpSessionId = useTabsStore((s) => s.setAcpSessionId);
 	const { onPromptSent, onEvent } = useAcpPaneStatus(paneId);
 
@@ -96,10 +97,13 @@ export function AcpPane({
 					// The cached list first, so the bar is populated immediately, then
 					// a wire read-back: a session this pane is re-attaching to may have
 					// been reconfigured since the cache was last touched.
-					seedControlBar(paneId, info.configOptions);
+					seedControlBar(paneId, info.configOptions, info.configSeq);
 					readConfigMutate(
 						{ paneId },
-						{ onSuccess: (options) => seedControlBar(paneId, options) },
+						{
+							onSuccess: (result) =>
+								seedControlBar(paneId, result.configOptions, result.seq),
+						},
 					);
 				},
 				onError: (mutationError) => {
@@ -122,6 +126,11 @@ export function AcpPane({
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-only, by design (D6)
 	useEffect(() => {
+		// A write that was in flight when this pane last unmounted has no live
+		// mutation observer left to settle it (TanStack Query v5 drops per-call
+		// callbacks on unmount), and a stranded `pending` disables the whole bar
+		// with no spinner and no error to explain it (A3).
+		controlBarMounted(paneId);
 		startSession();
 	}, []);
 

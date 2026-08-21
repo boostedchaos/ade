@@ -21,7 +21,7 @@ import type { SessionConfigOption } from "@agentclientprotocol/sdk";
 import { AcpSession, type AcpSessionHandlers } from "./acp-session";
 import { setAcpBinaryPathResolver } from "./binary-resolver";
 import { toAcpConfigOption } from "./config-options";
-import { FakeAcpChild, fixtureConfigOptions } from "./fake-acp-child";
+import { FakeAcpChild, fixtureConfigOptions, NO_REPLY } from "./fake-acp-child";
 import type { AcpSessionUpdate } from "./types";
 
 setAcpBinaryPathResolver(() => "/fake/claude-agent-acp/index.js");
@@ -41,6 +41,17 @@ beforeEach(() => {
 	updates.length = 0;
 	child = new FakeAcpChild();
 });
+
+/** Spin until an update of `kind` has been delivered, or time out. */
+async function waitForUpdate(kind: string): Promise<void> {
+	const deadline = Date.now() + 1000;
+	while (!updates.some((update) => update.kind === kind)) {
+		if (Date.now() > deadline) {
+			throw new Error(`no ${kind} update within 1000ms`);
+		}
+		await new Promise((r) => setTimeout(r, 5));
+	}
+}
 
 function session(paneId = "pane-readback"): AcpSession {
 	return new AcpSession(
@@ -201,7 +212,7 @@ describe("read-back (D3)", () => {
 			] as SessionConfigOption[],
 		}));
 
-		const returned = await acp.resume();
+		const { options: returned } = await acp.resume();
 
 		expect(returned.find((option) => option.id === "model")?.currentValue).toBe(
 			"haiku",
@@ -220,13 +231,15 @@ describe("read-back (D3)", () => {
 		await acp.start();
 
 		child.setHandler("session/resume", () => ({}));
-		const returned = await acp.resume();
+		const snapshot = await acp.resume();
 
-		expect(returned.map((option) => option.id)).toEqual([
+		expect(snapshot.options.map((option) => option.id)).toEqual([
 			"model",
 			"effort",
 			"fast",
 		]);
+		// And it says so, rather than passing the cache off as a wire read (A2).
+		expect(snapshot.fromWire).toBe(false);
 
 		await acp.dispose();
 	});
@@ -262,13 +275,16 @@ describe("read-back (D3)", () => {
 		const requested = "totally-made-up-model";
 		await acp.setConfigOption("model", requested, { allowUnlisted: true });
 
-		// The write alone is a lie: the cache now claims the requested value.
+		// The write on its own tells us nothing, so the cache does not move:
+		// claiming the requested value here is what made an unverified write
+		// report as verified (A2).
 		expect(
 			acp.info().configOptions.find((option) => option.id === "model")
 				?.currentValue,
-		).toBe(requested);
+		).toBe("default");
 
-		const readBack = await acp.resume();
+		const { options: readBack, fromWire } = await acp.resume();
+		expect(fromWire).toBe(true);
 		const actualValue = readBack.find(
 			(option) => option.id === "model",
 		)?.currentValue;
@@ -304,7 +320,7 @@ describe("read-back (D3)", () => {
 		}));
 
 		await acp.setConfigOption("model", "claude-fable-5[1m]");
-		const readBack = await acp.resume();
+		const { options: readBack } = await acp.resume();
 
 		expect(readBack.find((option) => option.id === "model")?.currentValue).toBe(
 			"claude-fable-5[1m]",
@@ -448,6 +464,170 @@ describe("normalizer carries name / description / category (D1)", () => {
 		expect(
 			grouped.framesFor("session/set_config_option")[0]?.params?.value,
 		).toBe("haiku");
+
+		await acp.dispose();
+	});
+});
+
+// =============================================================================
+// A1 — the cache generation counter
+// =============================================================================
+
+/**
+ * Two IPC channels carry config truth to the renderer and nothing orders them
+ * against each other, so every list the host hands out is stamped with the
+ * generation of the cache it came from. Adapter 0.63.0 emits
+ * `config_option_update` mid-turn (its fast-mode sync fires one from the
+ * turn-result handler), which is exactly the race.
+ */
+describe("config option seq (A1)", () => {
+	it("session/new seeds a non-zero generation", async () => {
+		const acp = session();
+		await acp.start();
+
+		expect(acp.info().configSeq).toBeGreaterThan(0);
+
+		await acp.dispose();
+	});
+
+	it("a config_option_update bumps the generation AND stamps the update", async () => {
+		const acp = session();
+		await acp.start();
+		const seeded = acp.info().configSeq;
+
+		child.sessionUpdate({
+			sessionUpdate: "config_option_update",
+			configOptions: fixtureConfigOptions() as SessionConfigOption[],
+		});
+		await waitForUpdate("config_option_update");
+
+		const emitted = updates.at(-1);
+		expect(acp.info().configSeq).toBe(seeded + 1);
+		expect(emitted).toMatchObject({
+			kind: "config_option_update",
+			seq: seeded + 1,
+		});
+
+		await acp.dispose();
+	});
+
+	it("a resume that re-seeds bumps the generation and reports it", async () => {
+		const acp = session();
+		await acp.start();
+		const seeded = acp.info().configSeq;
+
+		const snapshot = await acp.resume();
+
+		expect(snapshot.seq).toBe(seeded + 1);
+		expect(snapshot.seq).toBe(acp.info().configSeq);
+
+		await acp.dispose();
+	});
+
+	it("a resume that carried NO options leaves the generation alone", async () => {
+		// Nothing was re-seeded, so nothing downstream should treat this list
+		// as newer than what it already holds.
+		const acp = session();
+		await acp.start();
+		const seeded = acp.info().configSeq;
+
+		child.setHandler("session/resume", () => ({}));
+		const snapshot = await acp.resume();
+
+		expect(snapshot.seq).toBe(seeded);
+
+		await acp.dispose();
+	});
+
+	it("the generation only ever climbs, across every re-seed path", async () => {
+		const acp = session();
+		await acp.start();
+
+		const seen = [acp.info().configSeq];
+		child.sessionUpdate({
+			sessionUpdate: "config_option_update",
+			configOptions: fixtureConfigOptions() as SessionConfigOption[],
+		});
+		await waitForUpdate("config_option_update");
+		seen.push(acp.info().configSeq);
+		await acp.resume();
+		seen.push(acp.info().configSeq);
+		// A write only re-seeds when its response carries a list; the fake's
+		// default answers with none, so give it one.
+		child.setHandler("session/set_config_option", () => ({
+			configOptions: fixtureConfigOptions(),
+		}));
+		await acp.setConfigOption("effort", "high");
+		seen.push(acp.info().configSeq);
+
+		for (let index = 1; index < seen.length; index++) {
+			expect(seen[index]).toBeGreaterThan(seen[index - 1] as number);
+		}
+
+		await acp.dispose();
+	});
+});
+
+// =============================================================================
+// A3 — nothing latches: a per-call budget on the config RPCs
+// =============================================================================
+
+/**
+ * Only the startup handshake had a timeout. An adapter that accepted a config
+ * frame and never answered left the caller's promise pending forever — and the
+ * renderer disables a control until its write settles, so the bar came back
+ * disabled with no spinner and no error. A coded rejection is what lets the
+ * failure path clear that state.
+ *
+ * The budget is 30 s in production; the tests inject a short one through the
+ * same seam `spawnProcess` uses rather than waiting for it.
+ */
+describe("per-call RPC timeout (A3)", () => {
+	function impatient(paneId: string): AcpSession {
+		return new AcpSession(
+			{
+				paneId,
+				cwd: CWD,
+				spawnProcess: child.spawnProcess,
+				configRpcTimeoutMs: 40,
+			},
+			handlers,
+		);
+	}
+
+	it("F3: a set_config_option the adapter never answers rejects, not hangs", async () => {
+		const acp = impatient("pane-hung-write");
+		await acp.start();
+
+		child.setHandler("session/set_config_option", () => NO_REPLY);
+
+		await expect(acp.setConfigOption("effort", "high")).rejects.toThrow(
+			/^acp-rpc-timeout/,
+		);
+
+		await acp.dispose();
+	});
+
+	it("F3: a resume the adapter never answers rejects, not hangs", async () => {
+		const acp = impatient("pane-hung-resume");
+		await acp.start();
+
+		child.setHandler("session/resume", () => NO_REPLY);
+
+		await expect(acp.resume()).rejects.toThrow(/^acp-rpc-timeout/);
+
+		await acp.dispose();
+	});
+
+	it("POSITIVE CONTROL: an adapter that answers in time is not timed out", async () => {
+		// Without this, a budget of zero would pass both tests above.
+		const acp = impatient("pane-prompt-reply");
+		await acp.start();
+
+		await acp.setConfigOption("effort", "high");
+		const snapshot = await acp.resume();
+
+		expect(snapshot.options.map((option) => option.id)).toContain("effort");
 
 		await acp.dispose();
 	});

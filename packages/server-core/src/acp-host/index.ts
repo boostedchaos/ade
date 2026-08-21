@@ -12,7 +12,7 @@
  */
 
 export type { AcpSessionParams } from "./acp-connection";
-export { mapSessionUpdate } from "./acp-connection";
+export { mapSessionUpdate, UNSTAMPED_CONFIG_SEQ } from "./acp-connection";
 export { AcpHost, getAcpHost, resolveMaxConcurrentAcpSpawns } from "./acp-host";
 export {
 	ACP_STRIPPED_HOOK_ENV_VARS,
@@ -32,6 +32,7 @@ export {
 } from "./permission";
 export type {
 	AcpConfigOption,
+	AcpConfigSnapshot,
 	AcpExitInfo,
 	AcpHostEvents,
 	AcpPermissionOutcome,

@@ -26,38 +26,79 @@ export interface AcpControlBarMismatch {
 	actualValue: string | null;
 }
 
+/** A write whose read-back reported nothing — neither confirmed nor refuted. */
+export interface AcpControlBarUnverified {
+	configId: string;
+	requestedValue: string;
+}
+
 export interface AcpControlBarState {
 	/** Read-back truth, in the order the adapter reported it. */
 	options: AcpConfigOption[];
+	/**
+	 * Generation of the host cache `options` came from.
+	 *
+	 * Config truth reaches this reducer over two IPC channels that are not
+	 * ordered against each other — the `config_option_update` subscription and
+	 * a mutation's own return value — and adapter 0.63.0 emits an update
+	 * mid-turn from its fast-mode sync. Without this, a read-back that was
+	 * already on the wire lands afterwards and puts the bar back to a value the
+	 * adapter has already abandoned (A1).
+	 */
+	seq: number;
 	/** The option whose write is on the wire; its control is disabled. */
 	pending: string | null;
 	/** Set when a read-back reported a value other than the requested one. */
 	mismatch: AcpControlBarMismatch | null;
+	/** Set when the read-back reported nothing at all (A2). */
+	unverified: AcpControlBarUnverified | null;
 	/** Last write failure, verbatim. */
 	error: string | null;
 }
 
 export function emptyControlBar(): AcpControlBarState {
-	return { options: [], pending: null, mismatch: null, error: null };
+	return {
+		options: [],
+		seq: 0,
+		pending: null,
+		mismatch: null,
+		unverified: null,
+		error: null,
+	};
 }
 
 /**
- * Options the adapter no longer reports take their pending and mismatch state
- * with them: both name a control that is about to stop existing (D7), and a
- * warning chip with nothing to hang off would outlive its subject.
+ * Adopt an option list, unless it is older than the one already held.
+ *
+ * A list stamped BELOW the held generation was read before something the bar
+ * has already seen, so applying it would move the display backwards (A1). An
+ * equal stamp is the same generation and is accepted — re-seeding from it is a
+ * no-op by construction.
+ *
+ * Options the adapter no longer reports take their pending, mismatch and
+ * unverified state with them: each names a control that is about to stop
+ * existing (D7), and a warning chip with nothing to hang off would outlive its
+ * subject.
  */
 function withOptions(
 	state: AcpControlBarState,
 	options: AcpConfigOption[],
+	seq: number,
 ): AcpControlBarState {
+	if (seq < state.seq) return state;
 	const present = new Set(options.map((option) => option.id));
 	return {
 		...state,
 		options,
+		seq,
 		pending: state.pending && present.has(state.pending) ? state.pending : null,
 		mismatch:
 			state.mismatch && present.has(state.mismatch.configId)
 				? state.mismatch
+				: null,
+		unverified:
+			state.unverified && present.has(state.unverified.configId)
+				? state.unverified
 				: null,
 	};
 }
@@ -66,8 +107,24 @@ function withOptions(
 export function seedOptions(
 	state: AcpControlBarState,
 	options: AcpConfigOption[],
+	seq: number,
 ): AcpControlBarState {
-	return withOptions(state, options);
+	return withOptions(state, options, seq);
+}
+
+/**
+ * Pane mount: release a write that has nothing left to settle it.
+ *
+ * TanStack Query v5 does not run a per-call `onSuccess`/`onError` once the
+ * observer has unmounted, so a write that was in flight when the pane went away
+ * never settles. `pending` disables the whole bar, and on remount there is
+ * neither a spinner nor an error to explain it — the pane simply comes back
+ * inert (A3). The options are kept: the mount's own read-back is what replaces
+ * them, and blanking the bar first would flicker.
+ */
+export function paneMounted(state: AcpControlBarState): AcpControlBarState {
+	if (state.pending === null) return state;
+	return { ...state, pending: null };
 }
 
 /** Pure (state, event) → state. Never throws, for any event. */
@@ -81,10 +138,17 @@ export function reduceControlBarEvent(
 			// change adds or removes `effort`/`fast`, which is why the bar is
 			// rendered from the reported list rather than a fixed layout.
 			return event.update.kind === "config_option_update"
-				? withOptions(state, event.update.options)
+				? withOptions(state, event.update.options, event.update.seq)
 				: state;
 		case "session_exit":
 			return emptyControlBar();
+		case "session_error":
+			// The child can report a fatal error WITHOUT exiting, and the write
+			// that was on the wire when it did will never settle. Only
+			// `session_exit` used to clear `pending`, so this path left the bar
+			// disabled for good (A3). The options stay: the session is broken,
+			// not reconfigured.
+			return paneMounted(state);
 		default:
 			return state;
 	}
@@ -94,25 +158,52 @@ export function writeStarted(
 	state: AcpControlBarState,
 	configId: string,
 ): AcpControlBarState {
-	return { ...state, pending: configId, mismatch: null, error: null };
+	return {
+		...state,
+		pending: configId,
+		mismatch: null,
+		unverified: null,
+		error: null,
+	};
 }
 
+/**
+ * Settle a write against its read-back.
+ *
+ * Three outcomes, not two (A2). The read-back either proved the value landed,
+ * proved something else is set, or reported nothing at all — and the third is
+ * not a success. `canonicalized` is the adapter resolving an alias the user
+ * plainly meant ("opus" → "claude-opus-5"); warning about that would train the
+ * user to ignore the chip that matters (A4).
+ *
+ * The LIST may still be refused as stale while the write itself settles: a
+ * mutation that resolved must always clear `pending`, or the control it
+ * disabled stays disabled.
+ */
 export function writeSettled(
 	state: AcpControlBarState,
 	result: AcpSetConfigOptionResult,
 ): AcpControlBarState {
-	const next = withOptions(state, result.configOptions);
+	const next = withOptions(state, result.configOptions, result.seq);
 	const { applied } = result;
+	const substituted = !applied.verified && !applied.unverified;
 	return {
 		...next,
 		pending: null,
-		mismatch: applied.verified
-			? null
-			: {
+		mismatch:
+			substituted && !applied.canonicalized
+				? {
+						configId: applied.configId,
+						requestedValue: applied.requestedValue,
+						actualValue: applied.actualValue,
+					}
+				: null,
+		unverified: applied.unverified
+			? {
 					configId: applied.configId,
 					requestedValue: applied.requestedValue,
-					actualValue: applied.actualValue,
-				},
+				}
+			: null,
 	};
 }
 
@@ -199,7 +290,8 @@ interface AcpControlBarStore {
 	byPane: Record<string, AcpControlBarState>;
 	get: (paneId: string) => AcpControlBarState;
 	apply: (paneId: string, event: AcpPaneEvent) => void;
-	seed: (paneId: string, options: AcpConfigOption[]) => void;
+	seed: (paneId: string, options: AcpConfigOption[], seq: number) => void;
+	mounted: (paneId: string) => void;
 	started: (paneId: string, configId: string) => void;
 	settled: (paneId: string, result: AcpSetConfigOptionResult) => void;
 	failed: (paneId: string, message: string) => void;
@@ -223,8 +315,9 @@ export const useAcpControlBarStore = create<AcpControlBarStore>((set, get) => ({
 	get: (paneId) => get().byPane[paneId] ?? emptyControlBar(),
 	apply: (paneId, event) =>
 		set(update(paneId, (state) => reduceControlBarEvent(state, event))),
-	seed: (paneId, options) =>
-		set(update(paneId, (state) => seedOptions(state, options))),
+	seed: (paneId, options, seq) =>
+		set(update(paneId, (state) => seedOptions(state, options, seq))),
+	mounted: (paneId) => set(update(paneId, paneMounted)),
 	started: (paneId, configId) =>
 		set(update(paneId, (state) => writeStarted(state, configId))),
 	settled: (paneId, result) =>

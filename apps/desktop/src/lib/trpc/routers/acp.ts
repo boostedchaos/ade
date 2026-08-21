@@ -52,21 +52,74 @@ export type AcpPaneEvent =
 /**
  * What a config write actually did, as opposed to what it was asked to do.
  *
- * `actualValue` is read off the wire AFTER the write; `verified` is false when
- * the adapter resolved the request to something else — which it does silently,
- * with a success response, for any model id it cannot place. The renderer shows
- * `actualValue`, never `requestedValue`.
+ * `actualValue` is read off the wire AFTER the write. The outcome is
+ * three-valued, not two (A2): the write landed, the adapter applied something
+ * else, or the read-back reported nothing at all and neither claim can be made.
+ * The renderer shows `actualValue`, never `requestedValue`.
  */
 export interface AcpConfigApplied {
 	configId: string;
 	requestedValue: string;
 	actualValue: string | null;
+	/** The read-back proved the requested value landed. */
 	verified: boolean;
+	/**
+	 * The read-back carried nothing off the wire, so this write is neither
+	 * confirmed nor refuted. Distinct from `verified: false`, which is a
+	 * positive claim that something ELSE is set (A2).
+	 */
+	unverified: boolean;
+	/**
+	 * Not verified, but the adapter merely canonicalized an alias the user
+	 * plainly meant ("opus" → "claude-opus-5"). Warning about this is crying
+	 * wolf, and a chip that fires on correct writes trains the user to ignore
+	 * the one that matters (A4).
+	 */
+	canonicalized: boolean;
 }
 
 export interface AcpSetConfigOptionResult {
 	configOptions: AcpConfigOption[];
+	/**
+	 * Generation of the host's config cache this list came from. The renderer
+	 * refuses a list older than the one it holds — this return value and the
+	 * `config_option_update` subscription are separate IPC channels and nothing
+	 * orders them against each other (A1).
+	 */
+	seq: number;
 	applied: AcpConfigApplied;
+}
+
+/** A read-back, with the same ordering stamp and honesty marker as a write. */
+export interface AcpReadConfigResult {
+	configOptions: AcpConfigOption[];
+	seq: number;
+	/** The resume answered without any options; this list is cache, not wire. */
+	unverified: boolean;
+}
+
+/**
+ * Did the adapter canonicalize what was asked for, or substitute something else?
+ *
+ * Substring, case-insensitive, against the applied option's id AND its label —
+ * "opus" is contained in `claude-opus-5`, "claude-haiku-99" is contained in
+ * neither. A null `actualValue` (the option vanished) has nothing to match and
+ * is always a substitution.
+ */
+function isCanonicalization(
+	requestedValue: string,
+	actualValue: string | null,
+	applied: AcpConfigOption | undefined,
+): boolean {
+	if (actualValue === null) return false;
+	const needle = requestedValue.trim().toLowerCase();
+	if (needle === "") return false;
+	const label = applied?.values?.find(
+		(value) => value.id === actualValue,
+	)?.label;
+	return [actualValue, label].some((candidate) =>
+		candidate?.toLowerCase().includes(needle),
+	);
 }
 
 const SAFE_ID = z
@@ -238,18 +291,29 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 					allowUnlisted: input.allowUnlisted,
 				});
 
-				const configOptions = await host.readConfig(input.paneId);
-				const actualValue =
-					configOptions.find((option) => option.id === input.configId)
-						?.currentValue ?? null;
+				const snapshot = await host.readConfig(input.paneId);
+				const appliedOption = snapshot.options.find(
+					(option) => option.id === input.configId,
+				);
+				const actualValue = appliedOption?.currentValue ?? null;
+				// Nothing came off the wire, so the list is the host's own cache
+				// and it cannot support EITHER claim about this write (A2).
+				const unverified = !snapshot.fromWire;
+				const verified = !unverified && actualValue === input.value;
 
 				return {
-					configOptions,
+					configOptions: snapshot.options,
+					seq: snapshot.seq,
 					applied: {
 						configId: input.configId,
 						requestedValue: input.value,
 						actualValue,
-						verified: actualValue === input.value,
+						verified,
+						unverified,
+						canonicalized:
+							!verified &&
+							!unverified &&
+							isCanonicalization(input.value, actualValue, appliedOption),
 					},
 				};
 			}),
@@ -261,8 +325,13 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 		 */
 		readConfig: publicProcedure
 			.input(z.object({ paneId: SAFE_ID }))
-			.mutation(async ({ input }): Promise<AcpConfigOption[]> => {
-				return await host.readConfig(input.paneId);
+			.mutation(async ({ input }): Promise<AcpReadConfigResult> => {
+				const snapshot = await host.readConfig(input.paneId);
+				return {
+					configOptions: snapshot.options,
+					seq: snapshot.seq,
+					unverified: !snapshot.fromWire,
+				};
 			}),
 
 		/** Remount reconciliation: "is my session still alive?" */

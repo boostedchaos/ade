@@ -52,6 +52,16 @@ function textOf(chunk: ContentChunk): string {
  * Anything not modeled here becomes `{ kind: "unknown", raw }` — never a throw,
  * so a `claude-agent-acp` version bump cannot take the host down.
  */
+/**
+ * The `seq` a mapped `config_option_update` carries before `AcpSession` stamps
+ * it with the real cache generation.
+ *
+ * The mapper is a pure payload translation and has no session state to read a
+ * generation from; `AcpSession.handleSessionUpdate` is the only thing that
+ * emits one of these to a handler, and it always overwrites this.
+ */
+export const UNSTAMPED_CONFIG_SEQ = 0;
+
 export function mapSessionUpdate(update: SessionUpdate): AcpSessionUpdate {
 	switch (update.sessionUpdate) {
 		case "agent_message_chunk":
@@ -73,6 +83,7 @@ export function mapSessionUpdate(update: SessionUpdate): AcpSessionUpdate {
 			return {
 				kind: "config_option_update",
 				options: update.configOptions.map(toAcpConfigOption),
+				seq: UNSTAMPED_CONFIG_SEQ,
 			};
 		case "current_mode_update":
 			return { kind: "current_mode_update", modeId: update.currentModeId };

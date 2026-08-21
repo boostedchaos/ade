@@ -11,7 +11,11 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { SessionUpdate } from "@agentclientprotocol/sdk";
-import { mapSessionUpdate, resolveInsideRoot } from "./acp-connection";
+import {
+	mapSessionUpdate,
+	resolveInsideRoot,
+	UNSTAMPED_CONFIG_SEQ,
+} from "./acp-connection";
 import { AcpSession } from "./acp-session";
 import { setAcpBinaryPathResolver } from "./binary-resolver";
 import { FakeAcpChild, FIXTURE_SESSION_ID } from "./fake-acp-child";
@@ -103,6 +107,9 @@ describe("mapSessionUpdate", () => {
 			}),
 		).toEqual({
 			kind: "config_option_update",
+			// The mapper has no session state to read a generation from;
+			// `AcpSession` stamps the real one before emitting (A1).
+			seq: UNSTAMPED_CONFIG_SEQ,
 			options: [
 				{
 					id: "fast",

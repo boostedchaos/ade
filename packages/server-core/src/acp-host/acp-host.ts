@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { AcpSession } from "./acp-session";
 import { acpError } from "./errors";
 import type {
-	AcpConfigOption,
+	AcpConfigSnapshot,
 	AcpPromptResult,
 	AcpSessionInfo,
 	AcpSessionOptions,
@@ -226,8 +226,13 @@ export class AcpHost extends EventEmitter {
 	 * A caller that has just written MUST come through here: the adapter answers
 	 * success for a value it did not apply, so the wire read is the only place
 	 * the real current value exists.
+	 *
+	 * Returns a snapshot, not a bare list: `seq` orders it against the update
+	 * stream (A1) and `fromWire` says whether the adapter actually reported
+	 * anything this time, which is the difference between a verified write and
+	 * an unverifiable one (A2).
 	 */
-	async readConfig(paneId: string): Promise<AcpConfigOption[]> {
+	async readConfig(paneId: string): Promise<AcpConfigSnapshot> {
 		return await this.requireSession(paneId).resume();
 	}
 

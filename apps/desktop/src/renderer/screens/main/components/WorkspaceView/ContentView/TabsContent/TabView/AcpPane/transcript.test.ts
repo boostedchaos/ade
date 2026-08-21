@@ -175,7 +175,10 @@ describe("kinds Phase 2 does not render", () => {
 			type: "update",
 			update: { kind: "available_commands_update", commands: [] },
 		},
-		{ type: "update", update: { kind: "config_option_update", options: [] } },
+		{
+			type: "update",
+			update: { kind: "config_option_update", options: [], seq: 1 },
+		},
 		{ type: "update", update: { kind: "current_mode_update", modeId: "m" } },
 		{
 			type: "update",

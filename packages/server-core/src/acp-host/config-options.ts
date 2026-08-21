@@ -149,11 +149,4 @@ export class ConfigOptionCache {
 			);
 		}
 	}
-
-	/** Optimistic update after a write we have already validated and sent. */
-	applyLocalWrite(optionId: string, value: string): void {
-		const option = this.options.get(optionId);
-		if (!option) return;
-		this.options.set(optionId, { ...option, currentValue: value });
-	}
 }

@@ -17,7 +17,7 @@ import {
 	resolveModeIdForPolicy,
 } from "./permission";
 import type {
-	AcpConfigOption,
+	AcpConfigSnapshot,
 	AcpExitInfo,
 	AcpPromptResult,
 	AcpSessionInfo,
@@ -33,6 +33,17 @@ const DEBUG_ACP = process.env.SUPERSET_ACP_DEBUG === "1";
 
 /** `initialize` + `session/new` + the startup `session/set_mode` budget. */
 const ACP_STARTUP_TIMEOUT_MS = 15_000;
+/**
+ * Default per-call budget for the config RPCs (`session/set_config_option`,
+ * `session/resume`).
+ *
+ * Only the startup handshake had a timeout, so an adapter that accepted a
+ * config frame and never answered left the caller's promise pending forever —
+ * and a renderer that disables a control until its write settles then stays
+ * disabled with no spinner and no error (A3). A coded rejection is what lets
+ * the failure path clear that state.
+ */
+const CONFIG_RPC_TIMEOUT_MS = 30_000;
 /** Fail-safe: force-dispose a session whose child never exits. */
 const KILL_TIMEOUT_MS = 5000;
 /** Best-effort budget for each graceful teardown RPC. */
@@ -99,10 +110,18 @@ export class AcpSession {
 	private readonly spawnProcess: SpawnProcess;
 	private readonly env: Record<string, string> | undefined;
 	private readonly permissionPolicy: PermissionPolicy;
+	private readonly configRpcTimeoutMs: number;
 	private readonly permissionHandler: PermissionHandler =
 		autoApprovePermissionHandler;
 	private readonly handlers: AcpSessionHandlers;
 	private readonly configCache = new ConfigOptionCache();
+	/**
+	 * Cache generation, bumped on every re-seed. Rides on every option list
+	 * that leaves this session so a renderer can refuse a list older than the
+	 * one it holds — the two channels that carry them are not ordered against
+	 * each other (A1).
+	 */
+	private configSeq = 0;
 
 	private child: ChildProcess | null = null;
 	private connection: AcpConnection | null = null;
@@ -137,6 +156,8 @@ export class AcpSession {
 		this.spawnProcess = options.spawnProcess ?? spawn;
 		this.env = options.env;
 		this.permissionPolicy = options.permissionPolicy ?? "auto-approve";
+		this.configRpcTimeoutMs =
+			options.configRpcTimeoutMs ?? CONFIG_RPC_TIMEOUT_MS;
 		this.handlers = handlers;
 	}
 
@@ -258,7 +279,7 @@ export class AcpSession {
 
 		this.acpSessionId = session.sessionId;
 		this.modes = session.modes ?? null;
-		this.configCache.replaceAll(session.configOptions);
+		this.reseedConfig(session.configOptions);
 
 		// Set the mode explicitly rather than trusting the adapter's default to
 		// stay put: in bypass mode it never consults `canUseTool`, so the policy
@@ -311,6 +332,7 @@ export class AcpSession {
 			state: this.state,
 			modes: this.modes,
 			configOptions: this.configCache.list(),
+			configSeq: this.configSeq,
 		};
 	}
 
@@ -381,13 +403,25 @@ export class AcpSession {
 			? value === "true"
 			: value;
 		const response = await this.racingDeath(
-			connection.setConfigOption(sessionId, optionId, wireValue),
+			withTimeout(
+				connection.setConfigOption(sessionId, optionId, wireValue),
+				this.configRpcTimeoutMs,
+				() =>
+					acpError(
+						"acp-rpc-timeout",
+						`session/set_config_option for pane ${this.paneId} did not answer within ${this.configRpcTimeoutMs}ms`,
+					),
+			),
 		);
 
+		// No optimistic local write. This adapter answers success for a value it
+		// silently resolved to something else, so writing the REQUESTED value
+		// into the cache would make an unverified write indistinguishable from a
+		// verified one — and every caller here is required to follow with a
+		// `resume()` read-back anyway, which is the only thing that can tell
+		// them apart (A2).
 		if (response.configOptions.length > 0) {
-			this.configCache.replaceAll(response.configOptions);
-		} else {
-			this.configCache.applyLocalWrite(optionId, value);
+			this.reseedConfig(response.configOptions);
 		}
 	}
 
@@ -399,7 +433,7 @@ export class AcpSession {
 	 * resolved to something else. Non-destructive strictly because it resends
 	 * the recorded `session/new` params (`AcpSessionParams`).
 	 */
-	async resume(): Promise<AcpConfigOption[]> {
+	async resume(): Promise<AcpConfigSnapshot> {
 		const { connection, sessionId } = this.requireLive();
 		const params = this.sessionParams;
 		if (!params) {
@@ -410,7 +444,15 @@ export class AcpSession {
 		}
 
 		const response = await this.racingDeath(
-			connection.resumeSession(sessionId, params),
+			withTimeout(
+				connection.resumeSession(sessionId, params),
+				this.configRpcTimeoutMs,
+				() =>
+					acpError(
+						"acp-rpc-timeout",
+						`session/resume for pane ${this.paneId} did not answer within ${this.configRpcTimeoutMs}ms`,
+					),
+			),
 		);
 
 		if (response.modes) {
@@ -418,11 +460,14 @@ export class AcpSession {
 		}
 		// Guarded, not `?? []`: an ABSENT `configOptions` means the adapter
 		// reported nothing this time, which is not the same claim as "this
-		// session has no options" and must not empty the bar.
+		// session has no options" and must not empty the bar. It also means the
+		// list below is the cache's own memory rather than anything the wire
+		// just confirmed, which `fromWire` is what tells the caller (A2).
+		const fromWire = response.configOptions !== undefined;
 		if (response.configOptions) {
-			this.configCache.replaceAll(response.configOptions);
+			this.reseedConfig(response.configOptions);
 		}
-		return this.configCache.list();
+		return { options: this.configCache.list(), seq: this.configSeq, fromWire };
 	}
 
 	async setMode(modeId: string): Promise<void> {
@@ -625,12 +670,27 @@ export class AcpSession {
 	 * config state, so it overwrites the cache wholesale.
 	 */
 	private handleConfigOptions(options: SessionConfigOption[]): void {
+		this.reseedConfig(options);
+	}
+
+	/** The ONE place the cache is replaced, so the generation cannot be missed. */
+	private reseedConfig(
+		options: readonly SessionConfigOption[] | null | undefined,
+	): void {
 		this.configCache.replaceAll(options);
+		this.configSeq++;
 	}
 
 	private handleSessionUpdate(update: AcpSessionUpdate): void {
 		if (update.kind === "current_mode_update" && this.modes) {
 			this.modes = { ...this.modes, currentModeId: update.modeId };
+		}
+		if (update.kind === "config_option_update") {
+			// `AcpConnection` fires `onConfigOptions` before this, so the cache
+			// has already been re-seeded and `configSeq` is this list's own
+			// generation. The mapper cannot know it (`UNSTAMPED_CONFIG_SEQ`).
+			this.handlers.onUpdate({ ...update, seq: this.configSeq });
+			return;
 		}
 		this.handlers.onUpdate(update);
 	}

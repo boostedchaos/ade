@@ -51,6 +51,12 @@ interface AcpControlBarProps {
  * a wire read-back, and what lands here is what the read-back reported — which
  * for a model id the adapter could not place is a DIFFERENT model, silently
  * substituted. The warning chip is that substitution made visible.
+ *
+ * Three outcomes, and each looks different (A2/A4): the value landed, the
+ * adapter applied something ELSE, or the read-back reported nothing and the
+ * write is simply unproven. An alias the adapter merely canonicalized ("opus" →
+ * "claude-opus-5") is not a substitution and gets no chip — a warning that
+ * fires on correct writes is one nobody reads.
  */
 export function AcpControlBar({ paneId, disabled }: AcpControlBarProps) {
 	const state = useAcpControlBarStore(
@@ -92,6 +98,11 @@ export function AcpControlBar({ paneId, disabled }: AcpControlBarProps) {
 					{state.mismatch?.configId === option.id && (
 						<span className="shrink-0 rounded border border-[var(--argus-iris-waiting)]/40 bg-[var(--argus-iris-waiting)]/10 px-1.5 py-0.5 text-[10px] text-muted-foreground">
 							{`adapter resolved '${state.mismatch.requestedValue}' → '${state.mismatch.actualValue ?? "unknown"}'`}
+						</span>
+					)}
+					{state.unverified?.configId === option.id && (
+						<span className="shrink-0 rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+							{`could not verify '${state.unverified.requestedValue}'`}
 						</span>
 					)}
 				</div>

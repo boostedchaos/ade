@@ -35,7 +35,9 @@ export type AcpErrorCode =
 	/** `prompt()` called while a turn is already in flight on that session. */
 	| "acp-prompt-in-flight"
 	/** The ACP server answered a request with a JSON-RPC error. */
-	| "acp-rpc-error";
+	| "acp-rpc-error"
+	/** A per-call RPC budget elapsed with no answer from the adapter. */
+	| "acp-rpc-timeout";
 
 /** Build a coded Error. The code is the message prefix, followed by `: `. */
 export function acpError(code: AcpErrorCode, message: string): Error {

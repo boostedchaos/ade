@@ -12,6 +12,7 @@ import { describe, expect, it } from "bun:test";
 import { EventEmitter } from "node:events";
 import type {
 	AcpConfigOption,
+	AcpConfigSnapshot,
 	AcpSessionInfo,
 	AcpSessionUpdate,
 } from "@ade/server-core/acp-host";
@@ -29,6 +30,7 @@ function info(paneId: string, state: AcpSessionInfo["state"]): AcpSessionInfo {
 		state,
 		modes: null,
 		configOptions: [],
+		configSeq: 1,
 	};
 }
 
@@ -57,6 +59,14 @@ class FakeAcpHost extends EventEmitter {
 	readConfigCalls: string[] = [];
 	/** What the fake's read-back reports. The router's only source of truth. */
 	readConfigResult: AcpConfigOption[] = [];
+	/** Cache generation the read-back reports (A1). */
+	readConfigSeq = 7;
+	/**
+	 * False for the case A2 exists for: `session/resume` answered without any
+	 * `configOptions`, so the list is the cache's memory and nothing on the
+	 * wire confirmed or refuted the write.
+	 */
+	readConfigFromWire = true;
 	/** Set to make `setConfigOption` reject (the local gate refusing a write). */
 	setConfigOptionError: Error | null = null;
 
@@ -70,9 +80,13 @@ class FakeAcpHost extends EventEmitter {
 		if (this.setConfigOptionError) throw this.setConfigOptionError;
 	}
 
-	async readConfig(paneId: string): Promise<AcpConfigOption[]> {
+	async readConfig(paneId: string): Promise<AcpConfigSnapshot> {
 		this.readConfigCalls.push(paneId);
-		return this.readConfigResult;
+		return {
+			options: this.readConfigResult,
+			seq: this.readConfigSeq,
+			fromWire: this.readConfigFromWire,
+		};
 	}
 
 	createSession(options: {
@@ -514,6 +528,9 @@ describe("setConfigOption", () => {
 
 		expect(host.readConfigCalls).toEqual(["pane-1"]);
 		expect(result.configOptions).toEqual(host.readConfigResult);
+		// A1: the list is stamped, so the renderer can order it against the
+		// update stream rather than trusting IPC arrival order.
+		expect(result.seq).toBe(host.readConfigSeq);
 	});
 
 	it("verified:true when the read-back agrees with the request", async () => {
@@ -533,6 +550,8 @@ describe("setConfigOption", () => {
 			requestedValue: "claude-fable-5[1m]",
 			actualValue: "claude-fable-5[1m]",
 			verified: true,
+			unverified: false,
+			canonicalized: false,
 		});
 	});
 
@@ -555,6 +574,8 @@ describe("setConfigOption", () => {
 			requestedValue: "fabl-5-typo",
 			actualValue: "default",
 			verified: false,
+			unverified: false,
+			canonicalized: false,
 		});
 	});
 
@@ -616,10 +637,11 @@ describe("readConfig", () => {
 		const { caller } = makeCaller(host);
 		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
 
-		const options = await caller.readConfig({ paneId: "pane-1" });
+		const snapshot = await caller.readConfig({ paneId: "pane-1" });
 
 		expect(host.readConfigCalls).toEqual(["pane-1"]);
-		expect(options).toEqual(host.readConfigResult);
+		expect(snapshot.configOptions).toEqual(host.readConfigResult);
+		expect(snapshot.seq).toBe(host.readConfigSeq);
 	});
 
 	it("hits the wire on every call — it must not be a cached query", async () => {
@@ -631,5 +653,212 @@ describe("readConfig", () => {
 		await caller.readConfig({ paneId: "pane-1" });
 
 		expect(host.readConfigCalls).toEqual(["pane-1", "pane-1"]);
+	});
+});
+
+// =============================================================================
+// A2 — a read-back that confirmed nothing is not a green settle
+// =============================================================================
+
+describe("unverified read-back (A2)", () => {
+	it("F2: a resume carrying no configOptions reports unverified, not verified", async () => {
+		// `session/resume` answering without `configOptions` means the adapter
+		// reported nothing this time. The cache's own last-known value then
+		// happens to equal what we asked for whenever the previous write agreed
+		// — which is how an unproven write came back `verified: true`.
+		const host = new FakeAcpHost();
+		host.readConfigResult = [option("model", "haiku")];
+		host.readConfigFromWire = false;
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "haiku",
+		});
+
+		expect(result.applied.unverified).toBe(true);
+		expect(result.applied.verified).toBe(false);
+	});
+
+	it("POSITIVE CONTROL: the same values with a real wire read are verified", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigResult = [option("model", "haiku")];
+		host.readConfigFromWire = true;
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "haiku",
+		});
+
+		expect(result.applied.unverified).toBe(false);
+		expect(result.applied.verified).toBe(true);
+	});
+
+	it("an unverified read-back is never ALSO a substitution", async () => {
+		// Two different claims: "the adapter applied something else" and "the
+		// adapter did not say". Reporting both would show two chips for one
+		// event, and the mismatch one would be a guess.
+		const host = new FakeAcpHost();
+		host.readConfigResult = [option("model", "default")];
+		host.readConfigFromWire = false;
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "haiku",
+		});
+
+		expect(result.applied.unverified).toBe(true);
+		expect(result.applied.canonicalized).toBe(false);
+	});
+
+	it("readConfig reports it too, so a mount seed is not mistaken for proof", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigFromWire = false;
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		expect((await caller.readConfig({ paneId: "pane-1" })).unverified).toBe(
+			true,
+		);
+	});
+});
+
+// =============================================================================
+// A4 — alias canonicalization is not a substitution
+// =============================================================================
+
+describe("canonicalization vs substitution (A4)", () => {
+	it("F4: 'opus' resolving to 'claude-opus-5' is canonicalization, not a warning", async () => {
+		// The adapter resolving an alias the user meant. Warning about it is
+		// crying wolf, and a chip that fires on every correct write teaches the
+		// user to ignore the one that matters.
+		const host = new FakeAcpHost();
+		host.readConfigResult = [
+			option("model", "claude-opus-5", [
+				{ id: "claude-opus-5", label: "Opus" },
+			]),
+		];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "opus",
+			allowUnlisted: true,
+		});
+
+		expect(result.applied.verified).toBe(false);
+		expect(result.applied.canonicalized).toBe(true);
+	});
+
+	it("matches case-insensitively", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigResult = [
+			option("model", "claude-opus-5", [
+				{ id: "claude-opus-5", label: "Opus" },
+			]),
+		];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "OPUS",
+			allowUnlisted: true,
+		});
+
+		expect(result.applied.canonicalized).toBe(true);
+	});
+
+	it("matches on the LABEL as well as the id", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigResult = [
+			option("model", "claude-fable-5[1m]", [
+				{ id: "claude-fable-5[1m]", label: "Fable" },
+			]),
+		];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "fable",
+			allowUnlisted: true,
+		});
+
+		expect(result.applied.canonicalized).toBe(true);
+	});
+
+	it("PROVES THE CHECK FIRES: a real substitution still warns", async () => {
+		// The control. Suppression that swallowed everything would pass every
+		// test above, and would re-hide exactly the Agent-Canvas failure the
+		// chip exists to show.
+		const host = new FakeAcpHost();
+		host.readConfigResult = [
+			option("model", "claude-opus-5", [
+				{ id: "claude-opus-5", label: "Opus" },
+			]),
+		];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "claude-haiku-99",
+			allowUnlisted: true,
+		});
+
+		expect(result.applied.verified).toBe(false);
+		expect(result.applied.canonicalized).toBe(false);
+	});
+
+	it("an option that vanished is a substitution, never canonicalization", async () => {
+		// `actualValue` is null: there is no id or label to be a substring of,
+		// and a suppression that treated "nothing" as a match would silence it.
+		const host = new FakeAcpHost();
+		host.readConfigResult = [option("model", "haiku")];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "effort",
+			value: "high",
+		});
+
+		expect(result.applied.actualValue).toBeNull();
+		expect(result.applied.canonicalized).toBe(false);
+	});
+
+	it("a verified write is never marked canonicalized", async () => {
+		const host = new FakeAcpHost();
+		host.readConfigResult = [
+			option("model", "claude-opus-5", [
+				{ id: "claude-opus-5", label: "Opus" },
+			]),
+		];
+		const { caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const result = await caller.setConfigOption({
+			paneId: "pane-1",
+			configId: "model",
+			value: "claude-opus-5",
+		});
+
+		expect(result.applied.verified).toBe(true);
+		expect(result.applied.canonicalized).toBe(false);
 	});
 });

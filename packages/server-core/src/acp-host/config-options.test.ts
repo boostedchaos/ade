@@ -94,7 +94,12 @@ describe("config gate over the wire", () => {
 		await acp.dispose();
 	});
 
-	it("sends a declared value and updates the cache", async () => {
+	it("sends a declared value, and does NOT pretend the cache changed", async () => {
+		// A2: the fake's default `set_config_option` answers success carrying no
+		// options, exactly as the real adapter does for a value it silently
+		// resolved elsewhere. There is nothing to re-seed from, and writing the
+		// REQUESTED value in would make an unverified write look verified —
+		// which is precisely the read-back's job to decide.
 		const acp = session();
 		await acp.start();
 
@@ -103,6 +108,27 @@ describe("config gate over the wire", () => {
 		const frame = child.framesFor("session/set_config_option")[0];
 		expect(frame?.params?.configId).toBe("model");
 		expect(frame?.params?.value).toBe("claude-fable-5[1m]");
+		expect(
+			acp.info().configOptions.find((option) => option.id === "model")
+				?.currentValue,
+		).toBe("default");
+
+		await acp.dispose();
+	});
+
+	it("re-seeds the cache when the write response DOES carry options", async () => {
+		// Positive control for the test above: a cache that never updated on a
+		// write would pass it just as well.
+		const acp = session();
+		await acp.start();
+
+		child.setHandler("session/set_config_option", () => ({
+			configOptions: [
+				{ ...MODEL_OPTION, currentValue: "claude-fable-5[1m]" },
+			] as SessionConfigOption[],
+		}));
+		await acp.setConfigOption("model", "claude-fable-5[1m]");
+
 		expect(
 			acp.info().configOptions.find((option) => option.id === "model")
 				?.currentValue,
@@ -143,6 +169,9 @@ describe("config gate over the wire", () => {
 		expect(options[0]?.currentValue).toBe("claude-fable-5[1m]");
 		expect(updates.at(-1)).toEqual({
 			kind: "config_option_update",
+			// Stamped with the generation the re-seed produced (A1), which is
+			// session/new's seed plus this one.
+			seq: 2,
 			options: [
 				{
 					id: "model",

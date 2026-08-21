@@ -32,7 +32,15 @@ export type AcpSessionUpdate =
 	| { kind: "tool_call_update"; toolCall: ToolCallUpdate }
 	| { kind: "plan"; entries: PlanEntry[] }
 	| { kind: "available_commands_update"; commands: AvailableCommand[] }
-	| { kind: "config_option_update"; options: AcpConfigOption[] }
+	| {
+			kind: "config_option_update";
+			options: AcpConfigOption[];
+			/**
+			 * Generation of the host's config cache this list came from. Stamped
+			 * by `AcpSession`, never by the mapper — see `UNSTAMPED_CONFIG_SEQ`.
+			 */
+			seq: number;
+	  }
 	| { kind: "current_mode_update"; modeId: string }
 	| {
 			kind: "session_info_update";
@@ -70,6 +78,26 @@ export interface AcpConfigOption {
 	currentValue?: string;
 }
 
+/**
+ * A config option list plus the cache generation it came from.
+ *
+ * Two IPC channels carry config truth to a renderer — the update subscription
+ * and a mutation's own return value — and nothing orders them against each
+ * other. `seq` is what lets a consumer refuse a list older than the one it
+ * already holds (Phase 4, A1).
+ */
+export interface AcpConfigSnapshot {
+	options: AcpConfigOption[];
+	seq: number;
+	/**
+	 * False when the `session/resume` response carried no `configOptions` at
+	 * all. The list is then the cache's own last-known state, NOT something the
+	 * adapter just confirmed — a caller verifying a write must say so rather
+	 * than report a green settle (A2).
+	 */
+	fromWire: boolean;
+}
+
 // =============================================================================
 // Permissions
 // =============================================================================
@@ -102,6 +130,11 @@ export interface AcpSessionOptions {
 	permissionPolicy?: PermissionPolicy;
 	/** Test seam; defaults to `node:child_process`'s `spawn`. */
 	spawnProcess?: SpawnProcess;
+	/**
+	 * Per-call budget for `session/set_config_option` and `session/resume`.
+	 * Test seam; defaults to 30 s (A3).
+	 */
+	configRpcTimeoutMs?: number;
 	env?: Record<string, string>;
 }
 
@@ -124,11 +157,16 @@ export interface AcpSessionInfo {
 	/** As returned by `session/new`. */
 	modes: SessionModeState | null;
 	/**
-	 * Cached config state, not a live read — the adapter accepts illegal values
-	 * silently, and `config_option_update` does not arrive during a normal
-	 * prompt turn (Phase 0 findings).
+	 * Cached config state, not a live read: the adapter accepts illegal values
+	 * silently, so only a `resume()` read-back reports what is actually set.
+	 *
+	 * Nor is the cache quiescent during a turn. `config_option_update` DOES
+	 * arrive mid-turn on adapter 0.63.0 — its fast-mode sync emits one from the
+	 * turn-result handler — which is why every list carries `configSeq`.
 	 */
 	configOptions: AcpConfigOption[];
+	/** Generation of the cache the list above came from (A1). */
+	configSeq: number;
 }
 
 // =============================================================================
