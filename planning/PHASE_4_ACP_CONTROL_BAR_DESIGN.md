@@ -126,3 +126,38 @@ Live verify (the phase gate, run by hand in the dev app):
 
 Boolean capability opt-in; the `mode` control; persisting config choices across
 app restarts; Codex; the slash palette (Phase 5).
+
+## Amendments after adversarial review (2026-08-21, findings F1-F5)
+
+- **A1 (fixes F1) — Sequence-stamp every option list.** `AcpSession` keeps a
+  per-session monotonic counter, bumped on every cache re-seed (session/new,
+  `config_option_update`, write response, resume). The stamped seq rides on the
+  normalized `config_option_update` event and on `setConfigOption`/`readConfig`
+  returns. The renderer reducer refuses any list with a seq lower than the one it
+  holds. This replaces the assumption — now known false for 0.63.0 — that
+  `config_option_update` never arrives mid-turn (the adapter's fast-mode sync
+  emits it from the turn-result handler). Fix the stale comment in
+  `acp-host/types.ts:128-129` too.
+- **A2 (fixes F2) — Read-back honesty is three-valued.** `resume()` reports
+  whether the wire actually carried `configOptions`. When it did not, the
+  mutation returns `verified: false` with a distinct `unverified: true` marker,
+  and the UI shows "could not verify" rather than a green settle. Remove the
+  optimistic `applyLocalWrite` from the write path — a mandatory read-back
+  follows it, so it only exists to lie plausibly.
+- **A3 (fixes F3) — Nothing latches.** Host: a per-call timeout (30 s) on
+  `setConfigOption` and `resume` RPCs so a hung adapter surfaces as a mutation
+  error (which clears `pending` via the existing failed path). Renderer:
+  `pending` is cleared on pane mount (a remount has no live mutation observer to
+  settle it) and on `session_error`, not just `session_exit`.
+- **A4 (fixes F4) — The chip distinguishes canonicalization from substitution.**
+  Suppress the warning when the requested string (case-insensitive) is a
+  substring of the applied option's id or label — that is the adapter resolving
+  an alias the user meant ("opus" → "claude-opus-5"). Otherwise show the
+  substitution warning. An `unverified` result (A2) always shows its own
+  "could not verify" state.
+- **A5 (corrects Ground truth #2 / F5).** Precise adapter behavior on 0.63.0: a
+  model id sharing NO token with any known model **errors**
+  (`Invalid value for config option model`); an id sharing any token
+  **fuzzy-resolves silently** to some valid model. Live-verify step 2 therefore
+  has two inputs and two expected outcomes: `zzqqxx` → red error text;
+  `claude-opus-99` → mismatch chip showing the resolved model.
