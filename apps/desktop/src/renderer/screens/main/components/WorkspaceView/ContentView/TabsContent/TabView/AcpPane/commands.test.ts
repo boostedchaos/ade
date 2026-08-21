@@ -27,10 +27,16 @@ import type { AcpPaneEvent } from "lib/trpc/routers/acp";
 import {
 	type AcpCommand,
 	acceptCommand,
+	clampSelected,
 	commandHint,
 	commandSummary,
 	emptyCommands,
+	emptyPaletteMessage,
 	filterCommands,
+	hintVisible,
+	PALETTE_MAX_PX,
+	PALETTE_MIN_PX,
+	paletteMaxHeight,
 	reduceCommandsEvent,
 	seedCommands,
 	slashQuery,
@@ -526,5 +532,171 @@ describe("useAcpCommandsStore", () => {
 		expect(useAcpCommandsStore.getState().get("pane-never")).toEqual(
 			emptyCommands(),
 		);
+	});
+});
+
+// =============================================================================
+// Amendments A1-A5 (adversarial review findings F1-F8)
+// =============================================================================
+
+describe("filterCommands hoists an exact match (A1/F1)", () => {
+	it("puts a fully typed name first even when a longer name is a prefix match", () => {
+		// F1: four REAL pairs collide in the live 103-command list. Without an
+		// exact-match rule the two are indistinguishable in reported order, so
+		// Enter on a fully typed name silently runs the OTHER command.
+		const list = [command("loop-library"), command("loop")];
+		expect(names(filterCommands(list, "loop"))[0]).toBe("loop");
+	});
+
+	it("hoists the exact match for every colliding pair in the real capture", () => {
+		const pairs = [
+			["loop", "loop-library"],
+			["usage", "usage-credits"],
+			["design", "design-sync"],
+		] as const;
+		for (const [exact, longer] of pairs) {
+			const list = [command(longer), command(exact)];
+			expect(names(filterCommands(list, exact))[0]).toBe(exact);
+		}
+	});
+
+	it("matches the exact name case-insensitively", () => {
+		const list = [command("Loop-Library"), command("Loop")];
+		expect(names(filterCommands(list, "loop"))[0]).toBe("Loop");
+	});
+
+	it("still returns the other prefix matches after the exact one", () => {
+		const list = [command("loop-library"), command("loop"), command("unloop")];
+		expect(names(filterCommands(list, "loop"))).toEqual([
+			"loop",
+			"loop-library",
+			"unloop",
+		]);
+	});
+
+	it("names every real colliding pair the review found in the capture", () => {
+		// Population pin for the claim "four real pairs": derived from the
+		// capture, not asserted from the review's prose.
+		const captured = new Set(names(CAPTURED));
+		const collisions = names(CAPTURED).filter((name) =>
+			names(CAPTURED).some((other) => other !== name && other.startsWith(name)),
+		);
+		expect(collisions.length).toBeGreaterThanOrEqual(3);
+		for (const name of collisions) expect(captured.has(name)).toBe(true);
+		// And each one resolves to itself once the exact rule is in place.
+		for (const name of collisions) {
+			expect(names(filterCommands(CAPTURED, name))[0]).toBe(name);
+		}
+	});
+});
+
+describe("clampSelected keeps the highlight inside the live matches (A5/F7)", () => {
+	it("clamps a stale index down when the list shrinks mid-open", () => {
+		// F7: `selected` only resets on a QUERY change. An
+		// `available_commands_update` that shrinks the list leaves the old
+		// index pointing past the end — Enter then accepts undefined.
+		expect(clampSelected(7, 3)).toBe(2);
+	});
+
+	it("leaves an in-range index alone", () => {
+		expect(clampSelected(1, 3)).toBe(1);
+		expect(clampSelected(0, 1)).toBe(0);
+	});
+
+	it("returns 0 for an empty match list", () => {
+		expect(clampSelected(4, 0)).toBe(0);
+	});
+
+	it("never returns a negative index", () => {
+		expect(clampSelected(-2, 3)).toBe(0);
+	});
+});
+
+describe("emptyPaletteMessage keys on the session lifecycle (A4/F6)", () => {
+	it("says the session ended for a dead session", () => {
+		// F6: after `session_exit` the list is empty (D5), so a length-only
+		// rule tells a DEAD session it is still loading — forever.
+		expect(emptyPaletteMessage("dead")).toBe(
+			"session ended — commands unavailable",
+		);
+	});
+
+	it("says not-loaded-yet only while a session is coming up or live", () => {
+		expect(emptyPaletteMessage("starting")).toBe("commands not loaded yet");
+		expect(emptyPaletteMessage("ready")).toBe("commands not loaded yet");
+		expect(emptyPaletteMessage("streaming")).toBe("commands not loaded yet");
+	});
+
+	it("does not claim a session ended when none ever started", () => {
+		expect(emptyPaletteMessage("idle")).toBe(
+			"no session — commands unavailable",
+		);
+	});
+
+	it("distinguishes the D5 exit path from the pre-notification path", () => {
+		// The two states the design says must be distinguishable, reached
+		// through the real reducer rather than asserted from a literal.
+		const afterExit = reduceCommandsEvent(
+			reduceCommandsEvent(emptyCommands(), commandsEvent(CAPTURED)),
+			EXIT,
+		);
+		expect(afterExit.commands).toHaveLength(0);
+		expect(emptyPaletteMessage("dead")).not.toBe(
+			emptyPaletteMessage("starting"),
+		);
+	});
+});
+
+describe("hintVisible (A2/F2)", () => {
+	const active = { name: "wrap-up", hint: "what to wrap up" };
+
+	it("shows the hint right after accept, when only the trailing space is there", () => {
+		// F2: the placeholder variant renders NEVER — accept always leaves
+		// "/name ", and a placeholder only paints an empty textarea.
+		expect(hintVisible(active, "/wrap-up ")).toBe(true);
+	});
+
+	it("hides the hint once arguments are typed", () => {
+		expect(hintVisible(active, "/wrap-up the session")).toBe(false);
+	});
+
+	it("hides the hint when the command has none", () => {
+		expect(hintVisible(null, "/wrap-up ")).toBe(false);
+	});
+
+	it("hides the hint once the leading token is no longer that command", () => {
+		expect(hintVisible(active, "/wrap")).toBe(false);
+		expect(hintVisible(active, "hello")).toBe(false);
+		expect(hintVisible(active, "")).toBe(false);
+	});
+
+	it("treats whitespace-only arguments as still empty", () => {
+		expect(hintVisible(active, "/wrap-up   ")).toBe(true);
+	});
+});
+
+describe("paletteMaxHeight fits the pane (A3/F3)", () => {
+	it("caps to the measured space above the composer", () => {
+		// F3: every pane clips its children, so a fixed 15rem panel loses its
+		// TOP rows — which are the best matches.
+		expect(paletteMaxHeight(120)).toBe(120);
+	});
+
+	it("never exceeds the design's ~8-row ceiling", () => {
+		expect(paletteMaxHeight(10_000)).toBe(PALETTE_MAX_PX);
+	});
+
+	it("floors at about three rows in a very short pane", () => {
+		expect(paletteMaxHeight(10)).toBe(PALETTE_MIN_PX);
+		expect(paletteMaxHeight(0)).toBe(PALETTE_MIN_PX);
+		expect(paletteMaxHeight(-40)).toBe(PALETTE_MIN_PX);
+	});
+
+	it("falls back to the ceiling when nothing could be measured", () => {
+		expect(paletteMaxHeight(Number.NaN)).toBe(PALETTE_MAX_PX);
+	});
+
+	it("keeps the floor below the ceiling", () => {
+		expect(PALETTE_MIN_PX).toBeLessThan(PALETTE_MAX_PX);
 	});
 });

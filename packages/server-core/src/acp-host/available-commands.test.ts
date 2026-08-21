@@ -310,3 +310,66 @@ describe("the captured frame crosses mapSessionUpdate intact", () => {
 		await rig.session.dispose();
 	});
 });
+
+// =============================================================================
+// A5/F8 — info() deep-copies the cached commands
+// =============================================================================
+
+describe("info() hands out commands nobody else can mutate (A5/F8)", () => {
+	it("does not alias the cached command objects", async () => {
+		await rig.session.start();
+
+		await pushCommands([command("wrap-up", "roll up the session")]);
+
+		// The array was already copied; the ELEMENTS were not, so a caller
+		// tidying its own copy rewrote the host's cache for every pane. The
+		// `ConfigOptionCache.list()` precedent copies a level deeper.
+		const first = rig.session.info().availableCommands;
+		const entry = first[0];
+		if (!entry) throw new Error("no command came back");
+		entry.name = "mutated";
+		entry.description = "mutated";
+
+		const second = rig.session.info().availableCommands;
+		expect(second[0]?.name).toBe("wrap-up");
+		expect(second[0]?.description).toBe("roll up the session");
+		expect(second[0]).not.toBe(entry);
+
+		await rig.session.dispose();
+	});
+
+	it("does not alias the nested input hint", async () => {
+		await rig.session.start();
+
+		await pushCommands([
+			{
+				name: "storm-research",
+				description: "run the pipeline",
+				input: { hint: "topic" },
+			},
+		]);
+
+		const first = rig.session.info().availableCommands;
+		const input = first[0]?.input;
+		if (!input) throw new Error("no input came back");
+		input.hint = "mutated";
+
+		expect(rig.session.info().availableCommands[0]?.input?.hint).toBe("topic");
+
+		await rig.session.dispose();
+	});
+
+	it("leaves a command without input still without input", async () => {
+		await rig.session.start();
+
+		await pushCommands([command("wrap-up")]);
+
+		// A copy that manufactured `input: undefined` would change the shape
+		// the wire-equality test above asserts.
+		const entry = rig.session.info().availableCommands[0];
+		expect(entry && "input" in entry ? entry.input : null).toBeFalsy();
+		expect(rig.session.info().availableCommands).toEqual([command("wrap-up")]);
+
+		await rig.session.dispose();
+	});
+});

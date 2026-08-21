@@ -276,6 +276,7 @@ export function AcpPane({
 					paneId={paneId}
 					isBusy={isBusy}
 					canSend={lifecycle === "ready" || lifecycle === "streaming"}
+					lifecycle={lifecycle}
 					onSend={handleSend}
 					onCancel={handleCancel}
 				/>

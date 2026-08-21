@@ -52,6 +52,25 @@ const GRACEFUL_RPC_TIMEOUT_MS = 1000;
 /** How much child stderr to keep for a spawn-failure message. */
 const STDERR_TAIL_LINES = 20;
 
+/**
+ * Copy a command list a level deeper than the array, the way
+ * `ConfigOptionCache.list()` copies its values.
+ *
+ * A spread of the array alone hands out the cached ELEMENTS: one caller tidying
+ * its own copy would rewrite the cache every other pane reads. `input` is
+ * copied too, and only when it exists — manufacturing `input: undefined` would
+ * change the shape the wire-equality tests assert.
+ */
+function copyCommands(
+	commands: readonly AvailableCommand[],
+): AvailableCommand[] {
+	return commands.map((command) =>
+		command.input
+			? { ...command, input: { ...command.input } }
+			: { ...command },
+	);
+}
+
 export interface AcpSessionHandlers {
 	onUpdate: (update: AcpSessionUpdate) => void;
 	onError: (err: Error) => void;
@@ -341,7 +360,7 @@ export class AcpSession {
 			modes: this.modes,
 			configOptions: this.configCache.list(),
 			configSeq: this.configSeq,
-			availableCommands: [...this.availableCommands],
+			availableCommands: copyCommands(this.availableCommands),
 		};
 	}
 
@@ -694,7 +713,7 @@ export class AcpSession {
 		if (update.kind === "available_commands_update") {
 			// Replaced BEFORE the re-emit: a renderer that reacts to the event by
 			// reading `info()` must not see the previous list.
-			this.availableCommands = [...update.commands];
+			this.availableCommands = copyCommands(update.commands);
 		}
 		if (update.kind === "current_mode_update" && this.modes) {
 			this.modes = { ...this.modes, currentModeId: update.modeId };
