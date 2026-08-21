@@ -10,6 +10,22 @@ shipped under. They are history and are left as written.
 
 ## Unreleased
 
+### ACP slash-command palette (Phase 5)
+
+Typing `/` at the start of the ACP composer now opens an autocomplete palette
+fed by the adapter's `available_commands_update` — the user's real skills and
+commands (103 on this machine, including `/wrap-up` and `/fable-orchestration`).
+Exact name match ranks first (four real command pairs collide under plain
+prefix ranking), then prefix, then substring. The host caches the latest list
+so a remounted pane still has it (`session/new` never carries commands — the
+list only arrives by notification, verified live). The palette states are
+explicit — "commands not loaded yet" vs "session ended — commands unavailable"
+— so an empty list and a dead session never look alike; a command's input hint
+shows as an inline strip (a textarea placeholder can never render behind
+inserted text); the panel measures the pane so short panes don't clip the best
+matches; Enter/Tab/Escape respect IME composition. Selecting a command inserts
+`/name ` and sends through the normal prompt path — execution needs no new RPC.
+
 ### ACP rich rendering (Phase 3)
 
 The ACP pane now renders the full session stream instead of text only: tool
