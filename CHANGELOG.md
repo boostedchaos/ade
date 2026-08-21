@@ -10,6 +10,22 @@ shipped under. They are history and are left as written.
 
 ## Unreleased
 
+### ACP control bar (Phase 4)
+
+The ACP pane's toolbar now carries a live control bar — model, effort, fast
+mode, and agent — populated from the adapter's reported option list and written
+mid-session via `session/set_config_option`. Because the adapter can silently
+substitute a model (verified live: an unrecognized id either errors or
+downgrades to `default` with a success reply), every write is followed by a
+mandatory `session/resume` read-back; the bar renders only read-back truth,
+warns when the applied value differs from the requested one, and reports
+"could not verify" when the wire carried no options. Option lists are
+sequence-stamped so a stale snapshot can never overwrite a newer update, and
+config RPCs carry a 30 s timeout so a hung adapter cannot latch the bar. The
+model control accepts a typed id (validated locally, with an explicit
+escape hatch for unlisted ids). Live-verified against the real adapter and
+CLI: `planning/spikes/acp-phase4-live/RESULTS.md`.
+
 ### ACP panes (Phases 1–2)
 
 A session tab can now be an **ACP pane** instead of a terminal: a conversation
