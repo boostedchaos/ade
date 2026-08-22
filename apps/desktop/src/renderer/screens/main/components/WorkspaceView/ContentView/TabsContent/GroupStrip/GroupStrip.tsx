@@ -232,10 +232,17 @@ export function GroupStrip() {
 
 	// The session's cwd is the workspace's worktree — the agent's own Argus
 	// worktree, which is the whole point of the pane. No worktree, no entry.
+	//
+	// The explicit "ACP Session" entry, so it names the tab after the agent the
+	// way every other launch path does (A9/issue #36). It deliberately does NOT
+	// resolve a conversation to resume: this is the entry a user picks to start
+	// a new one, which is what "+ ACP Session" beside an already-open session
+	// means.
 	const handleAddAcp = useCallback(() => {
 		if (!activeWorkspaceId || !workspace?.worktreePath) return;
-		addAcpTab(activeWorkspaceId, workspace.worktreePath);
-	}, [activeWorkspaceId, workspace?.worktreePath, addAcpTab]);
+		const name = workspace.name?.trim();
+		addAcpTab(activeWorkspaceId, workspace.worktreePath, name ? { name } : {});
+	}, [activeWorkspaceId, workspace?.worktreePath, workspace?.name, addAcpTab]);
 
 	const handleAddNote = useCallback(async () => {
 		if (!activeWorkspaceId || !workspace?.project?.mainRepoPath) return;

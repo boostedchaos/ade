@@ -210,6 +210,27 @@ export interface AcpPaneState {
 }
 
 /**
+ * What a caller can hand an ACP pane at birth, beyond its directory.
+ *
+ * Both fields exist so the flip to ACP loses nothing the terminal path used to
+ * carry (Phase 6, A8/A9): the conversation to reopen, and the agent's own name.
+ */
+export interface AcpPaneOptions {
+	/**
+	 * The conversation this pane should reopen on mount — the caller's newest
+	 * one for the worktree, resolved the same way `claude --resume` used to
+	 * pick it (issue #49). `AcpPane` reads it back through `shouldResumeSession`
+	 * and asks for a `session/load`; absent, the pane starts fresh.
+	 */
+	acpSessionId?: string;
+	/**
+	 * The tab's name — the agent's durable identity (issue #36), not the
+	 * generic "Agent N" counter. Blank or absent falls back to the counter.
+	 */
+	name?: string;
+}
+
+/**
  * DevTools pane-specific properties
  */
 export interface DevToolsPaneState {

@@ -38,14 +38,18 @@ export interface AgentSessionViewInput {
 export function resolveAgentSessionView(
 	input: AgentSessionViewInput,
 ): AgentSessionView {
+	// No worktree, no session: `cwd` is required by `createAcpPane` because a
+	// session opened in the wrong directory is worse than one that fails to
+	// open. Checked FIRST, ahead of `forceView`, so an "acp" verdict is proof a
+	// cwd exists whatever produced it — the invariant `useAgentSession` states
+	// at its call site, and the only guard a future caller without its own
+	// `worktreePath` test would have. An explicit menu choice outranks the
+	// setting and the runtime; it cannot conjure a directory to run in.
+	if (!input.worktreePath) return "terminal";
 	if (input.forceView) return input.forceView;
 	// The global escape hatch: one setting restores the pre-Phase-6 behavior
 	// everywhere, without touching any of the call sites.
 	if (input.defaultView === "terminal") return "terminal";
 	if (input.runtime !== ACP_RUNTIME) return "terminal";
-	// No worktree, no session: `cwd` is required by `createAcpPane` because a
-	// session opened in the wrong directory is worse than one that fails to
-	// open.
-	if (!input.worktreePath) return "terminal";
 	return "acp";
 }

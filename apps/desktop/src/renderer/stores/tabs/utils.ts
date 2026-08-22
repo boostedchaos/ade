@@ -6,6 +6,7 @@ import {
 } from "shared/changes-types";
 import { hasRenderedPreview, isImageFile } from "shared/file-types";
 import type {
+	AcpPaneOptions,
 	AcpPaneState,
 	BrowserPaneState,
 	DevToolsPaneState,
@@ -297,9 +298,16 @@ export const createDevToolsPane = (
  * filesystem sandbox root. It is required, not defaulted: a session opened in
  * the wrong directory is worse than one that fails to open.
  */
-export const createAcpPane = (tabId: string, cwd: string): Pane => {
+export const createAcpPane = (
+	tabId: string,
+	cwd: string,
+	options: AcpPaneOptions = {},
+): Pane => {
 	const id = generateId("pane");
-	const acp: AcpPaneState = { cwd };
+	const acp: AcpPaneState = {
+		cwd,
+		...(options.acpSessionId ? { acpSessionId: options.acpSessionId } : {}),
+	};
 	return {
 		id,
 		tabId,
@@ -317,9 +325,10 @@ export const createAcpTabWithPane = (
 	workspaceId: string,
 	cwd: string,
 	existingTabs: Tab[] = [],
+	options: AcpPaneOptions = {},
 ): { tab: Tab; pane: Pane } => {
 	const tabId = generateId("tab");
-	const pane = createAcpPane(tabId, cwd);
+	const pane = createAcpPane(tabId, cwd, options);
 
 	const workspaceTabs = existingTabs.filter(
 		(t) => t.workspaceId === workspaceId,
@@ -327,7 +336,9 @@ export const createAcpTabWithPane = (
 
 	const tab: Tab = {
 		id: tabId,
-		name: `Agent ${workspaceTabs.filter((t) => t.name.startsWith("Agent")).length + 1}`,
+		name:
+			options.name?.trim() ||
+			`Agent ${workspaceTabs.filter((t) => t.name.startsWith("Agent")).length + 1}`,
 		workspaceId,
 		layout: pane.id,
 		createdAt: Date.now(),

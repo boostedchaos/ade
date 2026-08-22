@@ -60,14 +60,19 @@ export const FIXTURE_SESSION_ID = "acp-session-fixture-1";
 
 /** The six permission modes the adapter reported in the Phase 0 spike. */
 export const FIXTURE_MODES: SessionModeState = {
-	currentModeId: "default",
+	// Ids AND ORDER as `claude-agent-acp` 0.63.0 actually sends them, captured
+	// off the live wire 2026-08-21. The order is part of the fixture, not
+	// incidental: it used to lead with `default`, which is what let a
+	// mode-selection rule that reads POSITION pass every test while resolving
+	// live to `auto` — the one mode that never prompts (AL1).
+	currentModeId: "auto",
 	availableModes: [
+		{ id: "auto", name: "Auto" },
 		{ id: "default", name: "Default" },
 		{ id: "acceptEdits", name: "Accept Edits" },
-		{ id: "bypassPermissions", name: "Bypass Permissions" },
 		{ id: "plan", name: "Plan" },
 		{ id: "dontAsk", name: "Don't Ask" },
-		{ id: "auto", name: "Auto" },
+		{ id: "bypassPermissions", name: "Bypass Permissions" },
 	],
 };
 

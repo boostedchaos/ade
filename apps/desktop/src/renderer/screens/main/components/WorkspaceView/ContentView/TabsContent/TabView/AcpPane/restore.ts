@@ -35,6 +35,12 @@ export function shouldResumeSession(input: {
  * "Fresh WITH a stored id" is the honest failure case the design's rule exists
  * for: the agent no longer knows that conversation, and a pane that quietly
  * started an empty one would look identical to a successful restore.
+ *
+ * Everything here is a fact about THIS mount (A10), which is why every answer
+ * is gated on `requestedSessionId`. `ensureSession` short-circuits a live pane
+ * to its session info, and the `restored` field there is session-lifetime: it
+ * keeps reading "replayed" on every later remount. Reporting that as a restore
+ * would re-raise the strip forever, for mounts that asked for nothing.
  */
 export function restoreNotice(input: {
 	/** What was asked for — null when no restore was attempted. */
@@ -42,8 +48,7 @@ export function restoreNotice(input: {
 	/** What `ensureSession` reported. */
 	restored: "replayed" | "fresh";
 }): string | null {
+	if (!input.requestedSessionId) return null;
 	if (input.restored === "replayed") return "Restored previous session.";
-	if (input.requestedSessionId)
-		return "Previous session could not be restored — new session started.";
-	return null;
+	return "Previous session could not be restored — new session started.";
 }

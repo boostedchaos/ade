@@ -307,13 +307,20 @@ export function reduceAcpEvent(
 				requestIdToEntry: {},
 			};
 		case "session_error":
-			return settleAllPending(
-				appendDivider(
-					closeOpen(closeUser(closeThinking(state))),
-					event.message,
+			return {
+				...settleAllPending(
+					appendDivider(
+						closeOpen(closeUser(closeThinking(state))),
+						event.message,
+					),
+					"Session ended before this was answered.",
 				),
-				"Session ended before this was answered.",
-			);
+				// Same fact as `session_exit`, reached by a crash instead of a
+				// clean stop, so it drops the request index for the same reason
+				// (A11/F5): the next session mints `req-1` from its own counter
+				// and a surviving entry would reopen the card above the divider.
+				requestIdToEntry: {},
+			};
 		case "permission_request":
 			return appendRequest(state, {
 				requestId: event.requestId,

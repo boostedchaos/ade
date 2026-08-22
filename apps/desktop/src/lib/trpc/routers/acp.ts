@@ -282,12 +282,21 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 		// every update. Detaching first also covers the case where the host
 		// already wiped our handlers on a previous session's exit.
 		detachBridge(paneId);
-		// A fresh generation gets a fresh backlog — but only when there is no
-		// listener yet. Whatever a previous session banked and nobody drained
-		// belongs to a child that is gone, and a pane that already has a
+		// A pane with no listener yet gets a backlog; one that already has a
 		// subscription needs no stand-in for it.
+		//
+		// An EXISTING backlog is kept, never replaced (A7). `getSessionInfo`
+		// answers nothing while the first `createSession` is still in flight, so
+		// a double mount lands two `attachBridge` calls around a `session/load`
+		// whose entire history is already banked — and recreating the buffer
+		// there would discard that replay and reset `dropped` to zero, which is
+		// worse than the loss because a truncated backlog then reads as a whole
+		// one. Nothing stale can survive here: a previous generation's buffer is
+		// dropped when its session exits or is disposed.
 		if (subscriberCount(paneId) === 0) {
-			buffers.set(paneId, { events: [], dropped: 0 });
+			if (!buffers.has(paneId)) {
+				buffers.set(paneId, { events: [], dropped: 0 });
+			}
 		} else {
 			buffers.delete(paneId);
 		}
@@ -297,13 +306,20 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 				emitPaneEvent(paneId, { type: "permission_request", ...req }),
 			onElicitation: (req) =>
 				emitPaneEvent(paneId, { type: "elicitation_request", ...req }),
-			onExit: (info) =>
+			onExit: (info) => {
 				emitPaneEvent(paneId, {
 					type: "session_exit",
 					code: info.code,
 					signal: info.signal,
 					expected: info.expected,
-				}),
+				});
+				// Symmetry with `dispose` (A11/F8): what this child banked
+				// describes a conversation that is over, and replaying it into
+				// the next generation's pane would read as the new session
+				// having already spoken. Deleted AFTER the emit above so a live
+				// subscriber still receives the exit itself.
+				buffers.delete(paneId);
+			},
 			onError: (err) =>
 				emitPaneEvent(paneId, {
 					type: "session_error",
@@ -542,8 +558,17 @@ export const createAcpRouter = (deps: AcpRouterDeps = {}) => {
 						const remaining = subscriberCount(input.paneId) - 1;
 						if (remaining > 0) {
 							subscriberCounts.set(input.paneId, remaining);
-						} else {
-							subscriberCounts.delete(input.paneId);
+							return;
+						}
+						subscriberCounts.delete(input.paneId);
+						// The last listener just left a session that is still
+						// running (A7). Without a buffer here every frame it
+						// emits goes to nobody and is not even counted, so the
+						// next attach cannot tell a quiet agent from a lost
+						// conversation. A pane whose session has exited or been
+						// disposed has no bridge, and banks nothing.
+						if (bridges.has(input.paneId) && !buffers.has(input.paneId)) {
+							buffers.set(input.paneId, { events: [], dropped: 0 });
 						}
 					};
 				});

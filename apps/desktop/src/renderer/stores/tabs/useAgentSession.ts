@@ -38,8 +38,10 @@ export interface AgentSessionWorkspace {
  *
  * Since Phase 6 (B3) a Claude Code agent with a worktree opens as an ACP
  * CONVERSATION pane instead, unless the caller names a view or the global
- * setting says terminal. Resume parity comes free on that path: the ACP pane
- * restores its own stored session on mount (B1).
+ * setting says terminal. That path resolves the SAME newest-conversation id
+ * and hands it to the pane, which asks for it on mount (A8/B1) — the pane's
+ * own restore only covers a pane that already ran a session, so without this
+ * the flip would have started every "+" fresh.
  */
 export function useAgentSession() {
 	const { openPreset, addTab } = useTabsWithPresets();
@@ -95,9 +97,22 @@ export function useAgentSession() {
 				...(options?.view ? { forceView: options.view } : {}),
 			});
 			// The `worktreePath` test is type narrowing, not a second rule —
-			// `resolveAgentSessionView` has already refused "acp" without one.
+			// `resolveAgentSessionView` refuses "acp" without one before it looks
+			// at anything else.
 			if (view === "acp" && worktreePath) {
-				return useTabsStore.getState().addAcpTab(id, worktreePath);
+				// Resume parity with the terminal path (A8). The ACP branch used
+				// to return here without resolving anything, so the flip silently
+				// orphaned the user's newest conversation: `+` had reopened it as
+				// `claude --resume <id>` since issue #49, and started a blank one
+				// after. The pane asks for the `session/load` itself on mount
+				// (B1) — this only has to hand it the id.
+				const acpSessionId = runtime
+					? await resolveResumeSessionId(runtime, cwd)
+					: null;
+				return useTabsStore.getState().addAcpTab(id, worktreePath, {
+					...(acpSessionId ? { acpSessionId } : {}),
+					...(name?.trim() ? { name: name.trim() } : {}),
+				});
 			}
 
 			if (!runtime) {

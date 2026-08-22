@@ -3,6 +3,7 @@ import { updateTree } from "react-mosaic-component";
 import { getFileOpenMode } from "renderer/hooks/useFileOpenMode";
 import { posthog } from "renderer/lib/posthog";
 import { trpcTabsStorage } from "renderer/lib/trpc-storage";
+import type { AcpPaneOptions } from "shared/tabs-types";
 import { acknowledgedStatus } from "shared/tabs-types";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
@@ -1384,13 +1385,18 @@ export const useTabsStore = create<TabsStore>()(
 				},
 
 				// ACP (agent conversation) operations
-				addAcpTab: (workspaceId: string, cwd: string) => {
+				addAcpTab: (
+					workspaceId: string,
+					cwd: string,
+					options: AcpPaneOptions = {},
+				) => {
 					const state = get();
 
 					const { tab, pane } = createAcpTabWithPane(
 						workspaceId,
 						cwd,
 						state.tabs,
+						options,
 					);
 
 					const currentActiveId = state.activeTabIds[workspaceId];

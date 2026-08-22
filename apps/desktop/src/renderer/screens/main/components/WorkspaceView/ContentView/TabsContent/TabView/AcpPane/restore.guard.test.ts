@@ -77,13 +77,22 @@ describe("shouldResumeSession — the guard never loses to the id", () => {
 });
 
 describe("restoreNotice", () => {
-	it("says nothing on a replay that was never requested", () => {
-		// Defensive, and it is the one combination the pane should never see: a
-		// replay with no request means the host restored something nobody asked
-		// for. The notice still reports what the host said rather than staying
-		// silent, because a conversation appearing unannounced is worse.
+	it("says nothing on a replay THIS mount never requested (A10)", () => {
+		// Not the unreachable case it looks like. `ensureSession` short-circuits
+		// a live pane to its session info, and `restored` there is a
+		// SESSION-lifetime value — it keeps reading "replayed" for every later
+		// remount of a session that was restored once. Reporting it as a
+		// this-mount fact re-raises the strip on every mosaic split, forever,
+		// announcing a restore that did not happen on this mount.
 		expect(
 			restoreNotice({ requestedSessionId: null, restored: "replayed" }),
+		).toBe(null);
+
+		// PROVES THE NOTICE STILL WORKS: the mount that actually asked for the
+		// restore still gets told. A fix that silenced both would have deleted
+		// the feature instead of scoping it.
+		expect(
+			restoreNotice({ requestedSessionId: "sess-1", restored: "replayed" }),
 		).toBe("Restored previous session.");
 	});
 

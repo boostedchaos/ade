@@ -140,33 +140,44 @@ describe("resolveAgentSessionView — an explicit menu choice", () => {
 	});
 
 	/**
-	 * FINDING, recorded as behaviour rather than asserted as correct.
+	 * The invariant `useAgentSession.ts` asserts at its call site, pinned here.
 	 *
-	 * `forceView` returns before the worktree check, so a forced "acp" on a
-	 * workspace with no worktree resolves to "acp" — while the comment at
-	 * `useAgentSession.ts:96` states the opposite, that the worktree test there
-	 * "is type narrowing, not a second rule — `resolveAgentSessionView` has
-	 * already refused 'acp' without one."
+	 * The worktree requirement is checked BEFORE `forceView`, so an "acp"
+	 * verdict is proof a cwd exists no matter which input produced it. That is
+	 * what lets the call site treat its own `worktreePath` test as type
+	 * narrowing rather than a second rule — and it is what the next caller,
+	 * which may have no such test, is entitled to rely on.
 	 *
-	 * Nothing breaks today: the call site's own `worktreePath` test catches it
-	 * and falls through to the terminal path. But the invariant the comment
-	 * claims does not hold, so the next caller that trusts it — one that treats
-	 * an "acp" verdict as proof a cwd exists — has no guard left.
+	 * An explicit menu choice still wins over the setting and the runtime; it
+	 * cannot conjure a directory to run in.
 	 */
-	it("forceView acp is NOT refused for a workspace with no worktree", () => {
-		expect(
-			resolveAgentSessionView({
-				runtime: "claude",
-				worktreePath: null,
-				defaultView: "acp",
-				forceView: "acp",
-			}),
-		).toBe("acp");
+	it("forceView acp is REFUSED for a workspace with no worktree", () => {
+		for (const worktreePath of [null, undefined, ""]) {
+			expect(
+				resolveAgentSessionView({
+					runtime: "claude",
+					worktreePath,
+					defaultView: "acp",
+					forceView: "acp",
+				}),
+			).toBe("terminal");
+		}
 		// And for a runtime the ACP pane cannot serve at all.
 		expect(
 			resolveAgentSessionView({
 				runtime: "codex",
 				worktreePath: null,
+				defaultView: "terminal",
+				forceView: "acp",
+			}),
+		).toBe("terminal");
+	});
+
+	it("PROVES THE WORKTREE IS THE THING SAYING NO: the same force with one flips", () => {
+		expect(
+			resolveAgentSessionView({
+				runtime: "claude",
+				worktreePath: "/repo/worktree",
 				defaultView: "terminal",
 				forceView: "acp",
 			}),

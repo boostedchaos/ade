@@ -45,6 +45,9 @@ mock.module("./utils/acp-cleanup", () => ({
 }));
 
 const { createAcpPane, createAcpTabWithPane } = await import("./utils");
+const { shouldResumeSession } = await import(
+	"renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/TabView/AcpPane/restore"
+);
 const { TABS_STORE_VERSION, migrateTabsV8ToV9 } = await import(
 	"./migrations/v9-acp"
 );
@@ -80,6 +83,64 @@ describe("createAcpPane", () => {
 		expect(tab.layout).toBe(pane.id);
 		expect(pane.tabId).toBe(tab.id);
 		expect(pane.acp?.cwd).toBe("/repo");
+	});
+});
+
+describe("the flip carries the conversation to resume (A8/F2)", () => {
+	it("seeds AcpPaneState.acpSessionId when the caller resolved one", () => {
+		// `+` on a Claude agent used to run `claude --resume <newest>`; the ACP
+		// branch returned before resolving anything, so the flip silently
+		// started a fresh conversation and orphaned the newest one (issue #49).
+		const pane = createAcpPane("tab-1", "/repo", {
+			acpSessionId: "sess-newest",
+		});
+
+		expect(pane.acp?.acpSessionId).toBe("sess-newest");
+	});
+
+	it("still pre-fills nothing when there is no prior conversation", () => {
+		expect(
+			createAcpPane("tab-1", "/repo", {}).acp?.acpSessionId,
+		).toBeUndefined();
+		expect(
+			createAcpPane("tab-1", "/repo", { acpSessionId: undefined }).acp
+				?.acpSessionId,
+		).toBeUndefined();
+	});
+
+	it("PROVES THE RESTORE PICKS IT UP: the seeded id passes B1's guard", () => {
+		// The two halves of the fix meet here. A seeded id is worth nothing
+		// unless `AcpPane`'s mount guard asks for it, and the guard's other
+		// input — an empty transcript — is exactly what a brand-new pane has.
+		const { pane } = createAcpTabWithPane("ws-1", "/repo", [], {
+			acpSessionId: "sess-newest",
+		});
+
+		expect(
+			shouldResumeSession({
+				storedSessionId: pane.acp?.acpSessionId,
+				transcriptEntryCount: 0,
+			}),
+		).toBe(true);
+	});
+});
+
+describe("the tab carries the agent's name (A9/F3)", () => {
+	it("names the tab after the agent when the caller has one", () => {
+		// Naming parity with the terminal path (issue #36): a session tab
+		// carries the agent's durable identity, not a generic counter.
+		const { tab } = createAcpTabWithPane("ws-1", "/repo", [], {
+			name: "Argus",
+		});
+
+		expect(tab.name).toBe("Argus");
+	});
+
+	it("falls back to the counter for a caller with no name", () => {
+		expect(createAcpTabWithPane("ws-1", "/repo", []).tab.name).toBe("Agent 1");
+		expect(
+			createAcpTabWithPane("ws-1", "/repo", [], { name: "   " }).tab.name,
+		).toBe("Agent 1");
 	});
 });
 

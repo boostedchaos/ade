@@ -14,6 +14,16 @@
  * per question for a single-select, `{type: "array", items: {anyOf:
  * EnumOption[]}}` for a multi-select, and a plain `{type: "string"}` "Other"
  * field beside each so the user can type their own answer instead.
+ *
+ * A RECORDED ASYMMETRY (A12/F7). An answer's select VALUES are deliberately
+ * not validated against the options declared here, while `answerPermission`
+ * does check its `optionId` against the request. That difference is a decision,
+ * not an oversight: `AskUserQuestion` puts a free-text `*_custom` box beside
+ * every question precisely so the user can answer in words that are not on the
+ * list, and the agent reads that value as the user's own answer. A validator
+ * here would reject exactly the answers the tool exists to collect. A
+ * permission option id is the opposite — a closed set the agent will act on
+ * verbatim, where an unlisted value has no meaning at all.
  */
 
 import type {
@@ -61,6 +71,40 @@ export interface AcpElicitationForm {
  * cannot render has to decline rather than fall through to an empty form.
  */
 const SUPPORTED_MODE = "form";
+
+/**
+ * How large a form may be before it is declined outright (A12/F6).
+ *
+ * The renderer draws every field of a form it accepts and every character of
+ * every label, so an unbounded schema is an agent-controlled way to paint over
+ * the pane — including the transcript that explains why it is being asked. A
+ * declined form is a shape the agent already handles; an unanswerable one is
+ * not. `AskUserQuestion` emits at most a handful of short fields, so nothing
+ * legitimate is near either bound.
+ */
+const MAX_FIELDS = 20;
+const MAX_STRING_LENGTH = 10_000;
+
+/** True for a string the renderer must not be asked to draw. */
+function isOversized(value: string | null | undefined): boolean {
+	return typeof value === "string" && value.length > MAX_STRING_LENGTH;
+}
+
+/** Every drawn string of one field, so the bound covers what reaches the pane. */
+function fieldStrings(
+	field: AcpElicitationField,
+): (string | null | undefined)[] {
+	return [
+		field.key,
+		field.title,
+		field.description,
+		...(field.options ?? []).flatMap((option) => [
+			option.value,
+			option.label,
+			option.description,
+		]),
+	];
+}
 
 /**
  * Every property variant ends in an open `{ type: string; [key: string]:
@@ -160,6 +204,11 @@ function normalizeSchema(schema: ElicitationSchema): AcpElicitationForm | null {
 	if (!properties) return null;
 
 	const required = new Set(schema.required ?? []);
+	// Bounded before any of it is normalized: refusing on size is the same
+	// decision as refusing on shape, and both produce the one `decline` the
+	// agent knows how to carry on from (A12/F6).
+	if (Object.keys(properties).length > MAX_FIELDS) return null;
+	if (isOversized(schema.title)) return null;
 	const fields: AcpElicitationField[] = [];
 	// Insertion order is the agent's field order (`question_0`, `question_0_custom`,
 	// `question_1`, …), and it is the order the user should read them in.
@@ -169,6 +218,10 @@ function normalizeSchema(schema: ElicitationSchema): AcpElicitationForm | null {
 		// return an answer that omits a field the agent asked for, which reads to
 		// the agent as "the user left it blank".
 		if (!field) return null;
+		// One oversized string fails the WHOLE form, for the same reason an
+		// unrenderable field does: a truncated label is a different question
+		// from the one the agent asked.
+		if (fieldStrings(field).some(isOversized)) return null;
 		fields.push(field);
 	}
 

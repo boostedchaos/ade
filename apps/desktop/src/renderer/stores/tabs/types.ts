@@ -1,6 +1,7 @@
 import type { MosaicBranch, MosaicNode } from "react-mosaic-component";
 import type { ChangeCategory, FileStatus } from "shared/changes-types";
 import type {
+	AcpPaneOptions,
 	BaseTab,
 	BaseTabsState,
 	BrowserLoadError,
@@ -205,10 +206,16 @@ export interface TabsStore extends TabsState {
 	movePaneToNewTab: (paneId: string) => string;
 
 	// ACP (agent conversation) operations
-	/** New tab holding one ACP pane rooted at `cwd` (the agent's worktree). */
+	/**
+	 * New tab holding one ACP pane rooted at `cwd` (the agent's worktree).
+	 *
+	 * `options` carries what the flip would otherwise drop: the conversation to
+	 * reopen (A8) and the agent's own name for the tab (A9).
+	 */
 	addAcpTab: (
 		workspaceId: string,
 		cwd: string,
+		options?: AcpPaneOptions,
 	) => { tabId: string; paneId: string };
 
 	// Browser operations

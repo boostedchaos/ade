@@ -344,15 +344,40 @@ describe("session_exit sweep", () => {
 });
 
 describe("session_error", () => {
+	const sessionError: AcpPaneEvent = {
+		type: "session_error",
+		message: "acp-session-died: exited",
+	};
+
 	it("sweeps pending cards too — the session is just as gone", () => {
-		const after = reduceAcpEvent(run([permission]), {
-			type: "session_error",
-			message: "acp-session-died: exited",
-		});
+		const after = reduceAcpEvent(run([permission]), sessionError);
 
 		const card = after.entries.find(
 			(entry): entry is AcpRequestEntry => entry.role === "request",
 		);
 		expect(card?.outcome?.kind).toBe("unavailable");
+	});
+
+	it("empties requestIdToEntry like session_exit does (A11/F5)", () => {
+		// The two events describe the same fact — this child is not coming back
+		// — so an index that survives one and not the other is an asymmetry, not
+		// a decision. `session_error` is the path a crash takes.
+		const after = reduceAcpEvent(run([permission]), sessionError);
+
+		expect(after.requestIdToEntry).toEqual({});
+	});
+
+	it("PROVES IT MATTERS: the next session's req-1 opens its own card", () => {
+		const after = reduceAcpEvent(run([permission]), sessionError);
+
+		const next = reduceAcpEvent(after, permission);
+
+		const cards = next.entries.filter(
+			(entry): entry is AcpRequestEntry => entry.role === "request",
+		);
+		expect(cards).toHaveLength(2);
+		// The swept card stays swept; the new one opens below the divider.
+		expect(cards[0]?.outcome?.kind).toBe("unavailable");
+		expect(cards[1]?.outcome).toBe(null);
 	});
 });

@@ -368,6 +368,98 @@ describe("A5 — elicitation", () => {
 		).toBeNull();
 	});
 
+	it("refuses a form with more fields than a person will read (A12/F6)", () => {
+		// 20 is the bound; 21 is refused. The renderer draws every field of a
+		// form it accepts, so an unbounded one is an agent-controlled way to
+		// paint over the pane — and a card the user has to scroll past to reach
+		// the transcript that explains it is not an answerable question.
+		const properties: Record<string, unknown> = {};
+		for (let index = 0; index < 21; index++) {
+			properties[`question_${index}`] = { type: "string", title: "Q" };
+		}
+
+		expect(
+			normalizeElicitationRequest({
+				mode: "form",
+				sessionId: "session-1",
+				message: "Many things",
+				// biome-ignore lint/suspicious/noExplicitAny: an over-large schema is exactly what the bound exists for
+				requestedSchema: { type: "object", properties } as any,
+			}),
+		).toBeNull();
+	});
+
+	it("PROVES THE BOUND IS AT 20: a form of exactly 20 fields is accepted", () => {
+		// Without this control the test above passes against a build that
+		// refuses every multi-field form.
+		const properties: Record<string, unknown> = {};
+		for (let index = 0; index < 20; index++) {
+			properties[`question_${index}`] = { type: "string", title: "Q" };
+		}
+
+		const form = normalizeElicitationRequest({
+			mode: "form",
+			sessionId: "session-1",
+			message: "Many things",
+			// biome-ignore lint/suspicious/noExplicitAny: as above
+			requestedSchema: { type: "object", properties } as any,
+		});
+
+		expect(form?.fields).toHaveLength(20);
+	});
+
+	it("refuses a form carrying a string past 10 KB (A12/F6)", () => {
+		const huge = "x".repeat(10_001);
+
+		// In a field's description...
+		expect(
+			normalizeElicitationRequest({
+				mode: "form",
+				sessionId: "session-1",
+				message: "Pick",
+				requestedSchema: {
+					type: "object",
+					properties: { question_0: { type: "string", description: huge } },
+				},
+			}),
+		).toBeNull();
+
+		// ...and in an option's label, which the renderer draws just as literally.
+		expect(
+			normalizeElicitationRequest({
+				mode: "form",
+				sessionId: "session-1",
+				message: "Pick",
+				requestedSchema: {
+					type: "object",
+					properties: {
+						question_0: {
+							type: "string",
+							oneOf: [{ const: "a", title: huge }],
+						},
+					},
+					// biome-ignore lint/suspicious/noExplicitAny: an over-large schema is the subject
+				} as any,
+			}),
+		).toBeNull();
+	});
+
+	it("PROVES THE SIZE BOUND IS AT 10 KB: a string of exactly 10 KB is drawn", () => {
+		const big = "x".repeat(10_000);
+
+		const form = normalizeElicitationRequest({
+			mode: "form",
+			sessionId: "session-1",
+			message: "Pick",
+			requestedSchema: {
+				type: "object",
+				properties: { question_0: { type: "string", description: big } },
+			},
+		});
+
+		expect(form?.fields[0]?.description).toHaveLength(10_000);
+	});
+
 	it("parks a renderable form and returns the answer to the agent", async () => {
 		const child = new FakeAcpChild();
 		const session = sessionFor(child, recorded);

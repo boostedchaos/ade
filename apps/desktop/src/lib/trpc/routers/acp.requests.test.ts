@@ -468,3 +468,213 @@ describe("permission policy plumbing", () => {
 		expect(created).toEqual(["auto-approve"]);
 	});
 });
+
+/** Let the router's async resolver run up to its `createSession` call. */
+function tick(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// =============================================================================
+
+describe("the buffer's two silent-loss holes (A7)", () => {
+	it("re-banks a live session's events after the LAST subscriber detaches", async () => {
+		// The teardown used to install nothing, so a pane that unmounted while
+		// its session stayed alive emitted into zero listeners. Nothing counted
+		// those, so the next attach could not tell a quiet agent from a lost one.
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const first = await subscribe(appRouter, "pane-1");
+		first.subscription.unsubscribe();
+
+		for (let index = 0; index < 3; index++) {
+			host.emit("update:pane-1", {
+				kind: "agent_message_chunk",
+				text: `while-away-${index}`,
+			});
+		}
+
+		const second = await subscribe(appRouter, "pane-1");
+
+		expect(second.events).toEqual([
+			{
+				type: "update",
+				update: { kind: "agent_message_chunk", text: "while-away-0" },
+			},
+			{
+				type: "update",
+				update: { kind: "agent_message_chunk", text: "while-away-1" },
+			},
+			{
+				type: "update",
+				update: { kind: "agent_message_chunk", text: "while-away-2" },
+			},
+		]);
+		// The first subscriber saw nothing: everything arrived after it left.
+		expect(first.events).toHaveLength(0);
+	});
+
+	it("counts what overran the re-installed buffer instead of dropping it silently", async () => {
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const first = await subscribe(appRouter, "pane-1");
+		first.subscription.unsubscribe();
+		for (let index = 0; index < 5002; index++) {
+			host.emit("update:pane-1", {
+				kind: "agent_message_chunk",
+				text: `chunk-${index}`,
+			});
+		}
+
+		const second = await subscribe(appRouter, "pane-1");
+
+		expect(second.events[0]).toEqual({ type: "events_dropped", count: 2 });
+	});
+
+	it("keeps buffering only while the pane is unsubscribed", async () => {
+		// The re-install is a stand-in for a listener that is not there. Once one
+		// attaches, traffic must pass straight through — a buffer that survived
+		// the attach would swallow the live stream.
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+
+		const first = await subscribe(appRouter, "pane-1");
+		first.subscription.unsubscribe();
+		const second = await subscribe(appRouter, "pane-1");
+		host.emit("update:pane-1", { kind: "agent_message_chunk", text: "live" });
+
+		expect(second.events).toEqual([
+			{ type: "update", update: { kind: "agent_message_chunk", text: "live" } },
+		]);
+	});
+
+	it("does not re-bank for a pane whose session is gone", async () => {
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+		const first = await subscribe(appRouter, "pane-1");
+		await caller.dispose({ paneId: "pane-1" });
+		first.subscription.unsubscribe();
+
+		host.emit("update:pane-1", { kind: "agent_message_chunk", text: "ghost" });
+		const second = await subscribe(appRouter, "pane-1");
+
+		expect(second.events).toHaveLength(0);
+	});
+
+	it("a second ensureSession mid-startup does NOT wipe the banked replay", async () => {
+		// `AcpPane` is lazy and idempotent-by-`getSessionInfo`, which answers
+		// nothing while the first create is still in flight — so a StrictMode
+		// double mount lands two `attachBridge` calls around a `session/load`
+		// whose whole history is already in the buffer.
+		const host = new FakeAcpHost();
+		const releases: Array<() => void> = [];
+		// biome-ignore lint/suspicious/noExplicitAny: narrow fake, as above
+		const spyHost = host as any;
+		const original = spyHost.createSession.bind(host);
+		spyHost.createSession = (options: { paneId: string }) =>
+			new Promise((resolve) => {
+				releases.push(() => resolve(original(options)));
+			});
+		const { router: appRouter, caller } = makeCaller(host);
+
+		const firstCreate = caller.ensureSession({
+			paneId: "pane-1",
+			cwd: "/repo",
+		});
+		await tick();
+		for (let index = 0; index < 3; index++) {
+			host.emit("update:pane-1", {
+				kind: "user_message_chunk",
+				text: `replayed-${index}`,
+			});
+		}
+		const secondCreate = caller.ensureSession({
+			paneId: "pane-1",
+			cwd: "/repo",
+		});
+		await tick();
+		for (const release of releases) release();
+		await Promise.all([firstCreate, secondCreate]);
+
+		const { events } = await subscribe(appRouter, "pane-1");
+
+		expect(events.map((event) => event.type)).toEqual([
+			"update",
+			"update",
+			"update",
+		]);
+	});
+
+	it("a second ensureSession mid-startup does NOT zero the drop counter", async () => {
+		const host = new FakeAcpHost();
+		const releases: Array<() => void> = [];
+		// biome-ignore lint/suspicious/noExplicitAny: narrow fake, as above
+		const spyHost = host as any;
+		const original = spyHost.createSession.bind(host);
+		spyHost.createSession = (options: { paneId: string }) =>
+			new Promise((resolve) => {
+				releases.push(() => resolve(original(options)));
+			});
+		const { router: appRouter, caller } = makeCaller(host);
+
+		const firstCreate = caller.ensureSession({
+			paneId: "pane-1",
+			cwd: "/repo",
+		});
+		await tick();
+		for (let index = 0; index < 5003; index++) {
+			host.emit("update:pane-1", {
+				kind: "agent_message_chunk",
+				text: `chunk-${index}`,
+			});
+		}
+		const secondCreate = caller.ensureSession({
+			paneId: "pane-1",
+			cwd: "/repo",
+		});
+		await tick();
+		for (const release of releases) release();
+		await Promise.all([firstCreate, secondCreate]);
+
+		const { events } = await subscribe(appRouter, "pane-1");
+
+		// Zeroing it is worse than the drop: a truncated replay then reads as a
+		// complete one.
+		expect(events[0]).toEqual({ type: "events_dropped", count: 3 });
+	});
+
+	it("throws the backlog away when the session EXITS, not only on dispose", async () => {
+		// Symmetry with dispose (A11/F8). What a dead child banked describes a
+		// conversation that is over; replaying it into the next generation's
+		// pane would read as the new session having already spoken.
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+		host.emit("update:pane-1", { kind: "agent_message_chunk", text: "old" });
+		host.emit("exit:pane-1", { code: 0, signal: null, expected: true });
+
+		const { events } = await subscribe(appRouter, "pane-1");
+
+		expect(events).toHaveLength(0);
+	});
+
+	it("a LIVE subscriber still sees the exit before the backlog is dropped", async () => {
+		// The control for the test above: dropping the buffer must not eat the
+		// exit event itself for a pane that is actually listening.
+		const host = new FakeAcpHost();
+		const { router: appRouter, caller } = makeCaller(host);
+		await caller.ensureSession({ paneId: "pane-1", cwd: "/repo" });
+		const { events } = await subscribe(appRouter, "pane-1");
+
+		host.emit("exit:pane-1", { code: 2, signal: null, expected: false });
+
+		expect(events).toEqual([
+			{ type: "session_exit", code: 2, signal: null, expected: false },
+		]);
+	});
+});

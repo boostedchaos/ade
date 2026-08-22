@@ -63,6 +63,15 @@ export function ModelBar() {
 		// runtimes keep a model suffix so parallel sessions on other models stay
 		// distinguishable — the live model/context badge only reads Claude
 		// transcripts.
+		//
+		// This is a FLIP PATH (A9/F3): clicking the Claude logo now opens an ACP
+		// pane, not a terminal, whenever the flip's conditions hold. The name
+		// below reaches the ACP tab the same way it reaches a terminal preset.
+		// DEFERRED, deliberately: the MODEL the user clicked is not carried onto
+		// the ACP path. It is cosmetic today because the only ACP-eligible
+		// runtime is `claude` and its descriptor names no model — the moment a
+		// second Claude descriptor exists, this has to set the session's `model`
+		// config option instead of relying on the adapter's default.
 		const agentName = workspace?.name?.trim();
 		const name = agentName
 			? model.runtime === "claude"

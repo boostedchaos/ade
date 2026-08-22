@@ -16,11 +16,26 @@ const DEBUG_ACP = process.env.SUPERSET_ACP_DEBUG === "1";
 export const BYPASS_PERMISSIONS_MODE_ID = "bypassPermissions";
 
 /**
+ * The mode that actually asks the user, named by id (AL1).
+ *
+ * "The first mode that is not bypass" was the original rule and it is now
+ * wrong: `claude-agent-acp` 0.63.0 leads `availableModes` with `auto`, a model
+ * classifier that decides on the user's behalf and raises no
+ * `session/request_permission` at all. Under a positional rule the prompting
+ * policy silently stops prompting — and an agent that never asks looks exactly
+ * like an agent with nothing to ask about. Position is the adapter's to
+ * reorder; the id is what carries the meaning.
+ */
+const PROMPTING_MODE_ID = "default";
+
+/**
  * Which session mode a policy needs.
  *
  * `"auto-approve"` picks the bypass mode explicitly rather than trusting the
- * adapter default to stay put. `"prompt"` (Phase 2) picks the first mode that
- * is not the bypass mode, so `session/request_permission` actually fires.
+ * adapter default to stay put. `"prompt"` (Phase 2) picks `"default"` by id,
+ * falling back to the first non-bypass mode only when no such id is offered —
+ * the id is a convention rather than a protocol guarantee, and a renamed
+ * prompting mode should still beat leaving the session on bypass.
  *
  * Returns `null` when the `session/new` response offered no usable mode; the
  * caller then leaves the mode alone rather than guessing an id.
@@ -37,6 +52,8 @@ export function resolveModeIdForPolicy(
 		return bypass?.id ?? null;
 	}
 
+	const byId = available.find((mode) => mode.id === PROMPTING_MODE_ID);
+	if (byId) return byId.id;
 	const prompting = available.find(
 		(mode) => mode.id !== BYPASS_PERMISSIONS_MODE_ID,
 	);
