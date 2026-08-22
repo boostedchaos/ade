@@ -1,4 +1,6 @@
 import { Button } from "@superset/ui/button";
+import { useEffect, useState } from "react";
+import { newSessionLabel, restartNeedsConfirm } from "./statusLine";
 
 export type AcpPaneLifecycle =
 	| "idle"
@@ -16,6 +18,11 @@ interface AcpStatusLineProps {
 	 * failure, and never falls back to a terminal.
 	 */
 	error: string | null;
+	/**
+	 * Entries in this pane's transcript, which is what a restart discards —
+	 * and therefore the only thing that decides whether to confirm.
+	 */
+	transcriptEntryCount: number;
 	onNewSession: () => void;
 }
 
@@ -30,8 +37,31 @@ const LIFECYCLE_LABEL: Record<AcpPaneLifecycle, string> = {
 export function AcpStatusLine({
 	lifecycle,
 	error,
+	transcriptEntryCount,
 	onNewSession,
 }: AcpStatusLineProps) {
+	/** Two-click confirm: the armed button IS the dialog (no overlay to trap focus). */
+	const [armed, setArmed] = useState(false);
+
+	// Disarm whenever the thing being confirmed changes underneath the button.
+	// A session that ends while the confirm is up would otherwise leave a
+	// "Discard & restart?" pointing at a conversation that is already over.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: disarm on subject change, not on `armed`
+	useEffect(() => {
+		setArmed(false);
+	}, [lifecycle]);
+
+	const needsConfirm = restartNeedsConfirm({ lifecycle, transcriptEntryCount });
+
+	const handleClick = () => {
+		if (needsConfirm && !armed) {
+			setArmed(true);
+			return;
+		}
+		setArmed(false);
+		onNewSession();
+	};
+
 	return (
 		<div className="flex min-h-7 items-center gap-2 border-border/60 border-t px-3 py-1 text-xs">
 			<span
@@ -51,16 +81,23 @@ export function AcpStatusLine({
 				</span>
 			)}
 			{!error && <span className="flex-1" />}
-			{lifecycle === "dead" && (
-				<Button
-					variant="outline"
-					size="sm"
-					className="h-6 shrink-0 px-2 text-xs"
-					onClick={onNewSession}
-				>
-					New session
-				</Button>
-			)}
+			{/* Always available (2026-08-22): `/clear` cannot reach an ACP pane —
+			    the adapter strips it from `available_commands_update` — so this
+			    button is the only way to start a fresh context here. */}
+			<Button
+				variant="outline"
+				size="sm"
+				className="h-6 shrink-0 px-2 text-xs"
+				onClick={handleClick}
+				onBlur={() => setArmed(false)}
+				title={
+					armed
+						? "Click again to discard this conversation and start a new session"
+						: "Start a new session in this pane"
+				}
+			>
+				{newSessionLabel(armed)}
+			</Button>
 		</div>
 	);
 }

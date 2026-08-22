@@ -70,6 +70,9 @@ export function AcpPane({
 	const seedCommands = useAcpCommandsStore((s) => s.seed);
 	const seedControlBar = useAcpControlBarStore((s) => s.seed);
 	const controlBarMounted = useAcpControlBarStore((s) => s.mounted);
+	const clearTranscript = useAcpTranscriptStore((s) => s.clear);
+	const clearControlBar = useAcpControlBarStore((s) => s.clear);
+	const clearCommands = useAcpCommandsStore((s) => s.clear);
 	const setAcpSessionId = useTabsStore((s) => s.setAcpSessionId);
 	const { onPromptSent, onRequestAnswered, onEvent } = useAcpPaneStatus(paneId);
 
@@ -88,6 +91,7 @@ export function AcpPane({
 	const cancelMutation = electronTrpc.acp.cancel.useMutation();
 	const { mutate: readConfigMutate } =
 		electronTrpc.acp.readConfig.useMutation();
+	const { mutate: disposeMutate } = electronTrpc.acp.dispose.useMutation();
 	const { mutate: answerPermissionMutate } =
 		electronTrpc.acp.answerPermission.useMutation();
 	const { mutate: answerElicitationMutate } =
@@ -108,74 +112,127 @@ export function AcpPane({
 		onEvent,
 	};
 
-	const startSession = useCallback(() => {
+	const startSession = useCallback(
+		(options?: { fresh?: boolean }) => {
+			setLifecycle("starting");
+			setError(null);
+			setRestoreMessage(null);
+
+			// Read from the stores rather than from a subscribed value: this runs on
+			// mount and from the "New session" button, and a stale closure over
+			// either one would ask to replay a conversation that is already on
+			// screen. The guard is what stops a mosaic remount double-replaying (B1).
+			const storedSessionId =
+				useTabsStore.getState().panes[paneId]?.acp?.acpSessionId;
+			// `fresh` bypasses the resume rule rather than clearing the stored id:
+			// an explicit restart has just emptied the transcript, and emptiness is
+			// exactly what `shouldResumeSession` reads as "safe to replay" — so the
+			// mount heuristic would resurrect the conversation the user discarded.
+			const resumeSessionId =
+				!options?.fresh &&
+				shouldResumeSession({
+					storedSessionId,
+					transcriptEntryCount: useAcpTranscriptStore.getState().get(paneId)
+						.entries.length,
+				})
+					? (storedSessionId ?? null)
+					: null;
+
+			ensureSessionMutate(
+				{ paneId, cwd, ...(resumeSessionId ? { resumeSessionId } : {}) },
+				{
+					onSuccess: (info) => {
+						setLifecycle("ready");
+						setRestoreMessage(
+							restoreNotice({
+								requestedSessionId: resumeSessionId,
+								restored: info.restored,
+							}),
+						);
+						// The id of the session that is actually live now — which is a NEW
+						// one whenever the restore fell back, so the next mount does not
+						// ask for the dead one again.
+						setAcpSessionId(paneId, info.acpSessionId);
+						// The cached list first, so the bar is populated immediately, then
+						// a wire read-back: a session this pane is re-attaching to may have
+						// been reconfigured since the cache was last touched.
+						seedControlBar(paneId, info.configOptions, info.configSeq);
+						// `session/new` never returns commands, so a pane that mounts after
+						// the notification fired has only this cache to learn them from.
+						// It applies to an EMPTY list only: an event already received must
+						// win over a snapshot read before it (D2).
+						seedCommands(paneId, info.availableCommands);
+						readConfigMutate(
+							{ paneId },
+							{
+								onSuccess: (result) =>
+									seedControlBar(paneId, result.configOptions, result.seq),
+							},
+						);
+					},
+					onError: (mutationError) => {
+						// VERBATIM: the Phase 1 codes name their own fix, and so does
+						// `acp-claude-not-found`. A pane that hides this is a pane that
+						// hangs on "starting…" forever.
+						setLifecycle("dead");
+						setError(mutationError.message);
+					},
+				},
+			);
+		},
+		[
+			paneId,
+			cwd,
+			setAcpSessionId,
+			seedControlBar,
+			seedCommands,
+			readConfigMutate,
+			ensureSessionMutate,
+		],
+	);
+
+	/**
+	 * Replace this pane's session with a brand new one.
+	 *
+	 * The only way to get a fresh context in an ACP pane: `/clear` never
+	 * reaches the agent here, because the adapter filters it out of
+	 * `available_commands_update` (its `UNSUPPORTED_COMMANDS` list) and this
+	 * pane forwards every other slash command as plain prompt text.
+	 *
+	 * DISPOSE FIRST, and only start on the far side of it. `ensureSession`
+	 * short-circuits to the live session (`if (existing) return existing`), so
+	 * a restart that merely called it again would return the SAME session and
+	 * look like a no-op — the exact failure a visible-but-inert button would
+	 * have shipped. `dispose` is idempotent and resolves for a pane the host
+	 * has never heard of, so `onSettled` (not `onSuccess`) is the right hook:
+	 * a pane whose child already died must still get its new session.
+	 */
+	const restartSession = useCallback(() => {
 		setLifecycle("starting");
 		setError(null);
 		setRestoreMessage(null);
-
-		// Read from the stores rather than from a subscribed value: this runs on
-		// mount and from the "New session" button, and a stale closure over
-		// either one would ask to replay a conversation that is already on
-		// screen. The guard is what stops a mosaic remount double-replaying (B1).
-		const storedSessionId =
-			useTabsStore.getState().panes[paneId]?.acp?.acpSessionId;
-		const resumeSessionId = shouldResumeSession({
-			storedSessionId,
-			transcriptEntryCount: useAcpTranscriptStore.getState().get(paneId).entries
-				.length,
-		})
-			? (storedSessionId ?? null)
-			: null;
-
-		ensureSessionMutate(
-			{ paneId, cwd, ...(resumeSessionId ? { resumeSessionId } : {}) },
+		setIsBusy(false);
+		disposeMutate(
+			{ paneId },
 			{
-				onSuccess: (info) => {
-					setLifecycle("ready");
-					setRestoreMessage(
-						restoreNotice({
-							requestedSessionId: resumeSessionId,
-							restored: info.restored,
-						}),
-					);
-					// The id of the session that is actually live now — which is a NEW
-					// one whenever the restore fell back, so the next mount does not
-					// ask for the dead one again.
-					setAcpSessionId(paneId, info.acpSessionId);
-					// The cached list first, so the bar is populated immediately, then
-					// a wire read-back: a session this pane is re-attaching to may have
-					// been reconfigured since the cache was last touched.
-					seedControlBar(paneId, info.configOptions, info.configSeq);
-					// `session/new` never returns commands, so a pane that mounts after
-					// the notification fired has only this cache to learn them from.
-					// It applies to an EMPTY list only: an event already received must
-					// win over a snapshot read before it (D2).
-					seedCommands(paneId, info.availableCommands);
-					readConfigMutate(
-						{ paneId },
-						{
-							onSuccess: (result) =>
-								seedControlBar(paneId, result.configOptions, result.seq),
-						},
-					);
-				},
-				onError: (mutationError) => {
-					// VERBATIM: the Phase 1 codes name their own fix, and so does
-					// `acp-claude-not-found`. A pane that hides this is a pane that
-					// hangs on "starting…" forever.
-					setLifecycle("dead");
-					setError(mutationError.message);
+				onSettled: () => {
+					// Cleared AFTER the dispose settles: the old session's last
+					// frames are still arriving until then, and a clear that races
+					// them leaves fragments of the discarded conversation on screen.
+					clearTranscript(paneId);
+					clearControlBar(paneId);
+					clearCommands(paneId);
+					startSession({ fresh: true });
 				},
 			},
 		);
 	}, [
 		paneId,
-		cwd,
-		setAcpSessionId,
-		seedControlBar,
-		seedCommands,
-		readConfigMutate,
-		ensureSessionMutate,
+		disposeMutate,
+		clearTranscript,
+		clearControlBar,
+		clearCommands,
+		startSession,
 	]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-only, by design (D6)
@@ -385,7 +442,8 @@ export function AcpPane({
 				<AcpStatusLine
 					lifecycle={lifecycle}
 					error={error}
-					onNewSession={startSession}
+					transcriptEntryCount={transcript.entries.length}
+					onNewSession={restartSession}
 				/>
 				<AcpComposer
 					paneId={paneId}

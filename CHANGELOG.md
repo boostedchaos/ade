@@ -10,6 +10,23 @@ shipped under. They are history and are left as written.
 
 ## Unreleased
 
+### "New session" is always available in an ACP pane
+
+The pane's "New session" button used to appear only once the session was
+dead, which left a live pane with no way to start a fresh context at all —
+`/clear` cannot get there, because the ACP adapter strips it (and `cost`,
+`login`, `logout`, `todos`, `keybindings-help`, `release-notes`,
+`output-style:new`) out of `available_commands_update` before the palette
+ever sees it, and the composer forwards every other slash command as plain
+prompt text. The button now shows in every lifecycle. It disposes the
+current session before starting the next one — `ensureSession`
+short-circuits to a live session, so a restart that only re-called it would
+have returned the same session and looked inert — and clears the pane's
+transcript, control bar and command list on the far side of that dispose.
+Restarting a pane that holds a conversation asks first: the button arms
+itself into "Discard & restart?" and takes a second click. A dead session,
+or a live one with an empty transcript, restarts on the first click.
+
 ### ACP by default, durable sessions, permissions and questions (Phase 6)
 
 Agent sessions now open as ACP conversation panes by default (Claude Code
