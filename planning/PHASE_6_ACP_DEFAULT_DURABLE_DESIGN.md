@@ -170,3 +170,52 @@ Mid-session policy switching; multi-select or free-text elicitation beyond
 what AskUserQuestion needs (read the SDK shape and support the minimum that
 re-enables it, plainly erroring on unsupported forms); attention inbox;
 subagent trees; Codex; virtualized transcript.
+
+## Amendments after adversarial review + live gates (2026-08-21, F1-F8 + FL1)
+
+- **A7 (F1) — No silent event loss, ever.** (a) When the last subscriber
+  detaches from a live session, re-install the buffer (or at minimum count
+  drops-while-unsubscribed and surface them as `events_dropped` on the next
+  attach). (b) `attachBridge` must not recreate an existing buffer — a second
+  `ensureSession` during startup currently wipes the banked replay and zeroes
+  the drop counter. Both paths get tests (subscribe→unsubscribe→emit→
+  resubscribe; double-ensureSession mid-start).
+- **A8 (F2) — Resume parity for the flip.** The ACP branch of
+  `spawnAgentSession` resolves the newest existing conversation for the
+  worktree (the same `resolveResumeSessionId` the terminal path uses) and
+  passes it into the new pane's `AcpPaneState.acpSessionId`, so "+" reopens
+  the user's latest conversation exactly as `claude --resume` did (issue #49
+  parity). REQUIRED live check before relying on it: load a session id
+  created by the plain `claude` CLI (not via the adapter) through
+  `session/load` and confirm the history replays — the two id spaces are
+  believed to be the same store (`~/.claude/projects/<slug>/<id>.jsonl`);
+  believe it only after the wire says so.
+- **A9 (F3) — ModelBar is a fifth flip path; carry the name.** `addAcpTab`
+  accepts an optional tab name (agent-identity naming parity, issue #36);
+  ModelBar/GroupStrip pass what they have. Model choice on that path is
+  cosmetic today (single Claude descriptor) — recorded as deferred, not lost.
+- **A10 (F4) — The restore strip is a this-mount fact.** Show the "restored"
+  notice only when THIS mount requested a resume (`requestedSessionId !=
+  null`); a remount of a healthy session shows nothing.
+- **A11 (F5, F8) — Symmetry sweeps.** `session_error` clears
+  `requestIdToEntry` like `session_exit`; the router buffer is deleted on
+  session exit, not only on dispose/first-subscribe.
+- **A12 (F6, F7) — Form bounds + a recorded asymmetry.** Oversized elicitation
+  forms (fields > 20, any string > 10 KB) are DECLINED via the existing
+  refusal idiom rather than rendered. Select values are deliberately NOT
+  validated against declared options (AskUserQuestion accepts free text via
+  its `_custom` field; the agent treats the value as the user's words) —
+  decision recorded here so the asymmetry with `answerPermission` is
+  intentional.
+- **AL1 (live finding) — `prompt` policy selects mode `"default"` by id**,
+  falling back to first non-bypass only if absent. Live, "first non-bypass"
+  now resolves to `"auto"` (a model classifier that auto-approves), which
+  never prompts — the live gate proved mode `default` raises a real
+  `permission_request` for a Write and the full answer round-trip works.
+
+Live gate results (all against the real adapter + CLI, this machine):
+gate 2 restore PASSED (full replay incl. user turn + tool calls; bogus id →
+clean fresh fallback); gate 3 permission PASSED once mode=default (request
+"Write perm-test2.txt", allow answered, file written, turn completed); gate 4
+AskUserQuestion PASSED end-to-end ("You chose Blue."). Evidence scripts to be
+committed under `spikes/acp-phase6-live/`.
