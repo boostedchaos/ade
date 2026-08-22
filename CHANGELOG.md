@@ -10,6 +10,23 @@ shipped under. They are history and are left as written.
 
 ## Unreleased
 
+### ACP by default, durable sessions, permissions and questions (Phase 6)
+
+Agent sessions now open as ACP conversation panes by default (Claude Code
+runtime + worktree; terminal stays the opt-out via menu item and a settings
+toggle, and non-Claude runtimes stay terminal). Panes are durable: a restored
+pane replays its whole conversation through `session/load` (verified live —
+including a session created by the plain `claude` CLI, so "+" reopens your
+newest conversation exactly as `claude --resume` did), with a clean fresh-start
+fallback for unknown ids. The router buffers events so a replay can never
+stream into a void, and drops are counted and shown, never silent. A new
+permission mode setting ("Ask me") routes real permission prompts into the
+pane as answerable cards and rings Mission Control; the pane also advertises
+form elicitation, which re-enables `AskUserQuestion` — the agent can ask
+multiple-choice questions again, rendered as cards (verified live end-to-end).
+Failed turns now show as needs-review instead of idle. Live evidence:
+`planning/spikes/acp-phase6-live/`.
+
 ### ACP slash-command palette (Phase 5)
 
 Typing `/` at the start of the ACP composer now opens an autocomplete palette

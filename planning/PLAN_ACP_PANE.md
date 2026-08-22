@@ -1,6 +1,6 @@
 # PLAN — ACP Pane for Argus
 
-**Status (2026-08-21):** Phases 0-5 DONE and verified (Phase 3: `PHASE_3_ACP_RICH_RENDERING_DESIGN.md` + `spikes/acp-phase3-capture/`; Phase 5: `PHASE_5_ACP_SLASH_PALETTE_DESIGN.md` + `spikes/acp-phase5-live/`). Phase 0: `spikes/acp-phase0/FINDINGS.md`. Phase 4: design + amendments in `PHASE_4_ACP_CONTROL_BAR_DESIGN.md`, live gate in `spikes/acp-phase4-live/RESULTS.md`. Open: Phase 6 (default + durable).
+**Status (2026-08-22):** ALL PHASES 0-6 DONE and verified (Phase 6: `PHASE_6_ACP_DEFAULT_DURABLE_DESIGN.md` + `spikes/acp-phase6-live/`) (Phase 3: `PHASE_3_ACP_RICH_RENDERING_DESIGN.md` + `spikes/acp-phase3-capture/`; Phase 5: `PHASE_5_ACP_SLASH_PALETTE_DESIGN.md` + `spikes/acp-phase5-live/`). Phase 0: `spikes/acp-phase0/FINDINGS.md`. Phase 4: design + amendments in `PHASE_4_ACP_CONTROL_BAR_DESIGN.md`, live gate in `spikes/acp-phase4-live/RESULTS.md`. Open: by-hand pixel checks (3/5/6); deferred items listed in the Phase 6 design.
 **Goal:** give Argus a rich GUI view of a Claude Code session — messages, thinking,
 tool calls, plans, a live model/effort switcher and a skills palette — without
 giving up the agent identity, git worktree and memory that Argus already owns.
